@@ -3,10 +3,10 @@ import crypto from 'crypto';
 const MIN_PRODUCTION_SESSION_SECRET_LENGTH = 32;
 
 /**
- * Secreto para firmar la cookie de sesión.
- * Origen: SESSION_SECRET en el entorno.
- * En production es obligatorio (mín. 32 caracteres). En desarrollo, si falta,
- * se genera uno efímero (las sesiones dejan de ser válidas al reiniciar el proceso).
+ * Secret used to sign the session cookie.
+ * Source: SESSION_SECRET in the environment.
+ * Required in production (min. 32 characters). In development, when missing, an
+ * ephemeral one is generated (sessions stop being valid when the process restarts).
  *
  * @param {{ env?: NodeJS.ProcessEnv }} [opts]
  * @returns {string}
@@ -21,8 +21,8 @@ export function resolveSessionSecret({ env = process.env } = {}) {
       && sessionSecret.length < MIN_PRODUCTION_SESSION_SECRET_LENGTH
     ) {
       throw new Error(
-        `SESSION_SECRET debe tener al menos ${MIN_PRODUCTION_SESSION_SECRET_LENGTH} caracteres `
-          + 'cuando NODE_ENV=production (p. ej. openssl rand -hex 32).',
+        `SESSION_SECRET must be at least ${MIN_PRODUCTION_SESSION_SECRET_LENGTH} characters `
+          + 'when NODE_ENV=production (e.g. openssl rand -hex 32).',
       );
     }
     return sessionSecret;
@@ -30,15 +30,15 @@ export function resolveSessionSecret({ env = process.env } = {}) {
 
   if (env.NODE_ENV === 'production') {
     throw new Error(
-      'SESSION_SECRET es obligatorio cuando NODE_ENV=production. '
-        + 'Define un valor estable en .env (p. ej. openssl rand -hex 32).',
+      'SESSION_SECRET is required when NODE_ENV=production. '
+        + 'Set a stable value in .env (e.g. openssl rand -hex 32).',
     );
   }
 
   console.warn(
-    'SESSION_SECRET no está definido: se ha generado un secreto efímero. '
-      + 'Las sesiones de login no sobreviven al reinicio. '
-      + 'En despliegue define SESSION_SECRET (p. ej. openssl rand -hex 32 en .env).',
+    'SESSION_SECRET is not set: an ephemeral secret has been generated. '
+      + 'Login sessions will not survive a restart. '
+      + 'For deployment, set SESSION_SECRET (e.g. openssl rand -hex 32 in .env).',
   );
 
   return crypto.randomBytes(32).toString('hex');

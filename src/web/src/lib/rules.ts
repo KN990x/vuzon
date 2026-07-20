@@ -1,7 +1,7 @@
 import { ApiError } from './api';
 import type { Rule, RuleAction } from './types';
 
-/** Regla catch-all de Email Routing (matcher type all, o mismo id que el slot dedicado). */
+/** Email Routing catch-all rule (matcher type all, or same id as the dedicated slot). */
 export function ruleMatchesCatchAllSlot(rule: Rule, catchAll: Rule | null): boolean {
   if (Array.isArray(rule.matchers) && rule.matchers.some((m) => m && m.type === 'all')) {
     return true;
@@ -47,11 +47,11 @@ export function getRuleDest(rule: Rule | null | undefined): string {
 }
 
 /**
- * Destino de una regla que reenvía a UNA sola dirección, o null.
+ * Destination of a rule that forwards to ONE single address, or null.
  *
- * Solo esas reglas pueden editarse desde el panel con un desplegable: si la regla
- * ejecuta un Worker, descarta el correo o reenvía a varias direcciones, sustituirla
- * por un `forward` simple destruiría configuración hecha fuera de vuzon.
+ * Only those rules can be edited from the panel with a dropdown: if the rule runs a
+ * Worker, drops the mail or forwards to several addresses, replacing it with a plain
+ * `forward` would destroy configuration made outside vuzon.
  */
 export function getSingleForwardDestination(rule: Rule | null | undefined): string | null {
   const actions = rule?.actions;
@@ -76,9 +76,9 @@ export function getSingleForwardDestination(rule: Rule | null | undefined): stri
 const ALIAS_CHARS = '0123456789abcdefghijklmnopqrstuvwxyz';
 
 /**
- * Generación local, sin backend: 8 caracteres de [0-9a-z].
- * Usa crypto en vez de Math.random: un alias predecible anula el propósito del panel.
- * El módulo se descarta por rechazo para no sesgar hacia los primeros caracteres.
+ * Local generation, no backend: 8 characters from [0-9a-z].
+ * Uses crypto instead of Math.random: a predictable alias defeats the panel's purpose.
+ * The modulo is handled by rejection so the first characters are not favoured.
  */
 export function generateRandomLocalPart(): string {
   const limit = 256 - (256 % ALIAS_CHARS.length);
@@ -102,9 +102,9 @@ export function generateRandomLocalPart(): string {
 }
 
 /**
- * Los errores de Cloudflare llegan siempre con el mensaje genérico de
- * `api-route-error.js`, así que el único rate limit distinguible es el 429 del
- * limiter propio del panel, que sí conserva su status.
+ * Cloudflare errors always arrive with the generic message from `api-route-error.js`,
+ * so the only distinguishable rate limit is the 429 from the panel's own limiter,
+ * which does keep its status.
  */
 export function interpretAddDestError(err: unknown): string {
   const rawMessage = String((err as Error)?.message || err || '').trim();

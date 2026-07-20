@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { loginBodySchema } from '../../features/auth/login-body.js';
 
-test('loginBodySchema: acepta usuario y contraseña', () => {
+test('loginBodySchema: accepts user and password', () => {
   const parsed = loginBodySchema.parse({
     username: 'admin',
     password: 'secret',
@@ -10,7 +10,7 @@ test('loginBodySchema: acepta usuario y contraseña', () => {
   assert.deepEqual(parsed, { username: 'admin', password: 'secret' });
 });
 
-test('loginBodySchema: aplica trim', () => {
+test('loginBodySchema: applies trim', () => {
   const parsed = loginBodySchema.parse({
     username: '  admin  ',
     password: '  secret  ',
@@ -18,7 +18,7 @@ test('loginBodySchema: aplica trim', () => {
   assert.deepEqual(parsed, { username: 'admin', password: 'secret' });
 });
 
-test('loginBodySchema: rechaza vacío tras trim', () => {
+test('loginBodySchema: rejects an empty value after trim', () => {
   assert.throws(
     () => loginBodySchema.parse({ username: '   ', password: 'x' }),
     /Usuario requerido/,
@@ -29,7 +29,7 @@ test('loginBodySchema: rechaza vacío tras trim', () => {
   );
 });
 
-test('loginBodySchema: rechaza campos ausentes o tipo inválido', () => {
+test('loginBodySchema: rejects missing fields or an invalid type', () => {
   assert.throws(() => loginBodySchema.parse({}), /Usuario requerido/);
   assert.throws(
     () => loginBodySchema.parse({ username: 1, password: 'x' }),
@@ -37,7 +37,7 @@ test('loginBodySchema: rechaza campos ausentes o tipo inválido', () => {
   );
 });
 
-test('loginBodySchema: rechaza campos demasiado largos', () => {
+test('loginBodySchema: rejects overly long fields', () => {
   const long = 'a'.repeat(257);
   assert.throws(
     () => loginBodySchema.parse({ username: long, password: 'x' }),

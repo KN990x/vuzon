@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { cloudflareResourceIdSchema } from '../../shared/cloudflare-schemas.js';
 
-test('cloudflareResourceIdSchema: acepta ID típico', () => {
+test('cloudflareResourceIdSchema: accepts a typical ID', () => {
   const r = cloudflareResourceIdSchema.safeParse('zone_test_1');
   assert.equal(r.success, true);
 });
 
-test('cloudflareResourceIdSchema: rechaza caracteres no permitidos', () => {
+test('cloudflareResourceIdSchema: rejects disallowed characters', () => {
   const r = cloudflareResourceIdSchema.safeParse('bad id');
   assert.equal(r.success, false);
 });

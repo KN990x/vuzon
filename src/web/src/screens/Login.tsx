@@ -23,8 +23,8 @@ export function Login({ onSuccess }: { onSuccess: () => void }) {
     setError('');
     setSubmitting(true);
     try {
-      // 400 (Zod), 401 (credenciales) y 429 (rate limit) llegan como Error
-      // con el mensaje literal del servidor y se muestran tal cual.
+      // 400 (Zod), 401 (credentials) and 429 (rate limit) arrive as an Error carrying
+      // the server's literal message, and are shown verbatim.
       await apiRequest('/api/login', 'POST', { username, password });
       onSuccess();
     } catch (err) {

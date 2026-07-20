@@ -1,22 +1,22 @@
 import { PanelRequestError } from '../../platform/http/panel-request-error.js';
 
 /**
- * Diagnóstico de por qué falla la creación de un alias.
+ * Diagnosis of why creating an alias failed.
  *
- * Cloudflare no publica una tabla estable de códigos de error para Email Routing, y
- * `api-route-error.js` aplasta su texto a un mensaje genérico para no filtrar nada
- * upstream. Resultado hasta ahora: los dos fallos que de verdad comete el usuario
- * ("el destino no está verificado", "ese alias ya existe") llegaban como
+ * Cloudflare publishes no stable error-code table for Email Routing, and
+ * `api-route-error.js` flattens its text into a generic message so nothing upstream
+ * leaks. The result until now: the two mistakes users actually make ("the destination
+ * is not verified", "that alias already exists") both arrived as
  * "No se pudo completar la operación con Cloudflare".
  *
- * Aquí se deduce la causa a partir del estado que el panel ya sabe consultar, y el
- * mensaje resultante lo redactamos nosotros. El invariante de AGENTS.md se mantiene.
+ * Here the cause is deduced from state the panel already knows how to query, and we
+ * write the resulting message ourselves. The AGENTS.md invariant still holds.
  */
 
 /**
- * Espejo (reducido) de `isVerifiedStatus` en src/web/src/lib/verification.ts.
- * Cloudflare ha devuelto este campo como booleano, cadena y timestamp según la
- * versión de la API, así que se acepta cualquiera de esas formas.
+ * (Reduced) mirror of `isVerifiedStatus` in src/web/src/lib/verification.ts.
+ * Cloudflare has returned this field as a boolean, a string and a timestamp depending
+ * on the API version, so any of those shapes is accepted.
  * @param {unknown} value
  * @returns {boolean}
  */
@@ -29,7 +29,7 @@ export function isVerifiedAddress(value) {
     if (normalized === 'true' || normalized === 'verified' || normalized === 'active') {
       return true;
     }
-    // Timestamp de verificación: su mera presencia indica dirección verificada.
+    // Verification timestamp: its mere presence means the address is verified.
     return !Number.isNaN(Date.parse(value));
   }
   if (typeof value === 'object' && value !== null) {
@@ -57,10 +57,10 @@ export function inspectDestination(addresses, email) {
 }
 
 /**
- * ¿Ya hay una regla que capture exactamente esta dirección?
- * Cloudflare acepta patrones duplicados pero solo la primera regla procesa el correo,
- * así que crear un duplicado deja un alias que aparenta funcionar y no lo hace.
- * @param {unknown[]} rules Resultado de /email/routing/rules.
+ * Is there already a rule matching exactly this address?
+ * Cloudflare accepts duplicate patterns but only the first rule processes the mail, so
+ * creating a duplicate leaves an alias that looks like it works and does not.
+ * @param {unknown[]} rules Result of /email/routing/rules.
  * @param {string} aliasEmail
  * @returns {boolean}
  */

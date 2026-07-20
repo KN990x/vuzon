@@ -6,7 +6,7 @@ import {
   isVerifiedAddress,
 } from '../../features/email-routing/rule-diagnostics.js';
 
-test('isVerifiedAddress: acepta las formas que ha devuelto Cloudflare', () => {
+test('isVerifiedAddress: accepts the shapes Cloudflare has returned', () => {
   assert.equal(isVerifiedAddress(true), true);
   assert.equal(isVerifiedAddress('verified'), true);
   assert.equal(isVerifiedAddress('2024-05-01T10:00:00Z'), true);
@@ -14,7 +14,7 @@ test('isVerifiedAddress: acepta las formas que ha devuelto Cloudflare', () => {
   assert.equal(isVerifiedAddress({ verification_status: 'active' }), true);
 });
 
-test('isVerifiedAddress: rechaza pendientes y basura', () => {
+test('isVerifiedAddress: rejects pending values and junk', () => {
   assert.equal(isVerifiedAddress(false), false);
   assert.equal(isVerifiedAddress(null), false);
   assert.equal(isVerifiedAddress(undefined), false);
@@ -22,7 +22,7 @@ test('isVerifiedAddress: rechaza pendientes y basura', () => {
   assert.equal(isVerifiedAddress({ status: 'pending' }), false);
 });
 
-test('inspectDestination: distingue desconocido, pendiente y verificado', () => {
+test('inspectDestination: distinguishes unknown, pending and verified', () => {
   const addresses = [
     { email: 'ok@example.com', verified: true },
     { email: 'pendiente@example.com', verified: false },
@@ -42,7 +42,7 @@ test('inspectDestination: distingue desconocido, pendiente y verificado', () => 
   );
 });
 
-test('inspectDestination: compara sin distinguir mayúsculas ni espacios', () => {
+test('inspectDestination: compares ignoring case and whitespace', () => {
   const addresses = [{ email: 'OK@Example.com ', verified: true }];
   assert.deepEqual(
     inspectDestination(addresses, '  ok@example.COM'),
@@ -50,12 +50,12 @@ test('inspectDestination: compara sin distinguir mayúsculas ni espacios', () =>
   );
 });
 
-test('inspectDestination: tolera una lista ausente o inválida', () => {
+test('inspectDestination: tolerates a missing or invalid list', () => {
   assert.deepEqual(inspectDestination(null, 'x@y.com'), { exists: false, verified: false });
   assert.deepEqual(inspectDestination([null, {}], 'x@y.com'), { exists: false, verified: false });
 });
 
-test('hasRuleForAlias: detecta un matcher literal existente', () => {
+test('hasRuleForAlias: detects an existing literal matcher', () => {
   const rules = [
     { matchers: [{ type: 'literal', field: 'to', value: 'hola@example.com' }] },
     { matchers: [{ type: 'all' }] },
@@ -66,12 +66,12 @@ test('hasRuleForAlias: detecta un matcher literal existente', () => {
   assert.equal(hasRuleForAlias(rules, 'otro@example.com'), false);
 });
 
-test('hasRuleForAlias: el catch-all no cuenta como duplicado', () => {
+test('hasRuleForAlias: the catch-all does not count as a duplicate', () => {
   const rules = [{ matchers: [{ type: 'all' }] }];
   assert.equal(hasRuleForAlias(rules, 'cualquiera@example.com'), false);
 });
 
-test('hasRuleForAlias: tolera reglas sin matchers', () => {
+test('hasRuleForAlias: tolerates rules without matchers', () => {
   assert.equal(hasRuleForAlias([{}, { matchers: null }, null], 'x@example.com'), false);
   assert.equal(hasRuleForAlias(undefined, 'x@example.com'), false);
 });

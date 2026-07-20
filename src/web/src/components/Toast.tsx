@@ -1,11 +1,11 @@
 /**
- * Toast de estado (auto-limpiado a los ~5s por quien fija el mensaje).
+ * Status toast (auto-cleared after ~5s by whoever sets the message).
  *
- * El nodo se mantiene siempre montado y la visibilidad se controla con
- * `data-visible` + una transición CSS (ver `.toast` en index.css). Además de
- * evitar la dependencia de framer-motion, mantener viva la región `role="status"`
- * es lo correcto para lectores de pantalla: una live region debe existir antes de
- * que cambie su contenido para que el cambio se anuncie.
+ * The node stays mounted at all times and visibility is driven by `data-visible` plus a
+ * CSS transition (see `.toast` in index.css). Besides avoiding the framer-motion
+ * dependency, keeping the `role="status"` region alive is the right thing for screen
+ * readers: a live region must exist before its content changes for the change to be
+ * announced.
  */
 export function Toast({ message }: { message: string }) {
   return (

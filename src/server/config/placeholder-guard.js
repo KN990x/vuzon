@@ -1,20 +1,20 @@
 /**
- * Rechazo de los valores de relleno de `.env.example`.
+ * Rejection of the filler values shipped in `.env.example`.
  *
- * Motivo: `.env.example` vive en un repositorio público. Un valor de plantilla que
- * pase las validaciones normales es un secreto conocido por todo el mundo. El caso
- * grave es SESSION_SECRET: la cookie `vuzon_session` está firmada (no cifrada), así
- * que con la clave publicada cualquiera puede fabricar `{ authenticated: true }` y
- * entrar sin credenciales, sin pasar siquiera por el limiter de login.
+ * Why: `.env.example` lives in a public repository. A template value that passes the
+ * normal validations is a secret everybody knows. The serious case is SESSION_SECRET:
+ * the `vuzon_session` cookie is signed (not encrypted), so with the published key
+ * anyone can forge `{ authenticated: true }` and get in without credentials, without
+ * even going through the login limiter.
  *
- * La lista se codifica aquí, no se lee de `.env.example`: ese fichero no existe
- * dentro de la imagen Docker. El test `placeholder-guard.test.js` recorre
- * `.env.example` y comprueba que cada valor sigue estando cubierto, de modo que
- * añadir una plantilla nueva sin registrarla rompe CI.
+ * The list is hard-coded here rather than read from `.env.example`: that file does not
+ * exist inside the Docker image. The `placeholder-guard.test.js` test walks
+ * `.env.example` and checks that every value is still covered, so adding a new template
+ * value without registering it breaks CI.
  */
 
 /**
- * Claves cuyo valor de plantilla debe rechazarse, con sus valores conocidos.
+ * Keys whose template value must be rejected, with their known values.
  * @type {Record<string, string[]>}
  */
 export const PLACEHOLDER_VALUES_BY_KEY = {
@@ -25,14 +25,14 @@ export const PLACEHOLDER_VALUES_BY_KEY = {
 };
 
 /**
- * Claves de `.env.example` deliberadamente NO cubiertas.
- * `AUTH_USER=admin` es una elección legítima y por sí sola no da acceso a nada:
- * el atacante seguiría necesitando AUTH_PASS, que sí está cubierto. Rechazarlo
- * solo molestaría a quien quiere llamarse `admin`.
+ * Keys from `.env.example` deliberately NOT covered.
+ * `AUTH_USER=admin` is a legitimate choice and on its own grants no access: the
+ * attacker would still need AUTH_PASS, which is covered. Rejecting it would only
+ * annoy people who want to be called `admin`.
  */
 export const PLACEHOLDER_EXEMPT_KEYS = new Set(['AUTH_USER']);
 
-/** Por debajo de este número de caracteres distintos, SESSION_SECRET es trivial. */
+/** Below this number of distinct characters, SESSION_SECRET is trivial. */
 const MIN_SESSION_SECRET_DISTINCT_CHARS = 8;
 
 /**
@@ -54,27 +54,27 @@ function countDistinctChars(value) {
 
 /**
  * @param {NodeJS.ProcessEnv} [env]
- * @returns {string | null} Mensaje de error, o null si ningún valor es de plantilla.
+ * @returns {string | null} Error message, or null when no value is a template one.
  */
 export function getPlaceholderConfigurationIssue(env = process.env) {
   for (const [key, placeholders] of Object.entries(PLACEHOLDER_VALUES_BY_KEY)) {
     const value = readTrimmed(env, key);
     if (value && placeholders.includes(value)) {
-      return `${key} conserva el valor de ejemplo de .env.example. Ese valor es público: `
-        + 'cámbialo por uno propio antes de arrancar'
+      return `${key} still holds the example value from .env.example. That value is public: `
+        + 'replace it with your own before starting'
         + (key === 'SESSION_SECRET' ? ' (openssl rand -hex 32).' : '.');
     }
   }
 
-  // Entropía mínima: `openssl rand -hex 32` produce ~15-16 caracteres distintos,
-  // muy por encima del umbral; solo caen secretos triviales tipo "aaaa…" o "abab…".
+  // Minimum entropy: `openssl rand -hex 32` yields ~15-16 distinct characters, well
+  // above the threshold; only trivial secrets like "aaaa…" or "abab…" get caught.
   const sessionSecret = readTrimmed(env, 'SESSION_SECRET');
   if (
     sessionSecret
     && countDistinctChars(sessionSecret) < MIN_SESSION_SECRET_DISTINCT_CHARS
   ) {
-    return 'SESSION_SECRET es demasiado predecible (apenas usa caracteres distintos). '
-      + 'Genera uno aleatorio: openssl rand -hex 32.';
+    return 'SESSION_SECRET is too predictable (it barely uses distinct characters). '
+      + 'Generate a random one: openssl rand -hex 32.';
   }
 
   return null;

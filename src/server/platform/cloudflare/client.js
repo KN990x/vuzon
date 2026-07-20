@@ -71,7 +71,7 @@ async function parseCloudflareResponse(res) {
 
 function buildResponseError({ res, parsed, requestPath, method }) {
   if (!parsed.isJson || typeof parsed.body !== 'object' || parsed.body === null) {
-    return new CloudflareApiError(`Respuesta inesperada de Cloudflare (HTTP ${res.status})`, {
+    return new CloudflareApiError(`Unexpected response from Cloudflare (HTTP ${res.status})`, {
       status: res.status || 502,
       code: 'invalid_response',
       retryable: isRetryableStatus(res.status),
@@ -150,7 +150,7 @@ export function createCloudflareClient({ env = process.env } = {}) {
             ? buildTransportError({
               requestPath,
               method,
-              message: 'Cloudflare no respondió a tiempo',
+              message: 'Cloudflare did not respond in time',
               cause: err,
               status: 504,
               code: 'upstream_timeout',
@@ -158,7 +158,7 @@ export function createCloudflareClient({ env = process.env } = {}) {
             : buildTransportError({
               requestPath,
               method,
-              message: 'No se pudo conectar con Cloudflare',
+              message: 'Could not connect to Cloudflare',
               cause: err,
               status: 502,
               code: 'upstream_unreachable',
@@ -194,7 +194,7 @@ export function createCloudflareClient({ env = process.env } = {}) {
     do {
       if (page > MAX_LIST_PAGES) {
         throw new CloudflareApiError(
-          'Se superó el límite de paginación al listar recursos en Cloudflare.',
+          'Pagination limit exceeded while listing Cloudflare resources.',
           {
             status: 502,
             code: 'list_pagination_limit',
@@ -211,7 +211,7 @@ export function createCloudflareClient({ env = process.env } = {}) {
 
       if (allResults.length > MAX_LIST_ITEMS) {
         throw new CloudflareApiError(
-          'Se superó el límite de elementos al listar en Cloudflare.',
+          'Item limit exceeded while listing Cloudflare resources.',
           {
             status: 502,
             code: 'list_items_limit',

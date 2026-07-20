@@ -1,27 +1,27 @@
 /**
- * Revocación de sesiones en memoria.
+ * In-memory session revocation.
  *
- * La cookie `vuzon_session` es autocontenida (firmada, sin estado en servidor), así
- * que `POST /api/logout` solo puede borrarla del navegador: una copia hecha antes
- * seguiría siendo válida durante los 7 días de maxAge. Como el panel no puede
- * persistir nada (restricción de diseño: sin base de datos ni disco), guardamos una
- * marca de tiempo en memoria y descartamos las sesiones emitidas antes de ella.
+ * The `vuzon_session` cookie is self-contained (signed, no server-side state), so
+ * `POST /api/logout` can only remove it from the browser: a copy made beforehand would
+ * stay valid for the full 7-day maxAge. Since the panel cannot persist anything (design
+ * constraint: no database, no disk), we keep a timestamp in memory and discard sessions
+ * issued before it.
  *
- * `revokedBefore` arranca en 0 a propósito: reiniciar el proceso NO cierra la sesión
- * del usuario (es lo que se espera de un panel homelab que se reinicia al actualizar).
- * Lo único que se pierde en un reinicio es una revocación previa, y el margen es el
- * mismo que ya se acepta con varias réplicas compartiendo SESSION_SECRET.
+ * `revokedBefore` starts at 0 on purpose: restarting the process does NOT log the user
+ * out (that is what you expect from a homelab panel that restarts on update). The only
+ * thing lost on a restart is a previous revocation, and that gap is the same one already
+ * accepted when several replicas share a SESSION_SECRET.
  */
 
 let revokedBefore = 0;
 
-/** Invalida todas las sesiones emitidas hasta este momento. */
+/** Invalidates every session issued up to this moment. */
 export function revokeSessionsIssuedUntilNow(now = Date.now()) {
   revokedBefore = now;
 }
 
 /**
- * @param {unknown} issuedAt Marca `issuedAt` guardada en la sesión al hacer login.
+ * @param {unknown} issuedAt The `issuedAt` mark stored in the session at login time.
  * @returns {boolean}
  */
 export function isSessionIssuanceValid(issuedAt) {
@@ -31,7 +31,7 @@ export function isSessionIssuanceValid(issuedAt) {
   return issuedAt > revokedBefore;
 }
 
-/** Solo para tests: devuelve el estado al valor de arranque. */
+/** Tests only: resets the state back to its startup value. */
 export function resetSessionEpochForTests() {
   revokedBefore = 0;
 }

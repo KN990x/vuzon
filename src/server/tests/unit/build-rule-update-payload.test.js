@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { buildRuleUpdatePayload } from '../../features/email-routing/routes.js';
 
-test('buildRuleUpdatePayload: alias API básico sin source', () => {
+test('buildRuleUpdatePayload: basic API alias without source', () => {
   const payload = buildRuleUpdatePayload(
     {
       name: 'a@example.com',
@@ -21,7 +21,7 @@ test('buildRuleUpdatePayload: alias API básico sin source', () => {
   });
 });
 
-test('buildRuleUpdatePayload: preserva source y owner_worker_tag de reglas wrangler', () => {
+test('buildRuleUpdatePayload: preserves source and owner_worker_tag from wrangler rules', () => {
   const payload = buildRuleUpdatePayload(
     {
       name: 'worker-route',

@@ -3,7 +3,7 @@ import { cloudflareResourceIdSchema } from '../shared/cloudflare-schemas.js';
 const ID_ENV_KEYS = ['CF_ZONE_ID', 'CF_ACCOUNT_ID'];
 
 /**
- * Token de API (trim). Se normaliza en el arranque (start-server.js).
+ * API token (trimmed). Normalized at startup (start-server.js).
  * @param {NodeJS.ProcessEnv} [env]
  * @returns {string}
  */
@@ -13,12 +13,12 @@ export function getCfApiToken(env = process.env) {
 
 /**
  * @param {NodeJS.ProcessEnv} [env]
- * @returns {string | null} Mensaje de error o null si el token está presente (puede incluir solo espacios antes de normalizar).
+ * @returns {string | null} Error message, or null when the token is present (it may be whitespace-only before normalizing).
  */
 export function getCfApiTokenConfigurationIssue(env = process.env) {
   const token = getCfApiToken(env);
   if (!token) {
-    return 'CF_API_TOKEN es obligatorio en .env y no puede estar vacío (ni solo espacios). Revisa la plantilla .env.example.';
+    return 'CF_API_TOKEN is required in .env and cannot be empty (or whitespace-only). Check the .env.example template.';
   }
   return null;
 }
@@ -41,14 +41,14 @@ function cloudflareIdsValidationIssue(env) {
     const raw = getCloudflareResourceId(envKey, env);
     const parsed = cloudflareResourceIdSchema.safeParse(raw);
     if (!parsed.success) {
-      return `${envKey} no válido o vacío. Debe ser un identificador Cloudflare (letras, números, guiones y guión bajo, 1-64 caracteres). Si acabas de autodetectar y falla, revisa DOMAIN y el token, o define ambos IDs a mano en .env.`;
+      return `${envKey} is invalid or empty. It must be a Cloudflare identifier (letters, digits, dashes and underscores, 1-64 characters). If auto-detection just ran and failed, check DOMAIN and the token, or set both IDs by hand in .env.`;
     }
   }
   return null;
 }
 
 /**
- * Si ambos IDs están definidos en .env, valida formato antes de la autoconfiguración.
+ * When both IDs are set in .env, validate their format before auto-configuration.
  * @param {NodeJS.ProcessEnv} [env]
  * @returns {string | null}
  */
@@ -62,8 +62,8 @@ export function getCloudflareIdsConfigurationIssueIfFullySpecified(env = process
 }
 
 /**
- * Comprueba que CF_ZONE_ID y CF_ACCOUNT_ID existan y tengan formato válido tras autoconfiguración.
- * Normaliza env asignando los valores sin espacios laterales (mismo patrón que CF_API_TOKEN).
+ * Checks that CF_ZONE_ID and CF_ACCOUNT_ID exist and are well-formed after auto-configuration.
+ * Normalizes env by assigning the trimmed values (same pattern as CF_API_TOKEN).
  * @param {NodeJS.ProcessEnv} [env]
  */
 export function assertCloudflareEnvConfigured(env = process.env) {

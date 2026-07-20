@@ -6,9 +6,9 @@ const srcDir = path.join(bootstrapDir, '..', '..');
 const defaultPublicDir = path.join(srcDir, 'web', 'dist');
 
 /**
- * Directorio de estáticos servidos por Express.
- * `VUZON_PUBLIC_DIR` (ruta absoluta o relativa al CWD) tiene prioridad; si no, se usa
- * `<raíz de src>/web/dist` según la ubicación de este módulo (independiente del CWD).
+ * Static directory served by Express.
+ * `VUZON_PUBLIC_DIR` (absolute or CWD-relative path) wins; otherwise `<src root>/web/dist`
+ * is derived from this module's location (independent of the CWD).
  * @param {NodeJS.ProcessEnv} [env]
  * @returns {string}
  */

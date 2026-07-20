@@ -1,8 +1,8 @@
 import crypto from 'node:crypto';
 
 /**
- * Comparación en tiempo constante de dos strings UTF-8 (p. ej. credenciales en env).
- * Evita comparación con !== que acorta en el primer byte distinto.
+ * Constant-time comparison of two UTF-8 strings (e.g. credentials from env).
+ * Avoids a !== comparison, which short-circuits on the first differing byte.
  */
 export function timingSafeStringEqual(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') {

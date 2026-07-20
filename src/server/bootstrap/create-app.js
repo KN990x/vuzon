@@ -51,9 +51,9 @@ function createSecurityHeadersMiddleware({ hsts = false } = {}) {
 }
 
 /**
- * Las respuestas de /api llevan datos de la sesión (alias, destinos, dominio) y no
- * deben quedar en la caché del navegador ni en la de un proxy intermedio. Express no
- * pone ninguna cabecera de caché por su cuenta.
+ * /api responses carry session data (aliases, destinations, domain) and must not stay
+ * in the browser cache nor in an intermediate proxy's. Express sets no cache header
+ * of its own.
  */
 function createApiCacheControlMiddleware() {
   return function apiCacheControlMiddleware(req, res, next) {
@@ -80,15 +80,15 @@ export function createApp({
 
   app.set('trust proxy', runtime.trustProxy);
 
-  // HSTS solo con COOKIE_SECURE=1 (despliegue tras TLS); en homelab HTTP no debe emitirse.
+  // HSTS only with COOKIE_SECURE=1 (deployed behind TLS); on plain-HTTP homelabs it must not be sent.
   app.use(createSecurityHeadersMiddleware({ hsts: runtime.cookieSecure }));
   app.use(createApiCacheControlMiddleware());
-  // Invariante CSRF (sin token explícito). Descansa en tres pilares:
-  //   1. Cookie de sesión con sameSite: 'lax' (platform/session/middleware.js).
-  //   2. Mutaciones solo vía JSON: express.json sin urlencoded (un <form> cross-site
-  //      no puede enviar application/json sin preflight CORS).
-  //   3. Sin CORS: ningún origen externo puede hacer fetch con credenciales.
-  // Cambiar cualquiera de los tres obliga a revisar esta decisión.
+  // CSRF invariant (no explicit token). It rests on three pillars:
+  //   1. Session cookie with sameSite: 'lax' (platform/session/middleware.js).
+  //   2. Mutations only via JSON: express.json without urlencoded (a cross-site <form>
+  //      cannot send application/json without a CORS preflight).
+  //   3. No CORS: no external origin can fetch with credentials.
+  // Changing any of the three means revisiting this decision.
   app.use(express.json({ limit: JSON_BODY_LIMIT }));
   app.use(createSessionMiddleware({
     sessionSecret,
@@ -105,8 +105,8 @@ export function createApp({
     logoutLimiter,
   });
   registerApiRoutes(app, { env, requireAuth, cloudflareClient, apiLimiter });
-  // El 404 JSON de /api debe registrarse ANTES del catch-all SPA de registerPageRoutes:
-  // si se invierte el orden, un GET /api/... desconocido devolvería index.html.
+  // The /api JSON 404 must be registered BEFORE registerPageRoutes' SPA catch-all:
+  // reversed, an unknown GET /api/... would return index.html.
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'No encontrado' });
   });

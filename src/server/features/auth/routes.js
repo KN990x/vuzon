@@ -44,13 +44,13 @@ export function registerAuthRoutes(app, {
     return res.json({ success: true });
   });
 
-  // Sin requireAuth a propósito: cerrar sesión con una cookie ya caducada debe ser
-  // idempotente y devolver 200. Usa su propio limiter y NO el de login: aquel lleva
-  // `skipSuccessfulRequests`, y como el logout siempre responde 200 nunca habría
-  // consumido cupo, dejando el endpoint efectivamente sin acotar.
+  // No requireAuth on purpose: logging out with an already expired cookie must be
+  // idempotent and return 200. It uses its own limiter and NOT the login one: that one
+  // carries `skipSuccessfulRequests`, and since logout always answers 200 it would never
+  // consume quota, leaving the endpoint effectively unbounded.
   app.post('/api/logout', logoutLimiter, (req, res) => {
-    // Borrar la cookie solo la quita de ESTE navegador; la marca de revocación
-    // invalida además cualquier copia de la cookie que siguiera dentro de su maxAge.
+    // Clearing the cookie only removes it from THIS browser; the revocation mark also
+    // invalidates any copy of the cookie still within its maxAge.
     revokeSessionsIssuedUntilNow();
     req.session = null;
     res.clearCookie(sessionCookieName, sessionCookieClearOptions);

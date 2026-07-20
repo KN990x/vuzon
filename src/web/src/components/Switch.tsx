@@ -5,7 +5,7 @@ interface SwitchProps {
   onToggle: () => void;
 }
 
-/** Interruptor 36×20 del diseño (fondo ámbar cuando está activo, knob crema). */
+/** 36×20 switch from the design (amber background when on, cream knob). */
 export function Switch({ on, label, disabled = false, onToggle }: SwitchProps) {
   return (
     <button

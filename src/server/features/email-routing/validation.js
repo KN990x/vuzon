@@ -8,8 +8,8 @@ export const addressSchema = z.object({
 });
 
 export const ruleSchema = z.object({
-  // Debe empezar y acabar en alfanumérico: ".", "..", "-alias" o "alias." producen
-  // direcciones inválidas que Cloudflare rechaza con un error genérico y confuso.
+  // Must start and end alphanumeric: ".", "..", "-alias" or "alias." produce invalid
+  // addresses that Cloudflare rejects with a generic, confusing error.
   localPart: z.string()
     .min(1, 'El alias no puede estar vacío')
     .max(64, 'El alias es demasiado largo')
@@ -20,7 +20,7 @@ export const ruleSchema = z.object({
   destEmail: z.string().email('Email de destino inválido'),
 });
 
-/** Actualización de un alias existente: solo se permite cambiar el destino. */
+/** Update of an existing alias: only the destination may change. */
 export const ruleUpdateSchema = z.object({
   destEmail: z.string().email('Email de destino inválido'),
 });

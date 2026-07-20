@@ -2,21 +2,21 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { resolveSessionSecret } from '../../config/session-secret.js';
 
-test('resolveSessionSecret: SESSION_SECRET en env', () => {
+test('resolveSessionSecret: SESSION_SECRET from env', () => {
   const secret = resolveSessionSecret({
     env: { SESSION_SECRET: 'from-env' },
   });
   assert.equal(secret, 'from-env');
 });
 
-test('resolveSessionSecret: aplica trim a SESSION_SECRET', () => {
+test('resolveSessionSecret: trims SESSION_SECRET', () => {
   const secret = resolveSessionSecret({
     env: { SESSION_SECRET: '  trimmed-secret  \n' },
   });
   assert.equal(secret, 'trimmed-secret');
 });
 
-test('resolveSessionSecret: SESSION_SECRET solo espacios se trata como ausente', async (t) => {
+test('resolveSessionSecret: a whitespace-only SESSION_SECRET is treated as missing', async (t) => {
   const warnings = [];
   const origWarn = console.warn;
   console.warn = (...args) => {
@@ -34,7 +34,7 @@ test('resolveSessionSecret: SESSION_SECRET solo espacios se trata como ausente',
   assert.match(warnings.join('\n'), /SESSION_SECRET/i);
 });
 
-test('resolveSessionSecret: sin SESSION_SECRET genera hex 64 y avisa (desarrollo)', async (t) => {
+test('resolveSessionSecret: without SESSION_SECRET it generates 64 hex chars and warns (development)', async (t) => {
   const warnings = [];
   const origWarn = console.warn;
   console.warn = (...args) => {
@@ -48,17 +48,17 @@ test('resolveSessionSecret: sin SESSION_SECRET genera hex 64 y avisa (desarrollo
 
   assert.match(secret, /^[a-f0-9]{64}$/);
   assert.match(warnings.join('\n'), /SESSION_SECRET/i);
-  assert.match(warnings.join('\n'), /reinicio/i);
+  assert.match(warnings.join('\n'), /restart/i);
 });
 
-test('resolveSessionSecret: en production sin SESSION_SECRET lanza error', () => {
+test('resolveSessionSecret: in production without SESSION_SECRET it throws', () => {
   assert.throws(
     () => resolveSessionSecret({ env: { NODE_ENV: 'production' } }),
-    /SESSION_SECRET.*obligatorio/i,
+    /SESSION_SECRET.*required/i,
   );
 });
 
-test('resolveSessionSecret: en production con SESSION_SECRET lo usa', () => {
+test('resolveSessionSecret: in production with SESSION_SECRET it uses it', () => {
   const prodSecret = 'a'.repeat(32);
   const secret = resolveSessionSecret({
     env: {
@@ -69,16 +69,16 @@ test('resolveSessionSecret: en production con SESSION_SECRET lo usa', () => {
   assert.equal(secret, prodSecret);
 });
 
-test('resolveSessionSecret: en production rechaza secreto demasiado corto', () => {
+test('resolveSessionSecret: in production it rejects an overly short secret', () => {
   assert.throws(
     () => resolveSessionSecret({
       env: { NODE_ENV: 'production', SESSION_SECRET: 'too-short' },
     }),
-    /al menos 32/i,
+    /at least 32/i,
   );
 });
 
-test('resolveSessionSecret: en desarrollo acepta secreto corto', () => {
+test('resolveSessionSecret: in development it accepts a short secret', () => {
   const secret = resolveSessionSecret({
     env: { NODE_ENV: 'development', SESSION_SECRET: 'short' },
   });

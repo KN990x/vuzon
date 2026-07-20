@@ -21,7 +21,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-test('Clipboard API disponible: copia y no falla', async () => {
+test('Clipboard API available: copies and does not fail', async () => {
   vi.stubGlobal('navigator', {
     clipboard: { writeText: async () => {} },
   });
@@ -30,7 +30,7 @@ test('Clipboard API disponible: copia y no falla', async () => {
   expect(result).toEqual({ copied: true, failed: false });
 });
 
-test('Clipboard API falla y execCommand true: copia', async () => {
+test('Clipboard API fails and execCommand true: copies', async () => {
   vi.spyOn(console, 'error').mockImplementation(() => {});
   vi.stubGlobal('navigator', {
     clipboard: {
@@ -48,7 +48,7 @@ test('Clipboard API falla y execCommand true: copia', async () => {
   expect(promptSpy).not.toHaveBeenCalled();
 });
 
-test('Clipboard API y execCommand fallan: cae a prompt y marca fallo', async () => {
+test('Clipboard API and execCommand both fail: falls back to prompt and flags failure', async () => {
   vi.spyOn(console, 'error').mockImplementation(() => {});
   vi.stubGlobal('navigator', {
     clipboard: {
@@ -70,7 +70,7 @@ test('Clipboard API y execCommand fallan: cae a prompt y marca fallo', async () 
   expect(prompts[0].value).toBe('manual@example.com');
 });
 
-test('prompt bloqueado (iframe/sandbox): sigue reportando fallo sin lanzar', async () => {
+test('prompt blocked (iframe/sandbox): still reports failure without throwing', async () => {
   vi.spyOn(console, 'error').mockImplementation(() => {});
   vi.stubGlobal('navigator', {
     clipboard: {

@@ -1,23 +1,23 @@
 import type { ReactNode } from 'react';
 
-/** Botón píldora del diseño (relleno ámbar suave + brillo interior + hover scale). */
+/** Pill button from the design (soft amber fill + inner glow + hover scale). */
 export const pillButtonClass =
   'relative cursor-pointer rounded-full bg-accent/[0.08] px-4 py-[7px] text-[12.5px] ' +
   'font-medium text-accent shadow-[inset_0_1px_1px_rgba(255,255,255,0.06)] ' +
   'transition-transform duration-200 hover:scale-105 ' +
   'disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100';
 
-/** Botón de icono de la cabecera (36×36, hover scale). */
+/** Header icon button (36×36, hover scale). */
 export const iconButtonClass =
   'flex size-9 cursor-pointer items-center justify-center text-cream/80 ' +
   'transition-[transform,color] duration-200 hover:scale-105 hover:text-cream ' +
   'disabled:cursor-not-allowed disabled:opacity-40';
 
-/** Chip monoespaciado sobre fondo blanco translúcido (destino del catch-all). */
+/** Monospaced chip on a translucent white background (catch-all destination). */
 export const chipClass =
   'flex items-center gap-2 rounded-[10px] bg-white/[0.04] px-3 py-[9px] font-mono text-xs';
 
-/** Círculo ámbar de 30px que acompaña a los títulos de tarjeta. */
+/** 30px amber circle that accompanies card titles. */
 export function CardIcon({ children }: { children: ReactNode }) {
   return (
     <span className="flex size-[30px] flex-none items-center justify-center rounded-full bg-accent/10 text-accent">
@@ -27,12 +27,12 @@ export function CardIcon({ children }: { children: ReactNode }) {
 }
 
 /**
- * Marca de vuzon: buzón sobre disco ámbar.
+ * The vuzon mark: a mailbox on an amber disc.
  *
- * Va inline (como GitHubIcon) en vez de como <img>: evita una petición extra,
- * escala sin pixelarse y mantiene `src/web/public/` con un único asset. La
- * geometría es la MISMA que la de `public/favicon.svg`, así que la marca de la
- * pestaña y la de la interfaz no pueden divergir. Si se retoca una, retoca la otra.
+ * It goes inline (like GitHubIcon) rather than as an <img>: it avoids an extra request,
+ * scales without pixelating and keeps `src/web/public/` down to a single asset. The
+ * geometry is the SAME as `public/favicon.svg`, so the tab mark and the interface mark
+ * cannot diverge. If you tweak one, tweak the other.
  */
 export function VuzonMark({ size = 26 }: { size?: number }) {
   return (
@@ -55,7 +55,7 @@ export function VuzonMark({ size = 26 }: { size?: number }) {
   );
 }
 
-/** SVG de GitHub tal cual aparece en la cabecera del diseño. */
+/** GitHub SVG exactly as it appears in the design's header. */
 export function GitHubIcon({ size = 18 }: { size?: number }) {
   return (
     <svg

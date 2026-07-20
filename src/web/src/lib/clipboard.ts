@@ -1,6 +1,6 @@
 export interface CopyResult {
   copied: boolean;
-  /** true cuando falló también el fallback y procede el toast de error. */
+  /** true when the fallback failed too and the error toast is warranted. */
   failed: boolean;
 }
 

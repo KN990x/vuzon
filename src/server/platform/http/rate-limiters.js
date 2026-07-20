@@ -12,8 +12,8 @@ const sharedRateLimitOptions = {
 };
 
 /**
- * Límite estricto para intentos de login (anti fuerza bruta).
- * Los logins correctos no consumen cupo.
+ * Strict limit for login attempts (anti brute-force).
+ * Successful logins do not consume quota.
  * @param {import('express-rate-limit').Options} [options]
  */
 export function createLoginRateLimiter(options = {}) {
@@ -28,9 +28,9 @@ export function createLoginRateLimiter(options = {}) {
 }
 
 /**
- * Límite para el logout. Deliberadamente SIN `skipSuccessfulRequests`: el logout
- * siempre responde 200, así que reutilizar el limiter de login lo dejaría sin acotar.
- * El cupo es holgado porque cerrar sesión es una acción legítima y barata.
+ * Limit for logout. Deliberately WITHOUT `skipSuccessfulRequests`: logout always answers
+ * 200, so reusing the login limiter would leave it unbounded.
+ * The quota is generous because logging out is a legitimate and cheap action.
  * @param {import('express-rate-limit').Options} [options]
  */
 export function createLogoutRateLimiter(options = {}) {
@@ -44,12 +44,12 @@ export function createLogoutRateLimiter(options = {}) {
 }
 
 /**
- * Límite suave para la API autenticada (protege la cuota de Cloudflare).
+ * Soft limit for the authenticated API (protects the Cloudflare quota).
  *
- * El cupo se dimensiona a partir del coste real de una acción del panel: una mutación
- * más el refresco posterior (`refreshAll` en Dashboard.tsx) son ~4 peticiones. Con 600
- * caben ~150 acciones por ventana, holgado para un panel de un solo usuario. Con el
- * valor anterior (120) el propio panel se autobloqueaba a las ~24 acciones.
+ * The quota is sized from the real cost of a panel action: one mutation plus the
+ * following refresh (`refreshAll` in Dashboard.tsx) is ~4 requests. With 600 that fits
+ * ~150 actions per window, generous for a single-user panel. With the previous value
+ * (120) the panel locked itself out at ~24 actions.
  * @param {import('express-rate-limit').Options} [options]
  */
 export function createApiRateLimiter(options = {}) {
@@ -63,7 +63,7 @@ export function createApiRateLimiter(options = {}) {
 }
 
 /**
- * Límite suave para la página del panel autenticada.
+ * Soft limit for the authenticated panel page.
  * @param {import('express-rate-limit').Options} [options]
  */
 export function createPagesRateLimiter(options = {}) {

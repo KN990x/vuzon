@@ -67,9 +67,9 @@ export function AliasesCard(props: AliasesCardProps) {
       {rules.map((rule) => {
         const pending = isRulePending(rule.id);
         const enabled = Boolean(rule.enabled);
-        // Solo las reglas con un único `forward` son editables: ver
-        // getSingleForwardDestination. Las demás (Worker, descartar, multi-destino)
-        // se muestran en texto para no destruir configuración hecha fuera del panel.
+        // Only rules with a single `forward` are editable: see
+        // getSingleForwardDestination. The rest (Worker, drop, multi-destination) render
+        // as text so we do not destroy configuration made outside the panel.
         const currentDest = getSingleForwardDestination(rule);
         const editable = currentDest !== null && verifiedDests.length > 0;
         return (
@@ -92,8 +92,8 @@ export function AliasesCard(props: AliasesCardProps) {
                   aria-label={`Destino de ${rule.name ?? 'alias'}`}
                   className="w-full cursor-pointer appearance-none truncate rounded-[8px] bg-white/[0.04] py-1 pl-2 pr-6 font-mono text-[13px] text-cream/70 disabled:cursor-wait disabled:opacity-60"
                 >
-                  {/* El destino actual puede haberse quedado sin verificar: se mantiene
-                      como opción para no falsear lo que hay configurado en Cloudflare. */}
+                  {/* The current destination may have become unverified: it is kept as an
+                      option so we do not misrepresent what is configured in Cloudflare. */}
                   {!verifiedDests.some((d) => d.email === currentDest) && (
                     <option value={currentDest}>{currentDest}</option>
                   )}

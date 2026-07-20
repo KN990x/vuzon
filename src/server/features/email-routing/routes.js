@@ -24,14 +24,14 @@ import {
 } from './validation.js';
 
 /**
- * Regla de Cloudflare validada, o 502 si la respuesta no tiene la forma esperada.
+ * Validated Cloudflare rule, or 502 when the response does not have the expected shape.
  * @param {unknown} rule
  * @returns {Record<string, unknown>}
  */
 function parseCloudflareRule(rule) {
   const parsed = cloudflareRuleSchema.safeParse(rule);
   if (!parsed.success) {
-    throw new CloudflareApiError('Cloudflare devolvió una regla con forma inesperada', {
+    throw new CloudflareApiError('Cloudflare returned a rule with an unexpected shape', {
       status: 502,
       code: 'invalid_rule_shape',
       retryable: false,
@@ -41,11 +41,11 @@ function parseCloudflareRule(rule) {
 }
 
 /**
- * Payload de PUT a partir de la regla existente: Cloudflare exige el objeto completo,
- * así que se reenvían los campos que ya tenía y solo se cambia lo pedido.
- * @param {Record<string, unknown>} rule Regla validada por `parseCloudflareRule`.
+ * PUT payload built from the existing rule: Cloudflare demands the full object, so we
+ * send back the fields it already had and change only what was asked for.
+ * @param {Record<string, unknown>} rule Rule validated by `parseCloudflareRule`.
  * @param {boolean} enabled
- * @param {{ actions?: unknown[] }} [overrides] `actions` nuevas (cambiar destino).
+ * @param {{ actions?: unknown[] }} [overrides] New `actions` (change destination).
  */
 export function buildRuleUpdatePayload(rule, enabled, overrides = {}) {
   const payload = {
@@ -73,11 +73,11 @@ function rejectCatchAllMutation(res) {
 }
 
 /**
- * Contrato de respuesta de /api (verificado en tests/integration/server/app.test.js):
- *   - lecturas  → { result }
- *   - mutaciones→ { ok: true } y además `result` cuando Cloudflare devuelve el recurso
- *   - errores   → { error } con el status HTTP correspondiente
- * `/api/login` y `/api/logout` mantienen su propio `{ success: true }`.
+ * /api response contract (verified in tests/integration/server/app.test.js):
+ *   - reads     → { result }
+ *   - mutations → { ok: true }, plus `result` when Cloudflare returns the resource
+ *   - errors    → { error } with the matching HTTP status
+ * `/api/login` and `/api/logout` keep their own `{ success: true }`.
  */
 export function registerApiRoutes(app, {
   env = process.env,
@@ -86,9 +86,9 @@ export function registerApiRoutes(app, {
   apiLimiter = createApiRateLimiter(),
 } = {}) {
   const { fetchCloudflare, fetchAllCloudflare } = cloudflareClient;
-  // requireAuth ANTES del limiter: las peticiones sin sesión mueren en el 401 sin
-  // consumir la cuota compartida (si no, un cliente anónimo podría agotarla y
-  // bloquear al usuario legítimo; con TRUST_PROXY off todas las IPs colapsan).
+  // requireAuth BEFORE the limiter: requests without a session die at the 401 without
+  // burning the shared quota (otherwise an anonymous client could exhaust it and lock
+  // out the legitimate user; with TRUST_PROXY off every IP collapses into one).
   const gate = [requireAuth, apiLimiter];
   const updateRuleEnabledState = async (req, res, enabled) => {
     const ruleId = cloudflareResourceIdSchema.parse(req.params.id);
@@ -152,10 +152,10 @@ export function registerApiRoutes(app, {
   }));
 
   /**
-   * Traduce un fallo de Cloudflare al crear un alias en un mensaje accionable.
-   * Solo se ejecuta en la rama de error, así que las dos llamadas extra no encarecen
-   * el camino feliz. Si no se identifica la causa, se relanza el error original y el
-   * cliente recibe el mensaje genérico de siempre.
+   * Translates a Cloudflare failure while creating an alias into an actionable message.
+   * It only runs on the error branch, so the two extra calls do not make the happy path
+   * more expensive. When no cause is identified, the original error is rethrown and the
+   * client gets the usual generic message.
    * @returns {Promise<never>}
    */
   const diagnoseRuleCreationFailure = async ({ err, aliasEmail, destEmail }) => {
@@ -195,8 +195,8 @@ export function registerApiRoutes(app, {
     const { localPart, destEmail } = ruleSchema.parse(req.body);
     const aliasEmail = `${localPart}@${getPanelDomain(env)}`;
 
-    // Comprobación preventiva: la SPA ya solo ofrece destinos verificados, pero el
-    // servidor no puede fiarse del cliente y así el error llega claro de una vez.
+    // Pre-flight check: the SPA already offers verified destinations only, but the
+    // server cannot trust the client, and this way the error arrives clear right away.
     const addresses = await fetchAllCloudflare(`/accounts/${env.CF_ACCOUNT_ID}/email/routing/addresses`);
     const destination = inspectDestination(addresses, destEmail);
     if (!destination.exists) {
@@ -223,8 +223,8 @@ export function registerApiRoutes(app, {
     res.json({ ok: true, result: apiRes });
   }));
 
-  // Cambiar el destino de un alias existente. Mismo guard de catch-all que
-  // enable/disable/delete: la regla catch-all sigue siendo de solo lectura.
+  // Change the destination of an existing alias. Same catch-all guard as
+  // enable/disable/delete: the catch-all rule stays read-only.
   app.put('/api/rules/:id', ...gate, asyncHandler(async (req, res) => {
     const ruleId = cloudflareResourceIdSchema.parse(req.params.id);
     if (isCatchAllRuleId(ruleId)) {

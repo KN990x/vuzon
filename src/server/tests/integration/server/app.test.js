@@ -111,14 +111,14 @@ async function readJson(res) {
   }
 }
 
-/** Cabeceras Set-Cookie firmadas (cookie + .sig); `get('set-cookie')` no es fiable con varias cookies. */
+/** Signed Set-Cookie headers (cookie + .sig); `get('set-cookie')` is unreliable with several cookies. */
 function sessionCookieHeaderFromResponse(res) {
   const list = res.headers.getSetCookie();
-  assert.ok(list && list.length > 0, 'se esperaba al menos una Set-Cookie');
+  assert.ok(list && list.length > 0, 'expected at least one Set-Cookie');
   return list.map((line) => line.split(';')[0].trim()).join('; ');
 }
 
-test('integración HTTP: healthz, auth, API con Cloudflare simulado', async () => {
+test('HTTP integration: healthz, auth, API with a simulated Cloudflare', async () => {
   const env = {
     AUTH_USER: 'testuser',
     AUTH_PASS: 'test-secret-pass',
@@ -220,12 +220,12 @@ test('integración HTTP: healthz, auth, API con Cloudflare simulado', async () =
       });
       assert.equal(res.status, 200);
       const data = await readJson(res);
-      // Contrato de mutación: siempre `ok`, más `result` cuando Cloudflare lo devuelve.
+      // Mutation contract: always `ok`, plus `result` when Cloudflare returns it.
       assert.equal(data.ok, true);
       assert.ok(data.result);
     }
 
-    // Los DELETE comparten el mismo sobre `{ ok: true }`.
+    // DELETEs share the same `{ ok: true }` envelope.
     {
       const res = await fetch(`${baseUrl}/api/rules/rule1`, {
         method: 'DELETE',
@@ -250,7 +250,7 @@ test('integración HTTP: healthz, auth, API con Cloudflare simulado', async () =
   }
 });
 
-test('integración HTTP: login con AUTH en env con espacios (trim)', async () => {
+test('HTTP integration: login with AUTH env vars carrying whitespace (trim)', async () => {
   const env = {
     AUTH_USER: '  trimuser  ',
     AUTH_PASS: '  trim-pass  ',
@@ -294,7 +294,7 @@ test('integración HTTP: login con AUTH en env con espacios (trim)', async () =>
   }
 });
 
-test('integración HTTP: sin AUTH_USER/AUTH_PASS, POST /api/login responde 500', async () => {
+test('HTTP integration: without AUTH_USER/AUTH_PASS, POST /api/login answers 500', async () => {
   const env = {
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
@@ -326,7 +326,7 @@ test('integración HTTP: sin AUTH_USER/AUTH_PASS, POST /api/login responde 500',
   }
 });
 
-test('integración HTTP: cabeceras de seguridad en /healthz', async () => {
+test('HTTP integration: security headers on /healthz', async () => {
   const env = {
     AUTH_USER: 'u',
     AUTH_PASS: 'p',
@@ -359,7 +359,7 @@ test('integración HTTP: cabeceras de seguridad en /healthz', async () => {
   }
 });
 
-test('integración HTTP: logout invalida una copia de la cookie de sesión', async () => {
+test('HTTP integration: logout invalidates a copy of the session cookie', async () => {
   const env = {
     AUTH_USER: 'testuser',
     AUTH_PASS: 'test-secret-pass',
@@ -386,7 +386,7 @@ test('integración HTTP: logout invalida una copia de la cookie de sesión', asy
       body: JSON.stringify({ username: 'testuser', password: 'test-secret-pass' }),
     });
     assert.equal(loginRes.status, 200);
-    // Copia de la cookie, como la tendría un atacante que la hubiese robado.
+    // Copy of the cookie, as an attacker who had stolen it would hold.
     const stolenCookie = sessionCookieHeaderFromResponse(loginRes);
 
     const before = await fetch(`${baseUrl}/api/me`, { headers: { Cookie: stolenCookie } });
@@ -395,7 +395,7 @@ test('integración HTTP: logout invalida una copia de la cookie de sesión', asy
     const logoutRes = await fetch(`${baseUrl}/api/logout`, { method: 'POST' });
     assert.equal(logoutRes.status, 200);
 
-    // La cookie sigue dentro de su maxAge, pero la marca de revocación la invalida.
+    // The cookie is still within its maxAge, but the revocation mark invalidates it.
     const after = await fetch(`${baseUrl}/api/me`, { headers: { Cookie: stolenCookie } });
     assert.equal(after.status, 401);
   } finally {
@@ -406,7 +406,7 @@ test('integración HTTP: logout invalida una copia de la cookie de sesión', asy
   }
 });
 
-test('integración HTTP: las respuestas de /api no se cachean', async () => {
+test('HTTP integration: /api responses are not cached', async () => {
   const env = {
     AUTH_USER: 'testuser',
     AUTH_PASS: 'test-secret-pass',
@@ -438,7 +438,7 @@ test('integración HTTP: las respuestas de /api no se cachean', async () => {
     assert.equal(res.status, 200);
     assert.equal(res.headers.get('cache-control'), 'no-store');
 
-    // El 401 anónimo tampoco debe quedar cacheado como respuesta válida.
+    // The anonymous 401 must not be cached as a valid response either.
     const anon = await fetch(`${baseUrl}/api/rules`);
     assert.equal(anon.status, 401);
     assert.equal(anon.headers.get('cache-control'), 'no-store');
@@ -450,7 +450,7 @@ test('integración HTTP: las respuestas de /api no se cachean', async () => {
   }
 });
 
-test('integración HTTP: login rate limit responde 429', async () => {
+test('HTTP integration: login rate limit answers 429', async () => {
   const env = {
     AUTH_USER: 'testuser',
     AUTH_PASS: 'test-secret-pass',
@@ -495,7 +495,7 @@ test('integración HTTP: login rate limit responde 429', async () => {
   }
 });
 
-test('integración HTTP: body de login inválido responde 400', async () => {
+test('HTTP integration: an invalid login body answers 400', async () => {
   const env = {
     AUTH_USER: 'testuser',
     AUTH_PASS: 'test-secret-pass',
@@ -529,7 +529,7 @@ test('integración HTTP: body de login inválido responde 400', async () => {
   }
 });
 
-test('integración HTTP: API autenticada rate limit responde 429', async () => {
+test('HTTP integration: authenticated API rate limit answers 429', async () => {
   const env = {
     AUTH_USER: 'testuser',
     AUTH_PASS: 'test-secret-pass',
@@ -578,7 +578,7 @@ test('integración HTTP: API autenticada rate limit responde 429', async () => {
   }
 });
 
-test('integración HTTP: peticiones sin sesión no consumen la cuota del rate limit API', async () => {
+test('HTTP integration: sessionless requests do not consume the API rate-limit quota', async () => {
   const env = {
     AUTH_USER: 'testuser',
     AUTH_PASS: 'test-secret-pass',
@@ -598,13 +598,13 @@ test('integración HTTP: peticiones sin sesión no consumen la cuota del rate li
   const { server, baseUrl } = await listen(app);
 
   try {
-    // Muchas más peticiones anónimas que el max del limiter: siempre 401, nunca 429.
+    // Far more anonymous requests than the limiter's max: always 401, never 429.
     for (let i = 0; i < 5; i += 1) {
       const res = await fetch(`${baseUrl}/api/me`);
       assert.equal(res.status, 401);
     }
 
-    // La cuota sigue intacta para el usuario autenticado.
+    // The quota is still intact for the authenticated user.
     const loginRes = await fetch(`${baseUrl}/api/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -631,7 +631,7 @@ test('integración HTTP: peticiones sin sesión no consumen la cuota del rate li
   }
 });
 
-test('integración HTTP: HSTS solo se emite con COOKIE_SECURE activo', async () => {
+test('HTTP integration: HSTS is only sent with COOKIE_SECURE on', async () => {
   const baseEnv = {
     AUTH_USER: 'u',
     AUTH_PASS: 'p',
@@ -670,7 +670,7 @@ test('integración HTTP: HSTS solo se emite con COOKIE_SECURE activo', async () 
   }
 });
 
-test('integración HTTP: sin src/web/dist la SPA responde 503 con mensaje claro', async () => {
+test('HTTP integration: without src/web/dist the SPA answers 503 with a clear message', async () => {
   const env = {
     AUTH_USER: 'u',
     AUTH_PASS: 'p',
@@ -701,7 +701,7 @@ test('integración HTTP: sin src/web/dist la SPA responde 503 con mensaje claro'
   }
 });
 
-test('integración HTTP: no se puede mutar ni borrar catch-all', async () => {
+test('HTTP integration: the catch-all cannot be mutated or deleted', async () => {
   const env = {
     AUTH_USER: 'testuser',
     AUTH_PASS: 'test-secret-pass',
@@ -748,7 +748,7 @@ test('integración HTTP: no se puede mutar ni borrar catch-all', async () => {
   }
 });
 
-/** Login + cookie de sesión, para los tests que solo necesitan llegar autenticados. */
+/** Login + session cookie, for tests that just need to get authenticated. */
 async function loginAndGetCookie(baseUrl, username = 'testuser', password = 'test-secret-pass') {
   const loginRes = await fetch(`${baseUrl}/api/login`, {
     method: 'POST',
@@ -768,7 +768,7 @@ const DIAGNOSTICS_ENV = {
   NODE_ENV: 'development',
 };
 
-test('integración HTTP: crear alias con destino sin verificar da un mensaje accionable', async () => {
+test('HTTP integration: creating an alias with an unverified destination gives an actionable message', async () => {
   const base = createMockCloudflareClient();
   const cloudflareClient = {
     ...base,
@@ -809,7 +809,7 @@ test('integración HTTP: crear alias con destino sin verificar da un mensaje acc
   }
 });
 
-test('integración HTTP: crear alias con destino desconocido lo dice explícitamente', async () => {
+test('HTTP integration: creating an alias with an unknown destination says so explicitly', async () => {
   const { app } = createApp({
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient: createMockCloudflareClient(),
@@ -837,7 +837,7 @@ test('integración HTTP: crear alias con destino desconocido lo dice explícitam
   }
 });
 
-test('integración HTTP: alias duplicado se diagnostica tras el fallo de Cloudflare', async () => {
+test('HTTP integration: a duplicate alias is diagnosed after the Cloudflare failure', async () => {
   const base = createMockCloudflareClient();
   const cloudflareClient = {
     ...base,
@@ -880,7 +880,7 @@ test('integración HTTP: alias duplicado se diagnostica tras el fallo de Cloudfl
     assert.equal(res.status, 400);
     const data = await readJson(res);
     assert.match(data.error, /ya existe/);
-    // El invariante se mantiene: nada del texto de Cloudflare llega al cliente.
+    // The invariant holds: none of Cloudflare's text reaches the client.
     assert.ok(!data.error.includes('mensaje_upstream'));
   } finally {
     resetSessionEpochForTests();
@@ -890,7 +890,7 @@ test('integración HTTP: alias duplicado se diagnostica tras el fallo de Cloudfl
   }
 });
 
-test('integración HTTP: un fallo de Cloudflare sin causa identificable sigue siendo genérico', async () => {
+test('HTTP integration: a Cloudflare failure with no identifiable cause stays generic', async () => {
   const base = createMockCloudflareClient();
   const cloudflareClient = {
     ...base,
@@ -931,7 +931,7 @@ test('integración HTTP: un fallo de Cloudflare sin causa identificable sigue si
   }
 });
 
-test('integración HTTP: PUT /api/rules/:id cambia el destino y respeta el catch-all', async () => {
+test('HTTP integration: PUT /api/rules/:id changes the destination and respects the catch-all', async () => {
   const puts = [];
   const base = createMockCloudflareClient();
   const cloudflareClient = {
@@ -964,12 +964,12 @@ test('integración HTTP: PUT /api/rules/:id cambia el destino y respeta el catch
     assert.equal(ok.status, 200);
     assert.equal(puts.length, 1);
     assert.deepEqual(puts[0].body.actions, [{ type: 'forward', value: ['dest@example.com'] }]);
-    // El matcher (la dirección del alias) no se toca.
+    // The matcher (the alias address) is left untouched.
     assert.deepEqual(puts[0].body.matchers, [
       { type: 'literal', field: 'to', value: 'alias@example.com' },
     ]);
 
-    // El catch-all sigue siendo de solo lectura, por slug y por id real.
+    // The catch-all stays read-only, both by slug and by real id.
     const bySlug = await fetch(`${baseUrl}/api/rules/catch_all`, {
       method: 'PUT',
       headers,
@@ -986,9 +986,9 @@ test('integración HTTP: PUT /api/rules/:id cambia el destino y respeta el catch
     assert.equal(byId.status, 400);
     assert.equal((await readJson(byId)).error, CATCH_ALL_MUTATION_ERROR);
 
-    assert.equal(puts.length, 1, 'ninguna mutación del catch-all debe llegar a Cloudflare');
+    assert.equal(puts.length, 1, 'no catch-all mutation may reach Cloudflare');
 
-    // Un destino sin verificar se rechaza igual que al crear.
+    // An unverified destination is rejected just like on creation.
     const unverified = await fetch(`${baseUrl}/api/rules/rule1`, {
       method: 'PUT',
       headers,
@@ -1004,7 +1004,7 @@ test('integración HTTP: PUT /api/rules/:id cambia el destino y respeta el catch
   }
 });
 
-test('integración HTTP: rechazo async sin try/catch llega al manejador de errores API', async () => {
+test('HTTP integration: an async rejection without try/catch reaches the API error handler', async () => {
   const base = createMockCloudflareClient();
   const cloudflareClient = {
     ...base,
@@ -1055,7 +1055,7 @@ test('integración HTTP: rechazo async sin try/catch llega al manejador de error
   }
 });
 
-test('integración HTTP: CloudflareApiError 401 no se expone como 401 al cliente', async () => {
+test('HTTP integration: a CloudflareApiError 401 is not exposed as 401 to the client', async () => {
   const base = createMockCloudflareClient();
   const cloudflareClient = {
     ...base,

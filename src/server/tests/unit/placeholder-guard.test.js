@@ -9,7 +9,7 @@ import {
 } from '../../config/placeholder-guard.js';
 
 const unitDir = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.join(unitDir, '..', '..', '..', '..'); // raíz del workspace
+const repoRoot = path.join(unitDir, '..', '..', '..', '..'); // workspace root
 
 /**
  * Pares CLAVE=valor sin comentar de `.env.example`.
@@ -37,9 +37,9 @@ function readEnvExampleEntries() {
   return entries;
 }
 
-test('placeholder-guard: cada valor de .env.example está cubierto o exento', () => {
+test('placeholder-guard: every .env.example value is covered or exempt', () => {
   const entries = readEnvExampleEntries();
-  assert.ok(entries.length > 0, 'se esperaba al menos una entrada en .env.example');
+  assert.ok(entries.length > 0, 'expected at least one entry in .env.example');
 
   for (const [key, value] of entries) {
     if (!value || PLACEHOLDER_EXEMPT_KEYS.has(key)) {
@@ -49,41 +49,41 @@ test('placeholder-guard: cada valor de .env.example está cubierto o exento', ()
     const issue = getPlaceholderConfigurationIssue({ [key]: value });
     assert.ok(
       issue,
-      `.env.example define ${key}=${value} y el guard no lo rechaza. `
-        + 'Añádelo a PLACEHOLDER_VALUES_BY_KEY (o a PLACEHOLDER_EXEMPT_KEYS con su motivo).',
+      `.env.example defines ${key}=${value} and the guard does not reject it. `
+        + 'Add it to PLACEHOLDER_VALUES_BY_KEY (or to PLACEHOLDER_EXEMPT_KEYS with a reason).',
     );
     assert.match(issue, new RegExp(key));
   }
 });
 
-test('placeholder-guard: el SESSION_SECRET de ejemplo supera los 32 caracteres pero se rechaza', () => {
+test('placeholder-guard: the example SESSION_SECRET is over 32 characters yet is rejected', () => {
   const example = 'replace-with-openssl-rand-hex-32-chars';
-  // Documenta el fallo original: la validación de longitud por sí sola lo dejaba pasar.
+  // Documents the original bug: the length check alone let this through.
   assert.ok(example.length >= 32);
   assert.match(getPlaceholderConfigurationIssue({ SESSION_SECRET: example }), /SESSION_SECRET/);
 });
 
-test('placeholder-guard: rechaza SESSION_SECRET sin entropía', () => {
+test('placeholder-guard: rejects a SESSION_SECRET without entropy', () => {
   assert.match(
     getPlaceholderConfigurationIssue({ SESSION_SECRET: 'a'.repeat(64) }),
-    /predecible/,
+    /too predictable/,
   );
   assert.match(
     getPlaceholderConfigurationIssue({ SESSION_SECRET: 'ab'.repeat(32) }),
-    /predecible/,
+    /too predictable/,
   );
 });
 
-test('placeholder-guard: acepta un secreto real de openssl rand -hex 32', () => {
+test('placeholder-guard: accepts a real secret from openssl rand -hex 32', () => {
   const realistic = '9f3c1a7d0e5b48620fa1c37d9e2b8054a6d13f7c2e908b45d61af03c7e5928bd';
   assert.equal(getPlaceholderConfigurationIssue({ SESSION_SECRET: realistic }), null);
 });
 
-test('placeholder-guard: AUTH_USER=admin es una elección legítima', () => {
+test('placeholder-guard: AUTH_USER=admin is a legitimate choice', () => {
   assert.equal(getPlaceholderConfigurationIssue({ AUTH_USER: 'admin' }), null);
 });
 
-test('placeholder-guard: entorno normal no produce aviso', () => {
+test('placeholder-guard: a normal environment produces no warning', () => {
   assert.equal(
     getPlaceholderConfigurationIssue({
       DOMAIN: 'midominio.dev',

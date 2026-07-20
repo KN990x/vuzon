@@ -4,8 +4,8 @@ import { getRuleDest } from '../lib/rules';
 import { CardIcon, chipClass } from './primitives';
 
 /**
- * Tarjeta del catch-all. SOLO LECTURA por contrato: el backend rechaza
- * enable/disable/delete sobre esta regla, así que aquí no hay controles.
+ * Catch-all card. READ-ONLY by contract: the backend rejects enable/disable/delete on
+ * this rule, so there are no controls here.
  */
 export function CatchAllCard({ catchAll }: { catchAll: Rule | null }) {
   const enabled = Boolean(catchAll?.enabled);

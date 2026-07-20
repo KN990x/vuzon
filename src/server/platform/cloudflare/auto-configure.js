@@ -11,13 +11,13 @@ export async function ensureCloudflareIdentifiers({
     return;
   }
 
-  console.log('Autoconfiguración: detectando CF_ZONE_ID y CF_ACCOUNT_ID…');
+  console.log('Auto-configuration: detecting CF_ZONE_ID and CF_ACCOUNT_ID…');
 
   const domain = getPanelDomain(env);
   const token = getCfApiToken(env);
   if (!domain || !token) {
     throw new Error(
-      'No se puede autoconfigurar: faltan DOMAIN o CF_API_TOKEN en .env.',
+      'Cannot auto-configure: DOMAIN or CF_API_TOKEN missing in .env.',
     );
   }
 
@@ -25,13 +25,13 @@ export async function ensureCloudflareIdentifiers({
 
   if (!Array.isArray(zones) || zones.length === 0) {
     throw new Error(
-      `No hay ninguna zona "${domain}" en la cuenta de Cloudflare de este token. Comprueba DOMAIN y que el API token sea de la misma cuenta donde está el dominio.`,
+      `There is no "${domain}" zone in the Cloudflare account this token belongs to. Check DOMAIN, and that the API token comes from the same account that owns the domain.`,
     );
   }
 
   if (zones.length > 1) {
     throw new Error(
-      `Hay ${zones.length} zonas llamadas "${domain}"; la autoconfiguración no puede elegir una. Define CF_ZONE_ID y CF_ACCOUNT_ID manualmente en .env.`,
+      `There are ${zones.length} zones named "${domain}"; auto-configuration cannot pick one. Set CF_ZONE_ID and CF_ACCOUNT_ID manually in .env.`,
     );
   }
 
@@ -39,19 +39,19 @@ export async function ensureCloudflareIdentifiers({
 
   if (!zone || typeof zone !== 'object') {
     throw new Error(
-      'La API de Cloudflare devolvió una zona inválida. Revisa DOMAIN, el token y define CF_ZONE_ID y CF_ACCOUNT_ID manualmente en .env si hace falta.',
+      'The Cloudflare API returned an invalid zone. Check DOMAIN and the token, and set CF_ZONE_ID and CF_ACCOUNT_ID manually in .env if needed.',
     );
   }
 
   const accountId = zone.account && typeof zone.account === 'object' ? zone.account.id : undefined;
   if (!zone.id || !accountId) {
     throw new Error(
-      'La API de Cloudflare no devolvió identificadores de zona o cuenta. Define CF_ZONE_ID y CF_ACCOUNT_ID manualmente en .env.',
+      'The Cloudflare API returned no zone or account identifiers. Set CF_ZONE_ID and CF_ACCOUNT_ID manually in .env.',
     );
   }
 
   env.CF_ZONE_ID = zone.id;
   env.CF_ACCOUNT_ID = accountId;
 
-  console.log(`Autoconfiguración lista para ${domain}`);
+  console.log(`Auto-configuration ready for ${domain}`);
 }

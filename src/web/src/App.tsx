@@ -7,9 +7,9 @@ import { Dashboard } from './screens/Dashboard';
 type Session = 'checking' | 'anon' | 'authed' | 'error';
 
 /**
- * El login es un estado de la SPA: si GET /api/me responde 401 se muestra la
- * pantalla de login; si responde 200, el panel. No hay redirects de servidor.
- * Un fallo de red o 5xx NO cierra la sesión: se ofrece reintentar.
+ * Login is a state of the SPA: if GET /api/me answers 401 the login screen is shown;
+ * if it answers 200, the panel. There are no server-side redirects.
+ * A network failure or 5xx does NOT end the session: a retry is offered instead.
  */
 export default function App() {
   const [session, setSession] = useState<Session>('checking');

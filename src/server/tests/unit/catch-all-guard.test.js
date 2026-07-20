@@ -5,13 +5,13 @@ import {
   isCatchAllRuleId,
 } from '../../features/email-routing/catch-all-guard.js';
 
-test('isCatchAllRuleId: solo catch_all', () => {
+test('isCatchAllRuleId: catch_all only', () => {
   assert.equal(isCatchAllRuleId('catch_all'), true);
   assert.equal(isCatchAllRuleId('catch_all_rule'), false);
   assert.equal(isCatchAllRuleId('rule1'), false);
 });
 
-test('isCatchAllRule: por id o matcher type all', () => {
+test('isCatchAllRule: by id or by matcher type all', () => {
   assert.equal(isCatchAllRule({ id: 'catch_all', matchers: [] }), true);
   assert.equal(isCatchAllRule({
     id: 'abc',

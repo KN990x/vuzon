@@ -5,28 +5,28 @@ import {
   getPanelAuthCredentials,
 } from '../../config/panel-auth-env.js';
 
-test('getPanelAuthConfigurationIssue: acepta usuario y contraseña', () => {
+test('getPanelAuthConfigurationIssue: accepts user and password', () => {
   assert.equal(
     getPanelAuthConfigurationIssue({ AUTH_USER: 'admin', AUTH_PASS: 'secret' }),
     null,
   );
 });
 
-test('getPanelAuthConfigurationIssue: rechaza contraseña vacía', () => {
+test('getPanelAuthConfigurationIssue: rejects an empty password', () => {
   assert.match(
     getPanelAuthConfigurationIssue({ AUTH_USER: 'admin', AUTH_PASS: '' }),
-    /AUTH_USER y AUTH_PASS/,
+    /AUTH_USER and AUTH_PASS/,
   );
 });
 
-test('getPanelAuthConfigurationIssue: rechaza solo espacios', () => {
+test('getPanelAuthConfigurationIssue: rejects whitespace only', () => {
   assert.match(
     getPanelAuthConfigurationIssue({ AUTH_USER: 'admin', AUTH_PASS: '   ' }),
-    /AUTH_USER y AUTH_PASS/,
+    /AUTH_USER and AUTH_PASS/,
   );
 });
 
-test('getPanelAuthCredentials: recorta espacios', () => {
+test('getPanelAuthCredentials: trims whitespace', () => {
   const { authUser, authPass } = getPanelAuthCredentials({
     AUTH_USER: '  admin  ',
     AUTH_PASS: '  secret  ',
@@ -35,7 +35,7 @@ test('getPanelAuthCredentials: recorta espacios', () => {
   assert.equal(authPass, 'secret');
 });
 
-test('getPanelAuthCredentials: valores no string son vacíos', () => {
+test('getPanelAuthCredentials: non-string values come out empty', () => {
   const { authUser, authPass } = getPanelAuthCredentials({});
   assert.equal(authUser, '');
   assert.equal(authPass, '');

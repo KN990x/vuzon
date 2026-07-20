@@ -17,8 +17,8 @@ import { AliasesCard } from '../components/AliasesCard';
 import { CatchAllCard } from '../components/CatchAllCard';
 import { DestinationsCard } from '../components/DestinationsCard';
 
-// /api/me no entra aquí: email y rootDomain salen de variables de entorno del
-// servidor y no cambian durante la sesión, así que se pide una sola vez al montar.
+// /api/me is not listed here: email and rootDomain come from server environment
+// variables and do not change during the session, so it is fetched once on mount.
 const REFRESH_ENDPOINTS = [
   { path: '/api/rules', label: 'reglas' },
   { path: '/api/addresses', label: 'destinatarios' },
@@ -34,8 +34,8 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
   const [rules, setRules] = useState<Rule[]>([]);
   const [dests, setDests] = useState<Destination[]>([]);
   const [catchAll, setCatchAll] = useState<Rule | null>(null);
-  // Un único booleano bloqueaba toda la UI: añadir un destinatario deshabilitaba
-  // también crear alias y refrescar. Cada operación ocupa ahora su propia clave.
+  // A single boolean locked the whole UI: adding a destination also disabled creating
+  // aliases and refreshing. Each operation now occupies its own key.
   const [busy, setBusy] = useState<ReadonlySet<string>>(() => new Set());
 
   const [search, setSearch] = useState('');
@@ -76,7 +76,7 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
     });
   }, []);
 
-  /** Toast de estado con auto-limpieza a los ~5s. */
+  /** Status toast with auto-clear after ~5s. */
   const setStatus = useCallback((message: string) => {
     setStatusMsg(message);
     if (statusTimerRef.current != null) {
@@ -103,8 +103,8 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
   );
 
   const refreshAll = useCallback(async () => {
-    // `refreshAll` se llama anidado desde las mutaciones; el contador evita que el
-    // refresco interno apague el indicador mientras el externo sigue en marcha.
+    // `refreshAll` is called nested from the mutations; the counter keeps the inner
+    // refresh from switching the indicator off while the outer one is still running.
     refreshDepthRef.current += 1;
     if (refreshDepthRef.current === 1) {
       addBusy('refresh');
@@ -161,7 +161,7 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
     void refreshAll();
   }, [refreshAll]);
 
-  // Perfil: una sola vez al montar (ver comentario en REFRESH_ENDPOINTS).
+  // Profile: once on mount (see the comment on REFRESH_ENDPOINTS).
   useEffect(() => {
     let cancelled = false;
 
@@ -178,7 +178,7 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
     };
   }, [api, setStatus]);
 
-  // Derivados (mismos criterios que el cliente Alpine documentado).
+  // Derived values (same criteria as the documented Alpine client).
   const verifiedDests = dests.filter((dest) => isVerifiedStatus(dest.verified));
 
   const validRules = rules.filter((rule) => rule.name && rule.name.trim() !== '');
@@ -225,9 +225,9 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
   }
 
   /**
-   * Ejecuta `run` bajo la clave `key`, ignorando la llamada si esa operación ya está
-   * en curso. Sustituye a los guards manuales repetidos (doble submit con Enter, dos
-   * clics rápidos en borrar que lanzaban dos DELETE y un toast de error espurio).
+   * Runs `run` under the key `key`, ignoring the call if that operation is already in
+   * flight. It replaces the repeated manual guards (double submit with Enter, two quick
+   * clicks on delete that fired two DELETEs and a spurious error toast).
    */
   async function runExclusive(key: string, run: () => Promise<void>) {
     if (busy.has(key)) {
@@ -320,7 +320,7 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
     await runExclusive(`rule:${id}`, async () => {
       try {
         await api(`/api/rules/${id}`, 'DELETE');
-        // Filtrado optimista para respuesta visual inmediata; refreshAll re-sincroniza el resto.
+        // Optimistic filtering for immediate visual feedback; refreshAll re-syncs the rest.
         setRules((prev) => prev.filter((rule) => rule.id !== id));
         setStatus('Alias eliminado');
         await refreshAll();

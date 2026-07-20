@@ -7,24 +7,24 @@ import {
   getCloudflareIdsConfigurationIssueIfFullySpecified,
 } from '../../config/cloudflare-env.js';
 
-test('getCfApiToken: trim de espacios', () => {
+test('getCfApiToken: trims whitespace', () => {
   assert.equal(getCfApiToken({ CF_API_TOKEN: '  abc  ' }), 'abc');
 });
 
-test('getCfApiTokenConfigurationIssue: rechaza vacío', () => {
+test('getCfApiTokenConfigurationIssue: rejects an empty value', () => {
   assert.match(getCfApiTokenConfigurationIssue({ CF_API_TOKEN: '' }), /CF_API_TOKEN/);
   assert.match(getCfApiTokenConfigurationIssue({ CF_API_TOKEN: '   ' }), /CF_API_TOKEN/);
   assert.equal(getCfApiTokenConfigurationIssue({ CF_API_TOKEN: 'tok' }), null);
 });
 
-test('assertCloudflareEnvConfigured: acepta IDs válidos', () => {
+test('assertCloudflareEnvConfigured: accepts valid IDs', () => {
   assertCloudflareEnvConfigured({
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
   });
 });
 
-test('assertCloudflareEnvConfigured: normaliza IDs con espacios laterales', () => {
+test('assertCloudflareEnvConfigured: normalizes IDs with surrounding whitespace', () => {
   const env = {
     CF_ZONE_ID: '  zone_test_1  ',
     CF_ACCOUNT_ID: '\tacct_test_1\n',
@@ -34,7 +34,7 @@ test('assertCloudflareEnvConfigured: normaliza IDs con espacios laterales', () =
   assert.equal(env.CF_ACCOUNT_ID, 'acct_test_1');
 });
 
-test('assertCloudflareEnvConfigured: rechaza zone vacío', () => {
+test('assertCloudflareEnvConfigured: rejects an empty zone', () => {
   assert.throws(
     () => assertCloudflareEnvConfigured({
       CF_ZONE_ID: '',
@@ -44,7 +44,7 @@ test('assertCloudflareEnvConfigured: rechaza zone vacío', () => {
   );
 });
 
-test('assertCloudflareEnvConfigured: rechaza account con caracteres inválidos', () => {
+test('assertCloudflareEnvConfigured: rejects an account with invalid characters', () => {
   assert.throws(
     () => assertCloudflareEnvConfigured({
       CF_ZONE_ID: 'valid_zone_id',
@@ -54,7 +54,7 @@ test('assertCloudflareEnvConfigured: rechaza account con caracteres inválidos',
   );
 });
 
-test('getCloudflareIdsConfigurationIssueIfFullySpecified: null si falta algún ID', () => {
+test('getCloudflareIdsConfigurationIssueIfFullySpecified: null when either ID is missing', () => {
   assert.equal(
     getCloudflareIdsConfigurationIssueIfFullySpecified({
       CF_ZONE_ID: 'zone_test_1',
@@ -63,7 +63,7 @@ test('getCloudflareIdsConfigurationIssueIfFullySpecified: null si falta algún I
   );
 });
 
-test('getCloudflareIdsConfigurationIssueIfFullySpecified: detecta ID inválido cuando ambos están', () => {
+test('getCloudflareIdsConfigurationIssueIfFullySpecified: detects an invalid ID when both are set', () => {
   const issue = getCloudflareIdsConfigurationIssueIfFullySpecified({
     CF_ZONE_ID: 'bad zone',
     CF_ACCOUNT_ID: 'acct_test_1',

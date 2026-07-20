@@ -40,12 +40,12 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-test('200 JSON devuelve el body tipado', async () => {
+test('200 JSON returns the typed body', async () => {
   stubFetch({ body: { result: [1, 2] } });
   await expect(apiRequest('/api/rules')).resolves.toEqual({ result: [1, 2] });
 });
 
-test('envía método, body JSON y credentials en mutaciones', async () => {
+test('sends method, JSON body and credentials on mutations', async () => {
   const fetchMock = stubFetch({ body: { success: true } });
   await apiRequest('/api/login', 'POST', { username: 'u', password: 'p' });
 
@@ -56,52 +56,52 @@ test('envía método, body JSON y credentials en mutaciones', async () => {
   expect(JSON.parse(options.body as string)).toEqual({ username: 'u', password: 'p' });
 });
 
-test('401 lanza UnauthorizedError con el mensaje del body', async () => {
+test('401 throws UnauthorizedError with the body message', async () => {
   stubFetch({ status: 401, body: { error: 'Credenciales incorrectas' } });
   await expect(apiRequest('/api/login', 'POST', {})).rejects.toThrowError(
     new UnauthorizedError('Credenciales incorrectas'),
   );
 });
 
-test('401 sin body JSON usa el mensaje genérico', async () => {
+test('401 without a JSON body uses the generic message', async () => {
   stubFetch({ status: 401, contentType: 'text/html', body: null });
   const error = await apiRequest('/api/me').catch((err: unknown) => err);
   expect(error).toBeInstanceOf(UnauthorizedError);
   expect((error as Error).message).toBe('Sesión expirada');
 });
 
-test('respuesta no JSON con redirect se trata como sesión expirada', async () => {
+test('a non-JSON response with a redirect is treated as an expired session', async () => {
   stubFetch({ contentType: 'text/html', redirected: true });
   await expect(apiRequest('/api/me')).rejects.toBeInstanceOf(UnauthorizedError);
 });
 
-test('respuesta no JSON sin redirect lanza error genérico con status', async () => {
+test('a non-JSON response without a redirect throws a generic error with the status', async () => {
   stubFetch({ status: 502, contentType: 'text/html' });
   await expect(apiRequest('/api/me')).rejects.toThrowError(
     'Respuesta inesperada del servidor (502)',
   );
 });
 
-test('JSON ilegible lanza error con status', async () => {
+test('Unreadable JSON throws an error carrying the status', async () => {
   stubFetch({ status: 200, invalidJson: true });
   await expect(apiRequest('/api/me')).rejects.toThrowError(
     'Respuesta JSON inválida del servidor (200)',
   );
 });
 
-test('error HTTP con body usa data.error', async () => {
+test('HTTP error with a body uses data.error', async () => {
   stubFetch({ status: 400, body: { error: 'Alias: El alias no puede estar vacío' } });
   await expect(apiRequest('/api/rules', 'POST', {})).rejects.toThrowError(
     'Alias: El alias no puede estar vacío',
   );
 });
 
-test('error HTTP sin mensaje usa Error <status>', async () => {
+test('HTTP error without a message uses Error <status>', async () => {
   stubFetch({ status: 500, body: {} });
   await expect(apiRequest('/api/rules')).rejects.toThrowError('Error 500');
 });
 
-test('error HTTP no-401 lanza ApiError con el status transportado', async () => {
+test('non-401 HTTP error throws ApiError carrying the status', async () => {
   stubFetch({ status: 429, body: { error: 'Demasiadas peticiones. Espera unos minutos.' } });
   const error = await apiRequest('/api/addresses', 'POST', {}).catch((err: unknown) => err);
   expect(error).toBeInstanceOf(ApiError);

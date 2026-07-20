@@ -10,8 +10,8 @@ afterEach(() => {
 });
 
 /**
- * Respuesta mínima con la superficie que usa parseCloudflareResponse:
- * headers.get('content-type'), ok, status, json() y text().
+ * Minimal response with the surface parseCloudflareResponse uses:
+ * headers.get('content-type'), ok, status, json() and text().
  */
 function jsonResponse(body, { status = 200 } = {}) {
   return {
@@ -29,13 +29,13 @@ function textResponse(text, { status = 200, contentType = 'text/html' } = {}) {
     status,
     headers: { get: (name) => (name.toLowerCase() === 'content-type' ? contentType : null) },
     json: async () => {
-      throw new Error('no es JSON');
+      throw new Error('not JSON');
     },
     text: async () => text,
   };
 }
 
-/** Sustituye fetch por una cola de respuestas/errores y registra las llamadas. */
+/** Replaces fetch with a queue of responses/errors and records the calls. */
 function stubFetch(queue) {
   const calls = [];
   globalThis.fetch = async (url, options) => {
@@ -55,7 +55,7 @@ function abortError() {
   return err;
 }
 
-test('cabeceras: envía el token como Bearer y Content-Type JSON', async () => {
+test('headers: sends the token as Bearer and Content-Type JSON', async () => {
   const calls = stubFetch([jsonResponse({ success: true, result: { id: 'x' } })]);
   const client = createCloudflareClient({ env: ENV });
 
@@ -66,14 +66,14 @@ test('cabeceras: envía el token como Bearer y Content-Type JSON', async () => {
   assert.equal(calls[0].options.headers['Content-Type'], 'application/json');
 });
 
-test('fetchCloudflare: devuelve solo `result` del sobre de Cloudflare', async () => {
+test('fetchCloudflare: returns only `result` from the Cloudflare envelope', async () => {
   stubFetch([jsonResponse({ success: true, result: { id: 'rule1' }, errors: [] })]);
   const client = createCloudflareClient({ env: ENV });
 
   assert.deepEqual(await client.fetchCloudflare('/zones/z/email/routing/rules/rule1'), { id: 'rule1' });
 });
 
-test('reintenta los GET en estados transitorios y acaba devolviendo el resultado', async () => {
+test('retries GETs on transient statuses and ends up returning the result', async () => {
   const calls = stubFetch([
     jsonResponse({ success: false, errors: [{ message: 'rate limited', code: 10000 }] }, { status: 429 }),
     jsonResponse({ success: false, errors: [{ message: 'bad gateway' }] }, { status: 502 }),
@@ -85,7 +85,7 @@ test('reintenta los GET en estados transitorios y acaba devolviendo el resultado
   assert.equal(calls.length, 3);
 });
 
-test('agota los reintentos de GET a las 3 llamadas (MAX_GET_RETRIES = 2)', async () => {
+test('exhausts GET retries after 3 calls (MAX_GET_RETRIES = 2)', async () => {
   const calls = stubFetch(() => jsonResponse({ success: false, errors: [{ message: 'boom' }] }, { status: 500 }));
   const client = createCloudflareClient({ env: ENV });
 
@@ -96,7 +96,7 @@ test('agota los reintentos de GET a las 3 llamadas (MAX_GET_RETRIES = 2)', async
   assert.equal(calls.length, 3);
 });
 
-test('no reintenta mutaciones: POST falla a la primera', async () => {
+test('does not retry mutations: POST fails immediately', async () => {
   const calls = stubFetch(() => jsonResponse({ success: false, errors: [{ message: 'boom' }] }, { status: 500 }));
   const client = createCloudflareClient({ env: ENV });
 
@@ -104,7 +104,7 @@ test('no reintenta mutaciones: POST falla a la primera', async () => {
   assert.equal(calls.length, 1);
 });
 
-test('no reintenta estados no transitorios: un 400 en GET falla a la primera', async () => {
+test('does not retry non-transient statuses: a 400 on GET fails immediately', async () => {
   const calls = stubFetch(() => jsonResponse({ success: false, errors: [{ message: 'nope' }] }, { status: 400 }));
   const client = createCloudflareClient({ env: ENV });
 
@@ -112,7 +112,7 @@ test('no reintenta estados no transitorios: un 400 en GET falla a la primera', a
   assert.equal(calls.length, 1);
 });
 
-test('timeout: AbortError se normaliza a 504 upstream_timeout', async () => {
+test('timeout: AbortError is normalized to 504 upstream_timeout', async () => {
   stubFetch(() => abortError());
   const client = createCloudflareClient({ env: ENV });
 
@@ -127,7 +127,7 @@ test('timeout: AbortError se normaliza a 504 upstream_timeout', async () => {
   );
 });
 
-test('red caída: cualquier otro fallo de transporte se normaliza a 502 upstream_unreachable', async () => {
+test('network down: any other transport failure is normalized to 502 upstream_unreachable', async () => {
   stubFetch(() => new TypeError('fetch failed'));
   const client = createCloudflareClient({ env: ENV });
 
@@ -142,7 +142,7 @@ test('red caída: cualquier otro fallo de transporte se normaliza a 502 upstream
   );
 });
 
-test('respuesta no JSON (p. ej. HTML de un proxy) da invalid_response', async () => {
+test('a non-JSON response (e.g. HTML from a proxy) yields invalid_response', async () => {
   stubFetch(() => textResponse('<html>502 Bad Gateway</html>', { status: 200 }));
   const client = createCloudflareClient({ env: ENV });
 
@@ -156,7 +156,7 @@ test('respuesta no JSON (p. ej. HTML de un proxy) da invalid_response', async ()
   );
 });
 
-test('HTTP 200 con success:false se trata como error, no como éxito', async () => {
+test('HTTP 200 with success:false is treated as an error, not a success', async () => {
   stubFetch(() => jsonResponse({ success: false, errors: [{ message: 'Invalid zone', code: 1001 }] }));
   const client = createCloudflareClient({ env: ENV });
 
@@ -171,7 +171,7 @@ test('HTTP 200 con success:false se trata como error, no como éxito', async () 
   );
 });
 
-test('los detalles del error nunca incluyen el token', async () => {
+test('the error details never include the token', async () => {
   stubFetch(() => jsonResponse({ success: false, errors: [{ message: 'nope' }] }, { status: 400 }));
   const client = createCloudflareClient({ env: ENV });
 
@@ -184,7 +184,7 @@ test('los detalles del error nunca incluyen el token', async () => {
   );
 });
 
-test('fetchAllCloudflare: concatena páginas siguiendo result_info.total_pages', async () => {
+test('fetchAllCloudflare: concatenates pages following result_info.total_pages', async () => {
   const calls = stubFetch([
     jsonResponse({ success: true, result: [{ id: 'a' }], result_info: { total_pages: 3 } }),
     jsonResponse({ success: true, result: [{ id: 'b' }], result_info: { total_pages: 3 } }),
@@ -200,7 +200,7 @@ test('fetchAllCloudflare: concatena páginas siguiendo result_info.total_pages',
   assert.match(calls[2].url, /\?page=3&per_page=50$/);
 });
 
-test('fetchAllCloudflare: usa & como separador si la ruta ya trae query', async () => {
+test('fetchAllCloudflare: uses & as separator when the path already has a query', async () => {
   const calls = stubFetch([jsonResponse({ success: true, result: [] })]);
   const client = createCloudflareClient({ env: ENV });
 
@@ -209,7 +209,7 @@ test('fetchAllCloudflare: usa & como separador si la ruta ya trae query', async 
   assert.match(calls[0].url, /\/zones\?name=example\.com&page=1&per_page=50$/);
 });
 
-test('fetchAllCloudflare: sin result_info se queda en una sola página', async () => {
+test('fetchAllCloudflare: without result_info it stays on a single page', async () => {
   const calls = stubFetch([jsonResponse({ success: true, result: [{ id: 'a' }] })]);
   const client = createCloudflareClient({ env: ENV });
 
@@ -217,7 +217,7 @@ test('fetchAllCloudflare: sin result_info se queda en una sola página', async (
   assert.equal(calls.length, 1);
 });
 
-test('fetchAllCloudflare: corta al superar el tope de páginas', async () => {
+test('fetchAllCloudflare: stops when the page cap is exceeded', async () => {
   const calls = stubFetch(() =>
     jsonResponse({ success: true, result: [{ id: 'x' }], result_info: { total_pages: 999 } }),
   );
@@ -235,7 +235,7 @@ test('fetchAllCloudflare: corta al superar el tope de páginas', async () => {
   assert.equal(calls.length, 100);
 });
 
-test('fetchAllCloudflare: corta al superar el tope de elementos', async () => {
+test('fetchAllCloudflare: stops when the item cap is exceeded', async () => {
   const page = Array.from({ length: 5001 }, (_, i) => ({ id: `item-${i}` }));
   stubFetch(() => jsonResponse({ success: true, result: page, result_info: { total_pages: 2 } }));
   const client = createCloudflareClient({ env: ENV });

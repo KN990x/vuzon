@@ -1,10 +1,9 @@
 /**
- * Error de petición redactado POR EL PANEL, apto para mostrar al usuario tal cual.
+ * Request error written BY THE PANEL, safe to show to the user verbatim.
  *
- * Se distingue a propósito de `CloudflareApiError`: aquel se aplasta siempre a un
- * mensaje genérico porque su texto viene de Cloudflare y no debe filtrarse
- * (invariante de AGENTS.md). Este mensaje lo escribimos nosotros, así que puede
- * viajar íntegro al cliente.
+ * Deliberately distinct from `CloudflareApiError`: that one is always flattened into a
+ * generic message because its text comes from Cloudflare and must not leak (AGENTS.md
+ * invariant). This message is written by us, so it can travel intact to the client.
  */
 export class PanelRequestError extends Error {
   /**

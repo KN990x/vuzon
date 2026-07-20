@@ -20,16 +20,16 @@ const RUNNING_IN_DOCKER = fs.existsSync('/.dockerenv');
  */
 function requiredEnvHelp(env = process.env) {
   const base =
-    '   Obligatorio en .env (plantilla .env.example): CF_API_TOKEN, DOMAIN, AUTH_USER, AUTH_PASS.';
+    '   Required in .env (see the .env.example template): CF_API_TOKEN, DOMAIN, AUTH_USER, AUTH_PASS.';
   if (env.NODE_ENV === 'production') {
-    return `${base} En production también SESSION_SECRET (mín. 32 caracteres).`;
+    return `${base} In production, SESSION_SECRET too (min. 32 characters).`;
   }
-  return `${base} En production/Docker también SESSION_SECRET.`;
+  return `${base} In production/Docker, SESSION_SECRET too.`;
 }
 
 function logDockerComposeHint() {
   if (RUNNING_IN_DOCKER) {
-    console.error('   En Docker: docker compose logs -f vuzon');
+    console.error('   In Docker: docker compose logs -f vuzon');
   }
 }
 
@@ -64,14 +64,14 @@ function listenWhenReady(app, port) {
 }
 
 /**
- * Apagado ordenado: `docker stop` envía SIGTERM y espera 10s antes de SIGKILL. Sin esto
- * el proceso muere de golpe y corta las peticiones en vuelo (una mutación a mitad de
- * camino contra Cloudflare deja al panel desincronizado hasta el siguiente refresco).
+ * Graceful shutdown: `docker stop` sends SIGTERM and waits 10s before SIGKILL. Without
+ * this the process dies at once and cuts in-flight requests (a mutation half-way through
+ * against Cloudflare leaves the panel out of sync until the next refresh).
  *
  * @param {import('node:http').Server} server
  * @param {{ signals?: string[], graceMs?: number, exitProcess: (code: number) => void,
  *           processRef?: NodeJS.Process }} opts
- * @returns {() => void} Baja los listeners (usado por los tests).
+ * @returns {() => void} Removes the listeners (used by the tests).
  */
 export function registerGracefulShutdown(server, {
   signals = ['SIGTERM', 'SIGINT'],
@@ -86,11 +86,11 @@ export function registerGracefulShutdown(server, {
       return;
     }
     shuttingDown = true;
-    console.log(`Recibido ${signal}: cerrando el servidor…`);
+    console.log(`Received ${signal}: shutting the server down…`);
 
     // Si un cliente mantiene la conexión abierta, no esperamos indefinidamente.
     const forceTimer = setTimeout(() => {
-      console.error('Cierre ordenado agotado; saliendo igualmente.');
+      console.error('Graceful shutdown timed out; exiting anyway.');
       exitProcess(1);
     }, graceMs);
     // No mantiene vivo el event loop si el cierre termina antes.
@@ -99,7 +99,7 @@ export function registerGracefulShutdown(server, {
     server.close((err) => {
       clearTimeout(forceTimer);
       if (err) {
-        console.error('Error al cerrar el servidor:', err.message);
+        console.error('Error while closing the server:', err.message);
         exitProcess(1);
         return;
       }
@@ -127,7 +127,7 @@ export async function startServer({
   try {
     const syncIssues = collectSynchronousStartupConfigurationIssues(env);
     if (syncIssues.length > 0) {
-      console.error('Error fatal en arranque: revisa .env');
+      console.error('Fatal startup error: check .env');
       for (const issue of syncIssues) {
         console.error(`   - ${issue}`);
       }
@@ -153,7 +153,7 @@ export async function startServer({
         : runtime.port;
 
     server.on('error', (err) => {
-      console.error(`Error en el servidor HTTP (puerto ${boundPort}):`, err.message);
+      console.error(`HTTP server error (port ${boundPort}):`, err.message);
       exitProcess(1);
     });
 
@@ -162,21 +162,21 @@ export async function startServer({
     const { authUser } = getPanelAuthCredentials(env);
     const panelUserLine = authUser
       ? runtime.isProduction
-        ? 'Usuario del panel: configurado'
-        : `Usuario del panel: ${authUser}`
-      : 'Usuario del panel: no configurado';
+        ? 'Panel user: configured'
+        : `Panel user: ${authUser}`
+      : 'Panel user: not configured';
     console.log(
-      `Servidor en puerto ${boundPort} · producción: ${runtime.isProduction ? 'sí' : 'no'} · ${panelUserLine}`,
+      `Server on port ${boundPort} · production: ${runtime.isProduction ? 'yes' : 'no'} · ${panelUserLine}`,
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`Error fatal en arranque: ${message}`);
+    console.error(`Fatal startup error: ${message}`);
     console.error(requiredEnvHelp(env));
     if (
       /CF_ZONE_ID|CF_ACCOUNT_ID|\bzonas?\b|autoconfigur/i.test(message)
     ) {
       console.error(
-        '   Zona/cuenta: el token debe ser de la cuenta donde está DOMAIN; si hay varias zonas con el mismo nombre, define CF_ZONE_ID y CF_ACCOUNT_ID.',
+        '   Zone/account: the token must belong to the account that owns DOMAIN; if several zones share the same name, set CF_ZONE_ID and CF_ACCOUNT_ID.',
       );
     }
     logDockerComposeHint();

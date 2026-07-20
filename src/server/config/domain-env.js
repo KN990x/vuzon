@@ -1,5 +1,5 @@
 /**
- * Dominio del panel (trim). Usado en reglas de correo y /api/me.
+ * Panel domain (trimmed). Used in email rules and /api/me.
  * @param {NodeJS.ProcessEnv} [env]
  * @returns {string}
  */
@@ -9,11 +9,11 @@ export function getPanelDomain(env = process.env) {
 
 /**
  * @param {NodeJS.ProcessEnv} [env]
- * @returns {string | null} Mensaje de error o null si la configuración es válida.
+ * @returns {string | null} Error message, or null when the configuration is valid.
  */
 export function getDomainConfigurationIssue(env = process.env) {
   if (!getPanelDomain(env)) {
-    return 'DOMAIN es obligatorio en .env y no puede estar vacío (ni solo espacios). Debe ser el dominio raíz en Cloudflare (ej. ejemplo.com).';
+    return 'DOMAIN is required in .env and cannot be empty (or whitespace-only). It must be the root domain in Cloudflare (e.g. example.com).';
   }
   return null;
 }

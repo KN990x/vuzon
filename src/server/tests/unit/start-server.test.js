@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { startServer } from '../../bootstrap/start-server.js';
 
-test('startServer: sin credenciales del panel invoca exitProcess(1)', async () => {
+test('startServer: without panel credentials it invokes exitProcess(1)', async () => {
   let exitCode = null;
   const exitProcess = (code) => {
     exitCode = code;
@@ -23,7 +23,7 @@ test('startServer: sin credenciales del panel invoca exitProcess(1)', async () =
   assert.equal(exitCode, 1);
 });
 
-test('startServer: sin CF_API_TOKEN invoca exitProcess(1)', async () => {
+test('startServer: without CF_API_TOKEN it invokes exitProcess(1)', async () => {
   let exitCode = null;
   const exitProcess = (code) => {
     exitCode = code;
@@ -43,7 +43,7 @@ test('startServer: sin CF_API_TOKEN invoca exitProcess(1)', async () => {
   assert.equal(exitCode, 1);
 });
 
-test('startServer: acumula varios fallos síncronos en un solo mensaje', async () => {
+test('startServer: accumulates several synchronous failures into one message', async () => {
   const logged = [];
   const origError = console.error;
   console.error = (...args) => {
@@ -66,14 +66,14 @@ test('startServer: acumula varios fallos síncronos en un solo mensaje', async (
     assert.match(text, /CF_API_TOKEN/);
     assert.ok(
       (text.match(/ {3}- /g) ?? []).length >= 3,
-      'se esperaban al menos tres viñetas de error',
+      'expected at least three error bullets',
     );
   } finally {
     console.error = origError;
   }
 });
 
-test('startServer: SESSION_SECRET inválido en production usa exitProcess(1)', async () => {
+test('startServer: an invalid SESSION_SECRET in production uses exitProcess(1)', async () => {
   const logged = [];
   const origError = console.error;
   console.error = (...args) => {

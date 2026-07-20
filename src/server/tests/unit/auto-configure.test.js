@@ -4,7 +4,7 @@ import { ensureCloudflareIdentifiers } from '../../platform/cloudflare/auto-conf
 
 const BASE_ENV = { DOMAIN: 'example.com', CF_API_TOKEN: 'tok' };
 
-/** Cliente que devuelve `zones` para /zones?name=… y registra las llamadas. */
+/** Client returning `zones` for /zones?name=… while recording the calls. */
 function createZoneClient(zones) {
   const calls = [];
   return {
@@ -16,7 +16,7 @@ function createZoneClient(zones) {
   };
 }
 
-test('auto-configure: con ambos IDs definidos no llama a Cloudflare', async () => {
+test('auto-configure: with both IDs set it does not call Cloudflare', async () => {
   const env = { ...BASE_ENV, CF_ZONE_ID: 'zone1', CF_ACCOUNT_ID: 'acct1' };
   const cloudflareClient = createZoneClient([]);
 
@@ -26,7 +26,7 @@ test('auto-configure: con ambos IDs definidos no llama a Cloudflare', async () =
   assert.equal(env.CF_ZONE_ID, 'zone1');
 });
 
-test('auto-configure: detecta zona y cuenta a partir de DOMAIN', async () => {
+test('auto-configure: detects zone and account from DOMAIN', async () => {
   const env = { ...BASE_ENV };
   const cloudflareClient = createZoneClient([
     { id: 'zone-detectada', account: { id: 'acct-detectada' } },
@@ -39,7 +39,7 @@ test('auto-configure: detecta zona y cuenta a partir de DOMAIN', async () => {
   assert.equal(cloudflareClient.calls[0], '/zones?name=example.com');
 });
 
-test('auto-configure: el dominio se codifica en la query', async () => {
+test('auto-configure: the domain is encoded in the query', async () => {
   const env = { ...BASE_ENV, DOMAIN: 'mi dominio.com' };
   const cloudflareClient = createZoneClient([{ id: 'z', account: { id: 'a' } }]);
 
@@ -48,17 +48,17 @@ test('auto-configure: el dominio se codifica en la query', async () => {
   assert.equal(cloudflareClient.calls[0], '/zones?name=mi%20dominio.com');
 });
 
-test('auto-configure: sin zonas explica que el token puede ser de otra cuenta', async () => {
+test('auto-configure: with no zones it explains the token may belong to another account', async () => {
   await assert.rejects(
     () => ensureCloudflareIdentifiers({
       env: { ...BASE_ENV },
       cloudflareClient: createZoneClient([]),
     }),
-    /No hay ninguna zona "example\.com"/,
+    /There is no "example\.com" zone/,
   );
 });
 
-test('auto-configure: varias zonas con el mismo nombre exigen definir los IDs a mano', async () => {
+test('auto-configure: several zones with the same name require setting the IDs by hand', async () => {
   await assert.rejects(
     () => ensureCloudflareIdentifiers({
       env: { ...BASE_ENV },
@@ -67,11 +67,11 @@ test('auto-configure: varias zonas con el mismo nombre exigen definir los IDs a 
         { id: 'z2', account: { id: 'a2' } },
       ]),
     }),
-    /CF_ZONE_ID y CF_ACCOUNT_ID manualmente/,
+    /CF_ZONE_ID and CF_ACCOUNT_ID manually/,
   );
 });
 
-test('auto-configure: zona sin account.id se rechaza en vez de dejar env a medias', async () => {
+test('auto-configure: a zone without account.id is rejected instead of leaving env half-set', async () => {
   const env = { ...BASE_ENV };
 
   await assert.rejects(
@@ -79,37 +79,37 @@ test('auto-configure: zona sin account.id se rechaza en vez de dejar env a media
       env,
       cloudflareClient: createZoneClient([{ id: 'z1' }]),
     }),
-    /identificadores de zona o cuenta/,
+    /no zone or account identifiers/,
   );
   assert.equal(env.CF_ZONE_ID, undefined);
   assert.equal(env.CF_ACCOUNT_ID, undefined);
 });
 
-test('auto-configure: respuesta que no es un array se rechaza', async () => {
+test('auto-configure: a non-array response is rejected', async () => {
   await assert.rejects(
     () => ensureCloudflareIdentifiers({
       env: { ...BASE_ENV },
       cloudflareClient: createZoneClient(null),
     }),
-    /No hay ninguna zona/,
+    /There is no .* zone/,
   );
 });
 
-test('auto-configure: falta DOMAIN o CF_API_TOKEN antes de llamar a Cloudflare', async () => {
+test('auto-configure: missing DOMAIN or CF_API_TOKEN before calling Cloudflare', async () => {
   const cloudflareClient = createZoneClient([]);
 
   await assert.rejects(
     () => ensureCloudflareIdentifiers({ env: { CF_API_TOKEN: 'tok' }, cloudflareClient }),
-    /faltan DOMAIN o CF_API_TOKEN/,
+    /DOMAIN or CF_API_TOKEN missing/,
   );
   await assert.rejects(
     () => ensureCloudflareIdentifiers({ env: { DOMAIN: 'example.com' }, cloudflareClient }),
-    /faltan DOMAIN o CF_API_TOKEN/,
+    /DOMAIN or CF_API_TOKEN missing/,
   );
-  assert.deepEqual(cloudflareClient.calls, [], 'no debe llamarse a Cloudflare sin configuración');
+  assert.deepEqual(cloudflareClient.calls, [], 'Cloudflare must not be called without configuration');
 });
 
-test('auto-configure: con solo uno de los dos IDs, autodetecta igualmente', async () => {
+test('auto-configure: with only one of the two IDs it still auto-detects', async () => {
   const env = { ...BASE_ENV, CF_ZONE_ID: 'zone-manual' };
   const cloudflareClient = createZoneClient([{ id: 'zone-detectada', account: { id: 'acct1' } }]);
 

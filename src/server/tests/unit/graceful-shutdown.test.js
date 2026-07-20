@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events';
 import { test } from 'node:test';
 import { registerGracefulShutdown } from '../../bootstrap/start-server.js';
 
-/** Servidor HTTP falso: solo necesita `close(cb)`. */
+/** Fake HTTP server: it only needs `close(cb)`. */
 function createFakeServer({ closeError = null, autoClose = true } = {}) {
   let pendingCallback = null;
   return {
@@ -22,7 +22,7 @@ function createFakeServer({ closeError = null, autoClose = true } = {}) {
   };
 }
 
-test('apagado ordenado: SIGTERM cierra el servidor y sale con 0', () => {
+test('graceful shutdown: SIGTERM closes the server and exits with 0', () => {
   const server = createFakeServer();
   const processRef = new EventEmitter();
   const exitCodes = [];
@@ -39,7 +39,7 @@ test('apagado ordenado: SIGTERM cierra el servidor y sale con 0', () => {
   unregister();
 });
 
-test('apagado ordenado: SIGINT también está cubierto', () => {
+test('graceful shutdown: SIGINT is covered too', () => {
   const server = createFakeServer();
   const processRef = new EventEmitter();
   const exitCodes = [];
@@ -56,7 +56,7 @@ test('apagado ordenado: SIGINT también está cubierto', () => {
   unregister();
 });
 
-test('apagado ordenado: una segunda señal no reinicia el cierre', () => {
+test('graceful shutdown: a second signal does not restart the shutdown', () => {
   const server = createFakeServer({ autoClose: false });
   const processRef = new EventEmitter();
   const exitCodes = [];
@@ -70,7 +70,7 @@ test('apagado ordenado: una segunda señal no reinicia el cierre', () => {
   processRef.emit('SIGTERM');
   processRef.emit('SIGINT');
 
-  assert.equal(server.closeCalls, 1, 'close() solo debe llamarse una vez');
+  assert.equal(server.closeCalls, 1, 'close() must only be called once');
   assert.deepEqual(exitCodes, []);
 
   server.finishClose();
@@ -78,7 +78,7 @@ test('apagado ordenado: una segunda señal no reinicia el cierre', () => {
   unregister();
 });
 
-test('apagado ordenado: un fallo al cerrar sale con 1', () => {
+test('graceful shutdown: a failure while closing exits with 1', () => {
   const server = createFakeServer({ closeError: new Error('boom') });
   const processRef = new EventEmitter();
   const exitCodes = [];
@@ -94,7 +94,7 @@ test('apagado ordenado: un fallo al cerrar sale con 1', () => {
   unregister();
 });
 
-test('apagado ordenado: si el cierre se eterniza, el timeout fuerza la salida', async () => {
+test('graceful shutdown: if closing drags on, the timeout forces the exit', async () => {
   const server = createFakeServer({ autoClose: false });
   const processRef = new EventEmitter();
   const exitCodes = [];

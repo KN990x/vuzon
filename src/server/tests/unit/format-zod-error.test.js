@@ -5,16 +5,16 @@ import { addressSchema, ruleSchema } from '../../features/email-routing/validati
 
 function errorFor(schema, value) {
   const parsed = schema.safeParse(value);
-  assert.equal(parsed.success, false, 'se esperaba un fallo de validación');
+  assert.equal(parsed.success, false, 'expected a validation failure');
   return parsed.error;
 }
 
-test('formatZodError: traduce el nombre del campo a su etiqueta en español', () => {
+test('formatZodError: maps the field name to its Spanish label', () => {
   const message = formatZodError(errorFor(addressSchema, { email: 'no-es-correo' }));
   assert.equal(message, 'Email: Formato de correo inválido');
 });
 
-test('formatZodError: usa las etiquetas de alias y email de destino', () => {
+test('formatZodError: uses the alias and destination-email labels', () => {
   assert.match(
     formatZodError(errorFor(ruleSchema, { localPart: '', destEmail: 'dest@example.com' })),
     /^Alias: /,
@@ -25,22 +25,22 @@ test('formatZodError: usa las etiquetas de alias y email de destino', () => {
   );
 });
 
-test('formatZodError: une varios problemas con punto', () => {
+test('formatZodError: joins several issues with a period', () => {
   const message = formatZodError(errorFor(ruleSchema, { localPart: '', destEmail: 'x' }));
   assert.match(message, /^Alias: .+\. Email de destino: /);
 });
 
-test('formatZodError: campo sin etiqueta conocida usa su propio nombre', () => {
+test('formatZodError: a field with no known label uses its own name', () => {
   const error = { issues: [{ path: ['desconocido'], message: 'algo falla' }] };
   assert.equal(formatZodError(error), 'desconocido: algo falla');
 });
 
-test('formatZodError: sin path utilizable devuelve solo el mensaje', () => {
+test('formatZodError: with no usable path it returns just the message', () => {
   const error = { issues: [{ path: [], message: 'algo falla' }] };
   assert.equal(formatZodError(error), 'algo falla');
 });
 
-test('formatZodError: entrada sin issues cae en el mensaje genérico', () => {
+test('formatZodError: input without issues falls back to the generic message', () => {
   assert.equal(formatZodError(undefined), 'Datos no válidos');
   assert.equal(formatZodError({}), 'Datos no válidos');
   assert.equal(formatZodError({ issues: [] }), 'Datos no válidos');

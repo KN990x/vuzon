@@ -75,8 +75,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # GitHub renombra assets que empiezan por "." (p. ej. .env.example → default.env.example).
-          # Publicamos env.example para un nombre estable y URLs de descarga claras.
+          # GitHub renames assets starting with "." (e.g. .env.example → default.env.example).
+          # We publish env.example instead, for a stable name and clean download URLs.
           cp .env.example env.example
           gh release upload "${{ github.event.release.tag_name }}" \
             docker-compose.yml \

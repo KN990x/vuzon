@@ -17,7 +17,7 @@ export function resolveApiRouteError(err) {
     };
   }
 
-  // Mensaje escrito por el panel: viaja íntegro (no hay nada de Cloudflare que filtrar).
+  // Panel-written message: travels intact (there is nothing from Cloudflare to leak).
   if (err instanceof PanelRequestError) {
     return {
       status: err.status,
@@ -42,7 +42,7 @@ export function resolveApiRouteError(err) {
 }
 
 /**
- * Evita 401/403 de Cloudflare en el cliente: el front interpreta 401 como sesión del panel caducada.
+ * Keeps Cloudflare 401/403 away from the client: the front-end reads 401 as an expired panel session.
  * @param {number} status
  * @returns {number}
  */

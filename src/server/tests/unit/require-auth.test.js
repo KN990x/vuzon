@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createRequireAuth } from '../../features/auth/require-auth.js';
 
-test('requireAuth: API sin sesión responde 401 JSON', () => {
+test('requireAuth: API without a session answers 401 JSON', () => {
   const requireAuth = createRequireAuth({
     env: { AUTH_USER: 'u', AUTH_PASS: 'p' },
   });
@@ -20,12 +20,12 @@ test('requireAuth: API sin sesión responde 401 JSON', () => {
     json() {},
   };
   requireAuth(req, res, () => {
-    assert.fail('no debía llamar next');
+    assert.fail('next must not be called');
   });
   assert.equal(res.statusCode, 401);
 });
 
-test('requireAuth: petición no-API sin sesión también responde 401 JSON (sin redirect)', () => {
+test('requireAuth: a non-API request without a session also answers 401 JSON (no redirect)', () => {
   const requireAuth = createRequireAuth({
     env: { AUTH_USER: 'u', AUTH_PASS: 'p' },
   });
@@ -46,13 +46,13 @@ test('requireAuth: petición no-API sin sesión también responde 401 JSON (sin 
     },
   };
   requireAuth(req, res, () => {
-    assert.fail('no debía llamar next');
+    assert.fail('next must not be called');
   });
   assert.equal(res.statusCode, 401);
   assert.deepEqual(res.body, { error: 'No autorizado' });
 });
 
-test('requireAuth: sesión autenticada y vigente llama next', () => {
+test('requireAuth: an authenticated, current session calls next', () => {
   let called = false;
   const requireAuth = createRequireAuth({
     env: { AUTH_USER: 'u', AUTH_PASS: 'p' },
@@ -68,7 +68,7 @@ test('requireAuth: sesión autenticada y vigente llama next', () => {
   assert.equal(called, true);
 });
 
-test('requireAuth: sesión sin issuedAt (versión anterior) se rechaza con 401', () => {
+test('requireAuth: a session without issuedAt (previous version) is rejected with 401', () => {
   const requireAuth = createRequireAuth({
     env: { AUTH_USER: 'u', AUTH_PASS: 'p' },
   });
@@ -86,12 +86,12 @@ test('requireAuth: sesión sin issuedAt (versión anterior) se rechaza con 401',
     json() {},
   };
   requireAuth(req, res, () => {
-    assert.fail('no debía llamar next');
+    assert.fail('next must not be called');
   });
   assert.equal(res.statusCode, 401);
 });
 
-test('requireAuth: sin AUTH_USER/AUTH_PASS en servidor responde 500', () => {
+test('requireAuth: without AUTH_USER/AUTH_PASS on the server it answers 500', () => {
   const requireAuth = createRequireAuth({ env: {} });
   const req = {
     path: '/api/rules',
@@ -106,7 +106,7 @@ test('requireAuth: sin AUTH_USER/AUTH_PASS en servidor responde 500', () => {
     json() {},
   };
   requireAuth(req, res, () => {
-    assert.fail('no debía llamar next');
+    assert.fail('next must not be called');
   });
   assert.equal(res.statusCode, 500);
 });

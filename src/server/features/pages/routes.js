@@ -7,7 +7,7 @@ function sendIndexHtml(publicDir, res, next) {
     if (!err) {
       return;
     }
-    // Sin src/web/dist (solo posible en desarrollo; la imagen Docker siempre lo trae).
+    // No src/web/dist (only possible in development; the Docker image always ships it).
     if (err.code === 'ENOENT' && !res.headersSent) {
       res.status(503).type('text/plain').send('Frontend build not found. Run "pnpm run build".');
       return;
@@ -24,14 +24,14 @@ export function registerPageRoutes(app, {
     res.json({ ok: true });
   });
 
-  // El HTML se sirve siempre; el cliente React decide login/panel según /api/me.
+  // The HTML is always served; the React client picks login/panel based on /api/me.
   app.get(['/', '/index.html'], pagesLimiter, (_req, res, next) => {
     sendIndexHtml(publicDir, res, next);
   });
 
   app.use(express.static(publicDir, { index: false }));
 
-  // Catch-all SPA: cualquier GET fuera de /api/* que no haya coincidido con un estático.
+  // SPA catch-all: any GET outside /api/* that did not match a static file.
   app.get(/^(?!\/api(?:\/|$)).*/, pagesLimiter, (_req, res, next) => {
     sendIndexHtml(publicDir, res, next);
   });

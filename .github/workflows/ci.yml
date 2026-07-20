@@ -36,10 +36,10 @@ jobs:
       - name: Verify Docker image build
         run: docker build -t vuzon-ci .
 
-      # `docker build` no prueba que la imagen arranque. Este smoke test la ejecuta con
-      # el mismo endurecimiento del compose (read_only, cap_drop, no-new-privileges) y
-      # comprueba /healthz y el HTML de la SPA. Definir CF_ZONE_ID y CF_ACCOUNT_ID salta
-      # la autodetección, así que no hace falta ninguna credencial real de Cloudflare.
+      # `docker build` does not prove the image boots. This smoke test runs it with the
+      # same hardening as the compose file (read_only, cap_drop, no-new-privileges) and
+      # checks /healthz and the SPA HTML. Setting CF_ZONE_ID and CF_ACCOUNT_ID skips
+      # auto-detection, so no real Cloudflare credential is needed.
       - name: Smoke test the image (boots, hardened, serves the SPA)
         run: |
           set -euo pipefail
@@ -57,16 +57,16 @@ jobs:
 
           for i in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:8001/healthz > /dev/null 2>&1; then
-              echo "healthz OK tras ${i}s"; break
+              echo "healthz OK after ${i}s"; break
             fi
             if [ "$i" -eq 30 ]; then
-              echo "El contenedor no respondió a /healthz:"; docker logs vuzon-smoke; exit 1
+              echo "The container never answered /healthz:"; docker logs vuzon-smoke; exit 1
             fi
             sleep 1
           done
 
           curl -fsS http://127.0.0.1:8001/ | grep -q '<div id="root">'
-          # La API sin sesión debe responder 401 JSON, no el index.html de la SPA.
+          # Without a session the API must answer 401 JSON, not the SPA's index.html.
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8001/api/me)" = "401"
 
       - name: Tear down smoke test

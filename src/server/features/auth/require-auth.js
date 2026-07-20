@@ -2,8 +2,8 @@ import { getPanelAuthCredentials } from '../../config/panel-auth-env.js';
 import { isSessionIssuanceValid } from './session-epoch.js';
 
 /**
- * Sin sesión responde siempre 401 JSON. El cliente React decide qué pantalla
- * mostrar tras llamar a /api/me; el HTML se sirve sin autenticación (SPA).
+ * Without a session it always answers 401 JSON. The React client decides which screen
+ * to show after calling /api/me; the HTML is served without authentication (SPA).
  */
 export function createRequireAuth({ env = process.env } = {}) {
   const { authUser, authPass } = getPanelAuthCredentials(env);
@@ -13,9 +13,9 @@ export function createRequireAuth({ env = process.env } = {}) {
       return res.status(500).json({ error: 'Credenciales de servidor no configuradas (AUTH_USER/AUTH_PASS)' });
     }
 
-    // `issuedAt` se comprueba contra la marca de revocación en memoria: una cookie
-    // copiada antes de un logout deja de valer aunque siga dentro de su maxAge.
-    // Las sesiones anteriores a esta versión no traen `issuedAt` y se descartan.
+    // `issuedAt` is checked against the in-memory revocation mark: a cookie copied
+    // before a logout stops being valid even if it is still within its maxAge.
+    // Sessions predating this version carry no `issuedAt` and are discarded.
     if (req.session && req.session.authenticated && isSessionIssuanceValid(req.session.issuedAt)) {
       return next();
     }

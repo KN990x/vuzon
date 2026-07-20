@@ -32,9 +32,9 @@ updates:
       time: "09:00"
     open-pull-requests-limit: 5
     ignore:
-      # La imagen base se queda en la línea LTS de Node y los saltos de major se
-      # revisan a mano: subir solo el Dockerfile dejaría la imagen ejecutando una
-      # versión que CI (node-version: 24) nunca prueba. Para cambiar de LTS hay que
-      # tocar Dockerfile, ambos workflows y engines.node a la vez.
+      # The base image stays on the Node LTS line and major bumps are reviewed by
+      # hand: bumping only the Dockerfile would leave the image running a version
+      # CI (node-version: 24) never tests. Moving to a new LTS means touching the
+      # Dockerfile, both workflows and engines.node at the same time.
       - dependency-name: "node"
         update-types: ["version-update:semver-major"]

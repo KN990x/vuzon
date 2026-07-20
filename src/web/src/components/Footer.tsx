@@ -1,14 +1,14 @@
 import { Coffee } from 'lucide-react';
 
 /**
- * Pie discreto: autoría y enlace de apoyo.
+ * Discreet footer: authorship and a support link.
  *
- * El botón de Buy Me a Coffee NO usa la imagen oficial de su CDN a propósito: la CSP
- * del servidor es `img-src 'self' data:` (ver create-app.js), así que un <img> externo
- * quedaría bloqueado y el pie saldría roto. Se replica con un icono inline y los
- * tokens del panel, que además encaja con el resto de la interfaz.
+ * The Buy Me a Coffee button does NOT use the official CDN image on purpose: the server's
+ * CSP is `img-src 'self' data:` (see create-app.js), so an external <img> would be blocked
+ * and the footer would render broken. It is reproduced with an inline icon and the panel's
+ * tokens, which also fits the rest of the interface.
  *
- * El año se calcula en cada render para que no haya que tocarlo cada enero.
+ * The year is computed on every render so nobody has to touch it each January.
  */
 export function Footer() {
   const year = new Date().getFullYear();
