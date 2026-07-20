@@ -1,6 +1,7 @@
 import { expect, test, vi } from 'vitest';
 import { ApiError } from './api';
 import {
+  findAliasesUsingDestination,
   generateRandomLocalPart,
   getRuleDest,
   getSingleForwardDestination,
@@ -54,6 +55,32 @@ test('getSingleForwardDestination: empty or invalid input returns null', () => {
   expect(
     getSingleForwardDestination({ id: 'r', actions: [{ type: 'forward', value: ['  '] }] }),
   ).toBeNull();
+});
+
+test('findAliasesUsingDestination: lists alias labels and catch-all', () => {
+  const rules: Rule[] = [
+    {
+      id: 'r1',
+      matchers: [{ type: 'literal', field: 'to', value: 'a@example.com' }],
+      actions: [{ type: 'forward', value: 'Dest@Example.com' }],
+    },
+    {
+      id: 'r2',
+      matchers: [{ type: 'literal', field: 'to', value: 'b@example.com' }],
+      actions: [{ type: 'forward', value: ['other@example.com'] }],
+    },
+  ];
+  const catchAll: Rule = {
+    id: 'catch_all_rule',
+    matchers: [{ type: 'all' }],
+    actions: [{ type: 'forward', value: ['dest@example.com'] }],
+  };
+
+  expect(findAliasesUsingDestination(rules, 'dest@example.com', catchAll)).toEqual([
+    'a@example.com',
+    'catch-all',
+  ]);
+  expect(findAliasesUsingDestination(rules, 'nobody@example.com', catchAll)).toEqual([]);
 });
 
 test('getRuleDest: forward joins addresses', () => {

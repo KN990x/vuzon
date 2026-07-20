@@ -48,6 +48,8 @@ export const es = {
   'dashboard.confirm.deleteAlias': '¿Eliminar alias permanentemente?',
   'dashboard.confirm.deleteDest':
     '¿Eliminar destinatario? Si hay reglas usándolo, dejarán de funcionar.',
+  'dashboard.confirm.deleteDestInUse':
+    'Este destinatario lo usan: {aliases}. Quita o cambia esas reglas antes de eliminarlo.',
   'dashboard.copyPrompt': 'Copia tu alias manualmente:',
 
   'aliases.title': 'Alias',
@@ -120,6 +122,9 @@ export const es = {
   'error.dest.unverified':
     'El destino {email} no está verificado en Cloudflare. '
     + 'Revisa su bandeja de entrada y confirma la dirección antes de crear el alias.',
+  'error.dest.in_use':
+    'No se puede eliminar {email}: todavía lo usan {aliases}. '
+    + 'Quita o cambia esas reglas primero.',
   'error.cloudflare.generic':
     'No se pudo completar la operación con Cloudflare. Revisa la configuración o inténtalo más tarde.',
   'error.server.internal': 'Error interno del servidor',

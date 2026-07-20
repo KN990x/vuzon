@@ -53,6 +53,8 @@ export const en = {
   'dashboard.confirm.deleteAlias': 'Delete this alias permanently?',
   'dashboard.confirm.deleteDest':
     'Delete this destination? Any rules using it will stop working.',
+  'dashboard.confirm.deleteDestInUse':
+    'This destination is used by: {aliases}. Remove or re-point those rules before deleting it.',
   'dashboard.copyPrompt': 'Copy your alias manually:',
 
   'aliases.title': 'Aliases',
@@ -129,6 +131,9 @@ export const en = {
   'error.dest.unverified':
     'The destination {email} is not verified in Cloudflare. '
     + 'Check its inbox and confirm the address before creating the alias.',
+  'error.dest.in_use':
+    'Cannot delete {email}: it is still used by {aliases}. '
+    + 'Remove or re-point those rules first.',
   'error.cloudflare.generic':
     'Could not complete the operation with Cloudflare. Check the configuration or try again later.',
   'error.server.internal': 'Internal server error',

@@ -32,6 +32,7 @@ export const ERROR_CODES = Object.freeze({
   RULES_DUPLICATE_ALIAS: 'rules.duplicate_alias',
   DEST_UNKNOWN: 'dest.unknown',
   DEST_UNVERIFIED: 'dest.unverified',
+  DEST_IN_USE: 'dest.in_use',
   CLOUDFLARE_GENERIC: 'cloudflare.generic',
   SERVER_INTERNAL: 'server.internal',
   SERVER_NOT_FOUND: 'server.not_found',

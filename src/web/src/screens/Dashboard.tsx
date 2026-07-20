@@ -3,6 +3,7 @@ import { apiRequest, UnauthorizedError } from '../lib/api';
 import { copyTextToClipboard } from '../lib/clipboard';
 import { getDestSelectionState } from '../lib/dest-selection';
 import {
+  findAliasesUsingDestination,
   generateRandomLocalPart,
   getSingleForwardDestination,
   interpretAddDestError,
@@ -19,8 +20,8 @@ import { AliasesCard } from '../components/AliasesCard';
 import { CatchAllCard } from '../components/CatchAllCard';
 import { DestinationsCard } from '../components/DestinationsCard';
 
-// /api/me is not listed here: email and rootDomain come from server environment
-// variables and do not change during the session, so it is fetched once on mount.
+// /api/me is not listed here: rootDomain comes from the server environment and does
+// not change during the session, so it is fetched once on mount.
 const REFRESH_ENDPOINTS = [
   { path: '/api/rules', labelKey: 'dashboard.resource.rules' },
   { path: '/api/addresses', labelKey: 'dashboard.resource.addresses' },
@@ -359,7 +360,15 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
     if (busy.has(`dest:${id}`)) {
       return;
     }
-    if (!window.confirm(t('dashboard.confirm.deleteDest'))) {
+
+    const dest = dests.find((entry) => entry.id === id);
+    const aliasesInUse = dest
+      ? findAliasesUsingDestination(rules, dest.email, catchAll)
+      : [];
+    const confirmMessage = aliasesInUse.length > 0
+      ? t('dashboard.confirm.deleteDestInUse', { aliases: aliasesInUse.join(', ') })
+      : t('dashboard.confirm.deleteDest');
+    if (!window.confirm(confirmMessage)) {
       return;
     }
 

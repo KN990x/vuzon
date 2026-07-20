@@ -47,7 +47,6 @@ export function registerAuthRoutes(app, {
 
     req.session = {
       authenticated: true,
-      username: authUser,
       // Lets logout invalidate the cookie even though it is self-contained (session-epoch.js).
       issuedAt: nextIssuedAt(),
     };

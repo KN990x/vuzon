@@ -82,6 +82,71 @@ export function getSingleForwardDestination(rule: Rule | null | undefined): stri
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
 }
 
+/**
+ * Alias labels (or "catch-all") for rules that forward to this destination.
+ * Used by the delete-destination confirm dialog so the user sees the block before the API.
+ */
+export function findAliasesUsingDestination(
+  rules: Rule[],
+  destEmail: string,
+  catchAll: Rule | null = null,
+): string[] {
+  const target = destEmail.trim().toLowerCase();
+  if (!target) {
+    return [];
+  }
+
+  const list = catchAll ? [...rules, catchAll] : rules;
+  const labels: string[] = [];
+
+  for (const rule of list) {
+    const actions = rule?.actions;
+    if (!Array.isArray(actions)) {
+      continue;
+    }
+    const usesDest = actions.some((action) => {
+      if (!action || action.type !== 'forward') {
+        return false;
+      }
+      const values = Array.isArray(action.value) ? action.value : [action.value];
+      return values.some(
+        (value) => typeof value === 'string' && value.trim().toLowerCase() === target,
+      );
+    });
+    if (!usesDest) {
+      continue;
+    }
+
+    const matchers = rule.matchers;
+    let label = '';
+    if (Array.isArray(matchers)) {
+      for (const matcher of matchers) {
+        if (matcher?.type === 'all') {
+          label = 'catch-all';
+          break;
+        }
+        if (
+          matcher?.type === 'literal'
+          && matcher.field === 'to'
+          && typeof matcher.value === 'string'
+          && matcher.value.trim() !== ''
+        ) {
+          label = matcher.value.trim();
+          break;
+        }
+      }
+    }
+    if (!label) {
+      label = (typeof rule.name === 'string' && rule.name.trim()) || rule.id || 'unknown';
+    }
+    if (!labels.includes(label)) {
+      labels.push(label);
+    }
+  }
+
+  return labels;
+}
+
 const ALIAS_CHARS = '0123456789abcdefghijklmnopqrstuvwxyz';
 
 /**

@@ -186,8 +186,19 @@ test('HTTP integration: healthz, auth, API with a simulated Cloudflare', async (
       });
       assert.equal(res.status, 200);
       const data = await readJson(res);
-      assert.equal(data.email, 'testuser');
-      assert.equal(data.rootDomain, 'example.com');
+      assert.deepEqual(data, { rootDomain: 'example.com' });
+    }
+
+    {
+      // Invariant: /api JSON 404 is registered before the SPA catch-all.
+      const res = await fetch(`${baseUrl}/api/desconocido`, {
+        headers: { Cookie: sessionCookie },
+      });
+      assert.equal(res.status, 404);
+      assert.match(res.headers.get('content-type') || '', /application\/json/);
+      const data = await readJson(res);
+      assert.equal(data.error, 'Not found');
+      assert.equal(data.code, ERROR_CODES.SERVER_NOT_FOUND);
     }
 
     {
@@ -219,6 +230,17 @@ test('HTTP integration: healthz, auth, API with a simulated Cloudflare', async (
       assert.equal(res.status, 400);
       const data = await readJson(res);
       assert.ok(data && typeof data.error === 'string');
+    }
+
+    {
+      const res = await fetch(`${baseUrl}/api/rules/rule1/enable`, {
+        method: 'POST',
+        headers: { Cookie: sessionCookie },
+      });
+      assert.equal(res.status, 200);
+      const data = await readJson(res);
+      assert.equal(data.ok, true);
+      assert.ok(data.result);
     }
 
     {
@@ -293,8 +315,7 @@ test('HTTP integration: login with AUTH env vars carrying whitespace (trim)', as
     });
     assert.equal(me.status, 200);
     const meData = await readJson(me);
-    assert.equal(meData.email, 'trimuser');
-    assert.equal(meData.rootDomain, 'example.com');
+    assert.deepEqual(meData, { rootDomain: 'example.com' });
   } finally {
     await new Promise((resolve) => {
       server.close(resolve);
@@ -1366,6 +1387,87 @@ test('HTTP integration: a CloudflareApiError 401 is not exposed as 401 to the cl
     const data = await readJson(res);
     assert.ok(typeof data.error === 'string');
     assert.ok(!data.error.includes('mensaje_upstream'));
+  } finally {
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+  }
+});
+
+test('HTTP integration: DELETE /api/addresses/:id refuses a destination still used by a rule', async () => {
+  let addressDeleteCalls = 0;
+  const base = createMockCloudflareClient();
+  const cloudflareClient = {
+    async fetchCloudflare(requestPath, method = 'GET', body = null) {
+      if (requestPath.includes('/email/routing/addresses') && method === 'DELETE') {
+        addressDeleteCalls += 1;
+        return { id: 'deleted' };
+      }
+      return base.fetchCloudflare(requestPath, method, body);
+    },
+    async fetchAllCloudflare(requestPath) {
+      if (requestPath.includes('/email/routing/rules')) {
+        return [{
+          id: 'rule1',
+          name: 'alias@example.com',
+          enabled: true,
+          matchers: [{ type: 'literal', field: 'to', value: 'alias@example.com' }],
+          actions: [{ type: 'forward', value: ['dest@example.com'] }],
+        }];
+      }
+      if (requestPath.includes('/email/routing/addresses')) {
+        return [{
+          id: 'addr1',
+          email: 'dest@example.com',
+          verified: true,
+        }, {
+          id: 'addr-free',
+          email: 'free@example.com',
+          verified: true,
+        }];
+      }
+      return [];
+    },
+  };
+
+  const env = {
+    AUTH_USER: 'testuser',
+    AUTH_PASS: 'test-secret-pass',
+    CF_ZONE_ID: 'zone_test_1',
+    CF_ACCOUNT_ID: 'acct_test_1',
+    DOMAIN: 'example.com',
+    NODE_ENV: 'development',
+  };
+
+  const { app } = createApp({
+    env,
+    cloudflareClient,
+    sessionSecret: 'test-session-secret-32chars!!',
+  });
+
+  const { server, baseUrl } = await listen(app);
+
+  try {
+    const sessionCookie = await loginAndGetCookie(baseUrl);
+
+    const blocked = await fetch(`${baseUrl}/api/addresses/addr1`, {
+      method: 'DELETE',
+      headers: { Cookie: sessionCookie },
+    });
+    assert.equal(blocked.status, 400);
+    const blockedBody = await readJson(blocked);
+    assert.equal(blockedBody.code, ERROR_CODES.DEST_IN_USE);
+    assert.equal(blockedBody.params.email, 'dest@example.com');
+    assert.match(blockedBody.params.aliases, /alias@example.com/);
+    assert.equal(addressDeleteCalls, 0);
+
+    const free = await fetch(`${baseUrl}/api/addresses/addr-free`, {
+      method: 'DELETE',
+      headers: { Cookie: sessionCookie },
+    });
+    assert.equal(free.status, 200);
+    assert.deepEqual(await readJson(free), { ok: true });
+    assert.equal(addressDeleteCalls, 1);
   } finally {
     await new Promise((resolve) => {
       server.close(resolve);

@@ -1,5 +1,4 @@
 export interface Profile {
-  email?: string;
   rootDomain: string;
 }
 

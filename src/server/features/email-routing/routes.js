@@ -1,5 +1,4 @@
 import { getPanelDomain } from '../../config/domain-env.js';
-import { getPanelAuthCredentials } from '../../config/panel-auth-env.js';
 import { asyncHandler } from '../../bootstrap/async-handler.js';
 import { createApiRateLimiter } from '../../platform/http/rate-limiters.js';
 import {
@@ -15,6 +14,11 @@ import {
 } from './single-forward-guard.js';
 import { CloudflareApiError } from '../../platform/cloudflare/client.js';
 import { cloudflareRuleSchema } from '../../shared/cloudflare-schemas.js';
+import {
+  destinationInUseError,
+  findRulesUsingDestination,
+  ruleAliasLabel,
+} from './destination-usage.js';
 import {
   duplicateAliasError,
   hasRuleForAlias,
@@ -133,10 +137,8 @@ export function registerApiRoutes(app, {
     return res.json({ ok: true, result: apiRes });
   };
 
-  app.get('/api/me', ...gate, (req, res) => {
-    const { authUser } = getPanelAuthCredentials(env);
+  app.get('/api/me', ...gate, (_req, res) => {
     res.json({
-      email: authUser || 'admin',
       rootDomain: getPanelDomain(env),
     });
   });
@@ -161,8 +163,36 @@ export function registerApiRoutes(app, {
     res.json({ ok: true, result: apiRes });
   }));
 
+  // Refuse to delete a destination still referenced by any rule (including catch-all).
+  // Without this, aliases stay "active" in the panel while mail silently stops delivering.
   app.delete('/api/addresses/:id', ...gate, asyncHandler(async (req, res) => {
     const addressId = cloudflareResourceIdSchema.parse(req.params.id);
+
+    const [addresses, rules, catchAll] = await Promise.all([
+      fetchAllCloudflare(`/accounts/${env.CF_ACCOUNT_ID}/email/routing/addresses`),
+      fetchAllCloudflare(`/zones/${env.CF_ZONE_ID}/email/routing/rules`),
+      fetchCloudflare(`/zones/${env.CF_ZONE_ID}/email/routing/rules/catch_all`),
+    ]);
+
+    const address = (Array.isArray(addresses) ? addresses : []).find(
+      (entry) => entry && typeof entry === 'object' && entry.id === addressId,
+    );
+    if (address && typeof address.email === 'string' && address.email.trim() !== '') {
+      const allRules = Array.isArray(rules) ? [...rules] : [];
+      if (
+        catchAll
+        && typeof catchAll === 'object'
+        && !allRules.some((rule) => rule && typeof rule === 'object' && rule.id === catchAll.id)
+      ) {
+        allRules.push(catchAll);
+      }
+      const using = findRulesUsingDestination(allRules, address.email);
+      if (using.length > 0) {
+        const aliases = [...new Set(using.map((rule) => ruleAliasLabel(rule)))];
+        throw destinationInUseError(address.email, aliases);
+      }
+    }
+
     await fetchCloudflare(`/accounts/${env.CF_ACCOUNT_ID}/email/routing/addresses/${addressId}`, 'DELETE');
     res.json({ ok: true });
   }));

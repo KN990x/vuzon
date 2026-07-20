@@ -1,3 +1,5 @@
+import net from 'node:net';
+
 /**
  * Opt-in for Secure session cookies (HTTPS / TLS-terminating proxy).
  * Homelab HTTP stays usable when unset. Accepts 1/true/yes (case-insensitive).
@@ -15,8 +17,53 @@ export function parseCookieSecure(raw) {
 /** Predefined range names Express accepts in `trust proxy`. */
 const EXPRESS_TRUST_PROXY_KEYWORDS = new Set(['loopback', 'linklocal', 'uniquelocal']);
 
-/** IPv4/IPv6 with optional CIDR, or a comma-separated list. Express takes these as-is. */
-const IP_OR_CIDR_LIST_REGEX = /^[0-9a-f.:/]+(?:\s*,\s*[0-9a-f.:/]+)*$/i;
+/**
+ * One IP or CIDR that Express will accept without throwing in `app.set('trust proxy')`.
+ * A loose character-class regex used to let through values like `abc.def` that then
+ * aborted startup with a cryptic TypeError — validate with `net.isIP` instead.
+ * @param {string} entry
+ * @returns {boolean}
+ */
+function isValidIpOrCidr(entry) {
+  const trimmed = entry.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  const slash = trimmed.indexOf('/');
+  const addr = slash === -1 ? trimmed : trimmed.slice(0, slash);
+  const prefixRaw = slash === -1 ? null : trimmed.slice(slash + 1);
+
+  const family = net.isIP(addr);
+  if (family === 0) {
+    return false;
+  }
+
+  if (prefixRaw === null) {
+    return true;
+  }
+
+  // Express rejects empty/"0x…" prefixes; require a plain decimal integer in range.
+  if (!/^\d+$/.test(prefixRaw)) {
+    return false;
+  }
+  const prefix = Number.parseInt(prefixRaw, 10);
+  const max = family === 4 ? 32 : 128;
+  // Express (proxy-addr) throws on /0: "invalid range on address".
+  return prefix >= 1 && prefix <= max;
+}
+
+/**
+ * @param {string} original
+ * @returns {boolean}
+ */
+function isValidIpOrCidrList(original) {
+  const parts = original.split(',');
+  if (parts.length === 0) {
+    return false;
+  }
+  return parts.every((part) => isValidIpOrCidr(part));
+}
 
 /**
  * Value for `app.set('trust proxy', …)`.
@@ -25,7 +72,8 @@ const IP_OR_CIDR_LIST_REGEX = /^[0-9a-f.:/]+(?:\s*,\s*[0-9a-f.:/]+)*$/i;
  * that used to fall back to `false` silently: `loopback`, `linklocal`, `uniquelocal` and
  * IP/CIDR lists. An unrecognized value still returns `false` (the safe position), but now
  * it is logged: silently, the rate limit would end up grouping everyone under the proxy's
- * IP with nobody noticing.
+ * IP with nobody noticing. Each IP/CIDR entry is validated with `net.isIP` so a typo
+ * cannot throw inside Express at startup.
  *
  * @param {string | undefined} raw
  * @param {{ warn?: (message: string) => void }} [opts]
@@ -57,7 +105,7 @@ export function parseTrustProxy(raw, { warn = console.warn } = {}) {
     return s;
   }
 
-  if (IP_OR_CIDR_LIST_REGEX.test(original) && /[.:]/.test(original)) {
+  if (isValidIpOrCidrList(original)) {
     return original;
   }
 

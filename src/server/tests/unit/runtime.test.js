@@ -51,6 +51,15 @@ test('parseTrustProxy: IP/CIDR lists are passed to Express as-is', () => {
   assert.equal(parseTrustProxy('::1'), '::1');
 });
 
+test('parseTrustProxy: malformed IP/CIDR values warn and stay off (do not reach Express)', () => {
+  for (const value of ['abc.def', 'a.b.c', '::/0', 'zzz', '10.0.0.0/99', '127.0.0.1, not-an-ip']) {
+    const warnings = [];
+    assert.equal(parseTrustProxy(value, { warn: (m) => warnings.push(m) }), false);
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0], /TRUST_PROXY/);
+  }
+});
+
 test('parseTrustProxy: an unrecognized value falls back to false but warns', () => {
   const warnings = [];
   const warn = (message) => warnings.push(message);
