@@ -8,7 +8,11 @@ import {
   createApiRateLimiter,
   createLoginRateLimiter,
 } from '../../../platform/http/rate-limiters.js';
-import { CATCH_ALL_MUTATION_ERROR } from '../../../features/email-routing/catch-all-guard.js';
+import { ERROR_CODES } from '../../../platform/http/error-codes.js';
+import {
+  CATCH_ALL_MUTATION_CODE,
+  CATCH_ALL_MUTATION_ERROR,
+} from '../../../features/email-routing/catch-all-guard.js';
 import { resetSessionEpochForTests } from '../../../features/auth/session-epoch.js';
 
 function createMockCloudflareClient() {
@@ -486,8 +490,8 @@ test('HTTP integration: login rate limit answers 429', async () => {
     });
     assert.equal(limited.status, 429);
     const data = await readJson(limited);
-    assert.ok(data && typeof data.error === 'string');
-    assert.match(data.error, /intentos/i);
+    assert.ok(data && typeof data.error === 'string' && data.error.length > 0);
+    assert.equal(data.code, ERROR_CODES.RATE_LIMIT_LOGIN);
   } finally {
     await new Promise((resolve) => {
       server.close(resolve);
@@ -569,8 +573,8 @@ test('HTTP integration: authenticated API rate limit answers 429', async () => {
     });
     assert.equal(limited.status, 429);
     const data = await readJson(limited);
-    assert.ok(data && typeof data.error === 'string');
-    assert.match(data.error, /peticiones/i);
+    assert.ok(data && typeof data.error === 'string' && data.error.length > 0);
+    assert.equal(data.code, ERROR_CODES.RATE_LIMIT_API);
   } finally {
     await new Promise((resolve) => {
       server.close(resolve);
@@ -733,14 +737,18 @@ test('HTTP integration: the catch-all cannot be mutated or deleted', async () =>
       headers: { Cookie: sessionCookie },
     });
     assert.equal(bySlug.status, 400);
-    assert.equal((await readJson(bySlug)).error, CATCH_ALL_MUTATION_ERROR);
+    const bySlugBody = await readJson(bySlug);
+    assert.equal(bySlugBody.error, CATCH_ALL_MUTATION_ERROR);
+    assert.equal(bySlugBody.code, CATCH_ALL_MUTATION_CODE);
 
     const byId = await fetch(`${baseUrl}/api/rules/catch_all_rule`, {
       method: 'DELETE',
       headers: { Cookie: sessionCookie },
     });
     assert.equal(byId.status, 400);
-    assert.equal((await readJson(byId)).error, CATCH_ALL_MUTATION_ERROR);
+    const byIdBody = await readJson(byId);
+    assert.equal(byIdBody.error, CATCH_ALL_MUTATION_ERROR);
+    assert.equal(byIdBody.code, CATCH_ALL_MUTATION_CODE);
   } finally {
     await new Promise((resolve) => {
       server.close(resolve);
@@ -799,7 +807,10 @@ test('HTTP integration: creating an alias with an unverified destination gives a
 
     assert.equal(res.status, 400);
     const data = await readJson(res);
-    assert.match(data.error, /no está verificado/);
+    // The wording lives in the SPA catalogue; the wire carries the code and the params
+    // it interpolates, plus an English fallback.
+    assert.equal(data.code, ERROR_CODES.DEST_UNVERIFIED);
+    assert.deepEqual(data.params, { email: 'dest@example.com' });
     assert.match(data.error, /dest@example\.com/);
   } finally {
     resetSessionEpochForTests();
@@ -828,7 +839,9 @@ test('HTTP integration: creating an alias with an unknown destination says so ex
     });
 
     assert.equal(res.status, 400);
-    assert.match((await readJson(res)).error, /no está en la lista de destinos/);
+    const data = await readJson(res);
+    assert.equal(data.code, ERROR_CODES.DEST_UNKNOWN);
+    assert.deepEqual(data.params, { email: 'desconocido@example.com' });
   } finally {
     resetSessionEpochForTests();
     await new Promise((resolve) => {
@@ -879,7 +892,8 @@ test('HTTP integration: a duplicate alias is diagnosed after the Cloudflare fail
 
     assert.equal(res.status, 400);
     const data = await readJson(res);
-    assert.match(data.error, /ya existe/);
+    assert.equal(data.code, ERROR_CODES.RULES_DUPLICATE_ALIAS);
+    assert.deepEqual(data.params, { alias: 'duplicado@example.com' });
     // The invariant holds: none of Cloudflare's text reaches the client.
     assert.ok(!data.error.includes('mensaje_upstream'));
   } finally {
@@ -922,7 +936,7 @@ test('HTTP integration: a Cloudflare failure with no identifiable cause stays ge
     assert.equal(res.status, 400);
     const data = await readJson(res);
     assert.ok(!data.error.includes('mensaje_upstream'));
-    assert.match(data.error, /No se pudo completar la operación con Cloudflare/);
+    assert.equal(data.code, ERROR_CODES.CLOUDFLARE_GENERIC);
   } finally {
     resetSessionEpochForTests();
     await new Promise((resolve) => {
@@ -976,7 +990,9 @@ test('HTTP integration: PUT /api/rules/:id changes the destination and respects 
       body: JSON.stringify({ destEmail: 'dest@example.com' }),
     });
     assert.equal(bySlug.status, 400);
-    assert.equal((await readJson(bySlug)).error, CATCH_ALL_MUTATION_ERROR);
+    const bySlugBody = await readJson(bySlug);
+    assert.equal(bySlugBody.error, CATCH_ALL_MUTATION_ERROR);
+    assert.equal(bySlugBody.code, CATCH_ALL_MUTATION_CODE);
 
     const byId = await fetch(`${baseUrl}/api/rules/catch_all_rule`, {
       method: 'PUT',
@@ -984,7 +1000,9 @@ test('HTTP integration: PUT /api/rules/:id changes the destination and respects 
       body: JSON.stringify({ destEmail: 'dest@example.com' }),
     });
     assert.equal(byId.status, 400);
-    assert.equal((await readJson(byId)).error, CATCH_ALL_MUTATION_ERROR);
+    const byIdBody = await readJson(byId);
+    assert.equal(byIdBody.error, CATCH_ALL_MUTATION_ERROR);
+    assert.equal(byIdBody.code, CATCH_ALL_MUTATION_CODE);
 
     assert.equal(puts.length, 1, 'no catch-all mutation may reach Cloudflare');
 
@@ -995,7 +1013,7 @@ test('HTTP integration: PUT /api/rules/:id changes the destination and respects 
       body: JSON.stringify({ destEmail: 'desconocido@example.com' }),
     });
     assert.equal(unverified.status, 400);
-    assert.match((await readJson(unverified)).error, /no está en la lista de destinos/);
+    assert.equal((await readJson(unverified)).code, ERROR_CODES.DEST_UNKNOWN);
   } finally {
     resetSessionEpochForTests();
     await new Promise((resolve) => {
@@ -1047,7 +1065,8 @@ test('HTTP integration: an async rejection without try/catch reaches the API err
     });
     assert.equal(res.status, 500);
     const data = await readJson(res);
-    assert.equal(data.error, 'Error interno del servidor');
+    assert.equal(data.error, 'Internal server error');
+    assert.equal(data.code, ERROR_CODES.SERVER_INTERNAL);
   } finally {
     await new Promise((resolve) => {
       server.close(resolve);

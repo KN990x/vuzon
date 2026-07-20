@@ -1,6 +1,18 @@
 import rateLimit from 'express-rate-limit';
+import { ERROR_CODES } from './error-codes.js';
 
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
+
+// English fallbacks; the panel renders the `code` in the language the user picked.
+const TOO_MANY_ATTEMPTS = {
+  error: 'Too many attempts. Wait a moment and try again.',
+  code: ERROR_CODES.RATE_LIMIT_LOGIN,
+};
+
+const TOO_MANY_REQUESTS = {
+  error: 'Too many requests. Wait a moment and try again.',
+  code: ERROR_CODES.RATE_LIMIT_API,
+};
 
 const sharedRateLimitOptions = {
   standardHeaders: true,
@@ -22,7 +34,7 @@ export function createLoginRateLimiter(options = {}) {
     windowMs: FIFTEEN_MINUTES_MS,
     max: 10,
     skipSuccessfulRequests: true,
-    message: { error: 'Demasiados intentos. Espera un momento e inténtalo de nuevo.' },
+    message: TOO_MANY_ATTEMPTS,
     ...options,
   });
 }
@@ -38,7 +50,7 @@ export function createLogoutRateLimiter(options = {}) {
     ...sharedRateLimitOptions,
     windowMs: FIFTEEN_MINUTES_MS,
     max: 60,
-    message: { error: 'Demasiadas peticiones. Espera un momento e inténtalo de nuevo.' },
+    message: TOO_MANY_REQUESTS,
     ...options,
   });
 }
@@ -57,7 +69,7 @@ export function createApiRateLimiter(options = {}) {
     ...sharedRateLimitOptions,
     windowMs: FIFTEEN_MINUTES_MS,
     max: 600,
-    message: { error: 'Demasiadas peticiones. Espera un momento e inténtalo de nuevo.' },
+    message: TOO_MANY_REQUESTS,
     ...options,
   });
 }

@@ -1,4 +1,6 @@
 import { ApiError } from './api';
+import { translateApiError } from '../i18n/api-errors';
+import type { Translator } from '../i18n/locale';
 import type { Rule, RuleAction } from './types';
 
 /** Email Routing catch-all rule (matcher type all, or same id as the dedicated slot). */
@@ -12,7 +14,7 @@ export function ruleMatchesCatchAllSlot(rule: Rule, catchAll: Rule | null): bool
   return false;
 }
 
-function formatActionDestination(action: RuleAction): string {
+function formatActionDestination({ t }: Translator, action: RuleAction): string {
   if (!action || typeof action.type !== 'string') {
     return '';
   }
@@ -29,20 +31,27 @@ function formatActionDestination(action: RuleAction): string {
     return parts.length > 0 ? parts.join(', ') : '';
   }
   if (type === 'worker') {
-    return parts.length > 0 ? `Worker: ${parts.join(', ')}` : 'Email Worker';
+    return parts.length > 0
+      ? t('rule.action.worker', { value: parts.join(', ') })
+      : t('rule.action.workerDefault');
   }
   if (type === 'drop') {
-    return 'Descartar';
+    return t('rule.action.drop');
   }
   return parts.length > 0 ? parts.join(', ') : '';
 }
 
-export function getRuleDest(rule: Rule | null | undefined): string {
+/**
+ * Human-readable destination of a rule. It takes the translator because a Worker or a
+ * `drop` rule is described with words, not with an address.
+ */
+export function getRuleDest(translator: Translator, rule: Rule | null | undefined): string {
   const actions = rule?.actions;
   if (!Array.isArray(actions) || actions.length === 0) {
     return '';
   }
-  const chunks = actions.map(formatActionDestination).filter(Boolean);
+  const chunks = actions.map((action) => formatActionDestination(translator, action))
+    .filter(Boolean);
   return chunks.length > 0 ? chunks.join(' · ') : '';
 }
 
@@ -103,15 +112,15 @@ export function generateRandomLocalPart(): string {
 
 /**
  * Cloudflare errors always arrive with the generic message from `api-route-error.js`,
- * so the only distinguishable rate limit is the 429 from the panel's own limiter,
- * which does keep its status.
+ * so the only distinguishable rate limit is the 429 from the panel's own limiter, which
+ * does keep its status (and now its own `rate_limit.*` code, translated like the rest).
  */
-export function interpretAddDestError(err: unknown): string {
-  const rawMessage = String((err as Error)?.message || err || '').trim();
-
+export function interpretAddDestError(translator: Translator, err: unknown): string {
   if (err instanceof ApiError && err.status === 429) {
-    return 'Límite de solicitudes alcanzado. Espera unos segundos.';
+    return translateApiError(translator, err);
   }
 
-  return `Error: ${rawMessage || 'Desconocido'}`;
+  return translator.t('dashboard.status.error', {
+    message: translateApiError(translator, err),
+  });
 }

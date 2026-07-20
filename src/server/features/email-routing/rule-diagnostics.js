@@ -1,3 +1,4 @@
+import { ERROR_CODES } from '../../platform/http/error-codes.js';
 import { PanelRequestError } from '../../platform/http/panel-request-error.js';
 
 /**
@@ -6,8 +7,8 @@ import { PanelRequestError } from '../../platform/http/panel-request-error.js';
  * Cloudflare publishes no stable error-code table for Email Routing, and
  * `api-route-error.js` flattens its text into a generic message so nothing upstream
  * leaks. The result until now: the two mistakes users actually make ("the destination
- * is not verified", "that alias already exists") both arrived as
- * "No se pudo completar la operación con Cloudflare".
+ * is not verified", "that alias already exists") both arrived as the generic
+ * `cloudflare.generic` message.
  *
  * Here the cause is deduced from state the panel already knows how to query, and we
  * write the resulting message ourselves. The AGENTS.md invariant still holds.
@@ -39,7 +40,7 @@ export function isVerifiedAddress(value) {
 }
 
 /**
- * @param {unknown[]} addresses Resultado de /email/routing/addresses.
+ * @param {unknown[]} addresses Result of /email/routing/addresses.
  * @param {string} email
  * @returns {{ exists: boolean, verified: boolean }}
  */
@@ -83,8 +84,9 @@ export function hasRuleForAlias(rules, aliasEmail) {
  */
 export function unverifiedDestinationError(destEmail) {
   return new PanelRequestError(
-    `El destino ${destEmail} no está verificado en Cloudflare. `
-      + 'Revisa su bandeja de entrada y confirma la dirección antes de crear el alias.',
+    `The destination ${destEmail} is not verified in Cloudflare. `
+      + 'Check its inbox and confirm the address before creating the alias.',
+    { code: ERROR_CODES.DEST_UNVERIFIED, params: { email: destEmail } },
   );
 }
 
@@ -93,7 +95,10 @@ export function unverifiedDestinationError(destEmail) {
  * @returns {PanelRequestError}
  */
 export function duplicateAliasError(aliasEmail) {
-  return new PanelRequestError(`El alias ${aliasEmail} ya existe.`);
+  return new PanelRequestError(
+    `The alias ${aliasEmail} already exists.`,
+    { code: ERROR_CODES.RULES_DUPLICATE_ALIAS, params: { alias: aliasEmail } },
+  );
 }
 
 /**
@@ -102,6 +107,7 @@ export function duplicateAliasError(aliasEmail) {
  */
 export function unknownDestinationError(destEmail) {
   return new PanelRequestError(
-    `${destEmail} no está en la lista de destinos de la cuenta. Añádelo primero como destinatario.`,
+    `${destEmail} is not in the account's destination list. Add it as a destination first.`,
+    { code: ERROR_CODES.DEST_UNKNOWN, params: { email: destEmail } },
   );
 }

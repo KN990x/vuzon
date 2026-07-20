@@ -1,3 +1,5 @@
+import { ERROR_CODES } from '../../platform/http/error-codes.js';
+
 /**
  * @param {string} ruleId
  * @returns {boolean}
@@ -24,5 +26,8 @@ export function isCatchAllRule(rule) {
     && matchers.some((matcher) => matcher && typeof matcher === 'object' && matcher.type === 'all');
 }
 
+/** English fallback; the panel renders CATCH_ALL_MUTATION_CODE in the active language. */
 export const CATCH_ALL_MUTATION_ERROR =
-  'No se puede modificar ni eliminar la regla catch-all desde esta API.';
+  'The catch-all rule cannot be modified or deleted from this API.';
+
+export const CATCH_ALL_MUTATION_CODE = ERROR_CODES.RULES_CATCH_ALL_READONLY;

@@ -1,5 +1,7 @@
 import { LogOut, RefreshCw } from 'lucide-react';
+import { useI18n } from '../i18n/context';
 import { GitHubIcon, iconButtonClass, VuzonMark } from './primitives';
+import { LanguageMenu } from './LanguageMenu';
 
 interface HeaderProps {
   domain: string;
@@ -9,6 +11,8 @@ interface HeaderProps {
 }
 
 export function Header({ domain, loading, onRefresh, onLogout }: HeaderProps) {
+  const { t } = useI18n();
+
   return (
     <header className="glass glass-header fixed inset-x-0 top-0 z-50 flex h-16 items-center gap-4 px-6">
       {/* Lockup: marca y wordmark juntos (gap corto), el chip ya respira con el gap del header. */}
@@ -17,7 +21,7 @@ export function Header({ domain, loading, onRefresh, onLogout }: HeaderProps) {
         <span className="text-xl font-bold tracking-[-0.045em] text-cream">vuzon</span>
       </span>
       <span className="rounded-md bg-accent/10 px-[9px] py-[3px] font-mono text-[10px] uppercase tracking-[0.18em] text-accent">
-        Panel
+        {t('header.badge')}
       </span>
       <div className="ml-auto flex items-center gap-2 font-mono text-xs text-cream/65">
         <span className="size-[7px] rounded-full bg-positive" aria-hidden />
@@ -28,17 +32,18 @@ export function Header({ domain, loading, onRefresh, onLogout }: HeaderProps) {
         className={iconButtonClass}
         onClick={onRefresh}
         disabled={loading}
-        title="Actualizar"
-        aria-label="Actualizar"
+        title={t('header.refresh')}
+        aria-label={t('header.refresh')}
       >
         <RefreshCw size={17} className={loading ? 'animate-spin' : undefined} />
       </button>
+      <LanguageMenu />
       <button
         type="button"
         className={iconButtonClass}
         onClick={onLogout}
-        title="Cerrar sesión"
-        aria-label="Cerrar sesión"
+        title={t('header.logout')}
+        aria-label={t('header.logout')}
       >
         <LogOut size={17} />
       </button>
@@ -47,8 +52,8 @@ export function Header({ domain, loading, onRefresh, onLogout }: HeaderProps) {
         target="_blank"
         rel="noreferrer"
         className={iconButtonClass}
-        title="GitHub"
-        aria-label="GitHub"
+        title={t('header.github')}
+        aria-label={t('header.github')}
       >
         <GitHubIcon />
       </a>

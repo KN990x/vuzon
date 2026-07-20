@@ -1,4 +1,5 @@
 import { Coffee } from 'lucide-react';
+import { useI18n } from '../i18n/context';
 
 /**
  * Discreet footer: authorship and a support link.
@@ -11,6 +12,7 @@ import { Coffee } from 'lucide-react';
  * The year is computed on every render so nobody has to touch it each January.
  */
 export function Footer() {
+  const { t } = useI18n();
   const year = new Date().getFullYear();
 
   return (
@@ -33,7 +35,7 @@ export function Footer() {
         className="flex items-center gap-2 rounded-full bg-accent/[0.07] px-3 py-1.5 text-accent/80 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] transition-colors duration-200 hover:bg-accent/[0.12] hover:text-accent"
       >
         <Coffee size={12} aria-hidden />
-        Invítame a un café
+        {t('footer.coffee')}
       </a>
     </footer>
   );

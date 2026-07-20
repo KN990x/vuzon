@@ -48,9 +48,9 @@ test('package: the version does not drift between the root and the two workspace
 });
 
 test('tree: no leftovers from the workspace migration', () => {
-  // El contrato HTTP vive en tests/integration/server/app.test.js, no en un .md aparte.
+  // The HTTP contract lives in tests/integration/server/app.test.js, not in a separate .md.
   assert.equal(fs.existsSync(path.join(repoRoot, 'API_CONTRACT.md')), false);
-  // README boilerplate de create-vite: se borró al documentar todo en CONTRIBUTING.md.
+  // create-vite README boilerplate: deleted once everything was documented in CONTRIBUTING.md.
   assert.equal(fs.existsSync(path.join(repoRoot, 'src', 'web', 'README.md')), false);
   // A root-level `public/` got confused with VUZON_PUBLIC_DIR; images live in docs/.
   assert.equal(fs.existsSync(path.join(repoRoot, 'public')), false);
@@ -64,18 +64,18 @@ test('brand: the favicon uses the panel amber, not another brand palette', () =>
 
   // The favicon's accent must be the same token the UI uses.
   const accent = theme.match(/--color-accent:\s*(#[0-9a-f]{6})/i)?.[1];
-  assert.ok(accent, 'no se pudo leer --color-accent de index.css');
+  assert.ok(accent, 'could not read --color-accent from index.css');
   assert.ok(
     favicon.toLowerCase().includes(accent.toLowerCase()),
     `favicon.svg should use the theme accent (${accent}).`,
   );
 
-  // Regresión: el favicon original era violeta/cian de otra marca.
+  // Regression: the original favicon was violet/cyan, from another brand.
   for (const foreign of ['#863bff', '#7e14ff', '#47bfff']) {
     assert.equal(
       favicon.toLowerCase().includes(foreign),
       false,
-      `favicon.svg contiene ${foreign}, que no pertenece a la paleta de vuzon.`,
+      `favicon.svg contains ${foreign}, which is not part of the vuzon palette.`,
     );
   }
 });

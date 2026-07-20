@@ -87,6 +87,11 @@ Give every service its own address (`netflix@yourdomain.com`, `shop@yourdomain.c
 
 - Shown **read-only**. The API refuses to modify or delete it, so you cannot break your fallback rule by accident from the panel.
 
+**Interface**
+
+- **English and Spanish**, switched from the globe in the header. English is the default; your choice is remembered in the browser.
+- Error messages are localised too: the API answers with a machine-readable code and the panel writes the sentence in your language.
+
 **Operations**
 
 - **Single Docker image**, multi-arch **amd64 / arm64**, published to GHCR on every release.
@@ -97,7 +102,7 @@ Give every service its own address (`netflix@yourdomain.com`, `shop@yourdomain.c
 
 > Everything runs against **your** Cloudflare account with **your** API token. vuzon has no backend of its own, no telemetry, and no third-party services.
 
-> **Heads-up:** the panel interface is **in Spanish** (as in the screenshot above). This README and the code documentation are bilingual, but there is no language switcher in the app yet.
+> **Heads-up:** the screenshot above shows the Spanish interface. The panel opens in **English** by default — use the globe in the header to switch.
 
 ---
 
@@ -261,6 +266,11 @@ Da a cada servicio su propia dirección (`netflix@tudominio.com`, `tienda@tudomi
 **Catch-all**
 
 - Se muestra en **solo lectura**. La API rechaza modificarlo o borrarlo, así que no puedes romper tu regla de reserva por accidente desde el panel.
+
+**Interfaz**
+
+- **Inglés y español**, con el selector en el globo de la cabecera. El idioma por defecto es el inglés; tu elección se recuerda en el navegador.
+- Los mensajes de error también se traducen: la API responde con un código y es el panel quien escribe la frase en tu idioma.
 
 **Operación**
 

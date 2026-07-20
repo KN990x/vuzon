@@ -49,7 +49,7 @@ test('requireAuth: a non-API request without a session also answers 401 JSON (no
     assert.fail('next must not be called');
   });
   assert.equal(res.statusCode, 401);
-  assert.deepEqual(res.body, { error: 'No autorizado' });
+  assert.deepEqual(res.body, { error: 'Unauthorized', code: 'auth.unauthorized' });
 });
 
 test('requireAuth: an authenticated, current session calls next', () => {

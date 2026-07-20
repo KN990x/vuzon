@@ -37,14 +37,15 @@ For frontend development with hot reload, run the backend (`pnpm --filter @vuzon
 ## Where to make changes
 
 - **Backend:** routes in `src/server/features/*/routes.js`; integrations in `src/server/platform/`; configuration in `src/server/config/`. Keep `src/server/server.js` as a thin entrypoint.
-- **Frontend:** React app under `src/web/src/` (`screens/`, `components/`, pure helpers in `lib/`). Keep business logic in `src/web/src/lib/` so it stays unit-testable.
+- **Frontend:** React app under `src/web/src/` (`screens/`, `components/`, pure helpers in `lib/`, translations in `i18n/`). Keep business logic in `src/web/src/lib/` so it stays unit-testable.
 - **Tests:** backend coverage in `src/server/tests/unit/` and `src/server/tests/integration/`; smoke checks in `src/server/tests/architecture/`; frontend tests in `src/web/src/**/*.test.ts` (Vitest).
 
 ## Code conventions
 
 - **ESM modules** (`"type": "module"` in `package.json`).
-- **Validate HTTP inputs** at the edge with Zod; keep the JSON shapes already consumed by the UI or tests (`{ success: true }`, `{ ok: true, result }`, `{ result }`, `{ error }`, etc.).
-- **User-visible messages and errors** stay in **Spanish**, unless the change is explicitly for copy in another language.
+- **Validate HTTP inputs** at the edge with Zod; keep the JSON shapes already consumed by the UI or tests (`{ success: true }`, `{ ok: true, result }`, `{ result }`, `{ error, code }`, etc.). Zod issue messages are translation **slugs** (`alias.charset`), not prose.
+- **User-visible copy lives in `src/web/src/i18n/`** — never as a literal in a component, and that includes `title`, `aria-label` and `placeholder`. `en.ts` is the source of truth and `es.ts` is type-checked against it, so a string added to one and not the other fails the build.
+- **Server error messages are English fallbacks.** The panel picks the language, so a new error must carry a `code` from `src/server/platform/http/error-codes.js` and get an `error.<code>` entry in both catalogues; `tests/architecture/error-codes-guard.test.js` enforces it.
 - **Session and cookies:** the client uses `credentials: 'include'`; any auth/session change should stay consistent across server, client, and tests.
 - **Environment variables:** do not rename or relocate established conventions (`VUZON_PORT`, `SESSION_SECRET`, etc.) unless that is an explicit part of the change and covered by tests and README updates where applicable.
 - Avoid new production or tooling dependencies when the current stack is enough.
@@ -179,7 +180,7 @@ pnpm install
 
 The backend exposes login/session endpoints plus a REST proxy to Cloudflare. Cloudflare-facing routes and `GET /api/me` require an authenticated session.
 
-Response envelope: reads return `{ result }`, mutations `{ ok: true }` (plus `result` when Cloudflare returns the resource), errors `{ error }`. `/api/login` and `/api/logout` keep `{ success: true }`. All `/api/*` responses are sent with `Cache-Control: no-store`.
+Response envelope: reads return `{ result }`, mutations `{ ok: true }` (plus `result` when Cloudflare returns the resource), errors `{ error, code, params? }` — `error` is an English fallback and `code` is what the bilingual panel renders from. `/api/login` and `/api/logout` keep `{ success: true }`. All `/api/*` responses are sent with `Cache-Control: no-store`.
 
 - `GET  /healthz` - Public endpoint that returns `{ ok: true }`.
 - `POST /api/login` - Authenticates with `{ username, password }`. Wrong credentials return `401`.

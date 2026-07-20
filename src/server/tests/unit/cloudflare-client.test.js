@@ -231,7 +231,7 @@ test('fetchAllCloudflare: stops when the page cap is exceeded', async () => {
       return true;
     },
   );
-  // 100 páginas leídas; la 101 se rechaza antes de llamar a fetch.
+  // 100 pages read; the 101st is rejected before calling fetch.
   assert.equal(calls.length, 100);
 });
 

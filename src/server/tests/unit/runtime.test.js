@@ -99,7 +99,7 @@ test('getListenPort: without PORT it uses VUZON_PORT', () => {
 test('getListenPort: an invalid or negative value falls back to the default', () => {
   assert.equal(getListenPort({ PORT: 'not-a-number' }), 8001);
   assert.equal(getListenPort({ PORT: '-1' }), 8001);
-  // Fuera de rango o no entero: listen() fallaría con ERR_SOCKET_BAD_PORT.
+  // Out of range or not an integer: listen() would fail with ERR_SOCKET_BAD_PORT.
   assert.equal(getListenPort({ PORT: '70000' }), 8001);
   assert.equal(getListenPort({ PORT: '8001.5' }), 8001);
 });

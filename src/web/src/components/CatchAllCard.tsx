@@ -1,6 +1,7 @@
 import { Activity, ArrowRight } from 'lucide-react';
 import type { Rule } from '../lib/types';
 import { getRuleDest } from '../lib/rules';
+import { useI18n } from '../i18n/context';
 import { CardIcon, chipClass } from './primitives';
 
 /**
@@ -8,8 +9,15 @@ import { CardIcon, chipClass } from './primitives';
  * this rule, so there are no controls here.
  */
 export function CatchAllCard({ catchAll }: { catchAll: Rule | null }) {
+  const i18n = useI18n();
+  const { t } = i18n;
   const enabled = Boolean(catchAll?.enabled);
-  const destText = getRuleDest(catchAll);
+  const destText = getRuleDest(i18n, catchAll);
+
+  let stateLabel = t('catchAll.state.unavailable');
+  if (catchAll !== null) {
+    stateLabel = enabled ? t('catchAll.state.active') : t('catchAll.state.paused');
+  }
 
   return (
     <section className="glass relative rounded-panel p-5">
@@ -18,24 +26,23 @@ export function CatchAllCard({ catchAll }: { catchAll: Rule | null }) {
           <CardIcon>
             <Activity size={14} />
           </CardIcon>
-          <span className="text-[15px] font-bold tracking-[-0.01em]">Catch-all</span>
+          <span className="text-[15px] font-bold tracking-[-0.01em]">{t('catchAll.title')}</span>
         </div>
         <span
           className={`font-mono text-[10px] uppercase tracking-[0.08em] ${
-            catchAll === null ? 'text-cream/60' : enabled ? 'text-positive' : 'text-cream/60'
+            catchAll !== null && enabled ? 'text-positive' : 'text-cream/60'
           }`}
         >
-          {catchAll === null ? 'no disponible' : enabled ? 'activo' : 'pausado'}
+          {stateLabel}
         </span>
       </div>
       <p className="m-0 mb-3 text-[12.5px] leading-relaxed text-cream/60">
-        Todo correo a una dirección sin alias se reenvía al destino por defecto. Esta regla se
-        gestiona desde Cloudflare y aquí es de solo lectura.
+        {t('catchAll.description')}
       </p>
       <div className={`${chipClass} ${enabled ? 'text-cream/75' : 'text-cream/65'}`}>
         <ArrowRight size={13} className="flex-none" aria-hidden />
         <span className="min-w-0 truncate">
-          {catchAll === null ? 'No se pudo cargar la regla catch-all' : destText || 'Sin acción configurada'}
+          {catchAll === null ? t('catchAll.loadError') : destText || t('catchAll.noAction')}
         </span>
       </div>
     </section>

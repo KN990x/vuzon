@@ -6,7 +6,7 @@ export interface Profile {
 export interface Destination {
   id: string;
   email: string;
-  /** Se reenvía tal cual desde Cloudflare: boolean, string, objeto, timestamp… */
+  /** Forwarded as-is from Cloudflare: boolean, string, object, timestamp… */
   verified: unknown;
 }
 
@@ -29,7 +29,11 @@ export interface Rule {
   actions?: RuleAction[];
 }
 
+/**
+ * Raw errors, not text: the message is produced at render time so it follows the
+ * language switcher (see Dashboard.tsx).
+ */
 export interface FormErrors {
-  alias: string;
-  dest: string;
+  alias: unknown;
+  dest: unknown;
 }

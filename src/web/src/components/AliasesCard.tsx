@@ -1,6 +1,7 @@
 import { ArrowRight, Check, ChevronDown, Copy, Mail, Plus, Search, Shuffle, Trash2 } from 'lucide-react';
 import type { Destination, Rule } from '../lib/types';
 import { getRuleDest, getSingleForwardDestination } from '../lib/rules';
+import { useI18n } from '../i18n/context';
 import { Switch } from './Switch';
 import { CardIcon, pillButtonClass } from './primitives';
 
@@ -40,6 +41,9 @@ export function AliasesCard(props: AliasesCardProps) {
     dest, onDestChange, verifiedDests, canCreate, loading, onCreate, aliasError,
   } = props;
 
+  const i18n = useI18n();
+  const { t, tn } = i18n;
+
   return (
     <section className="overflow-hidden rounded-card bg-surface">
       <div className="flex items-center justify-between gap-3 px-[18px] py-3.5 shadow-[inset_0_-1px_0_rgba(255,255,255,0.06)]">
@@ -47,7 +51,7 @@ export function AliasesCard(props: AliasesCardProps) {
           <CardIcon>
             <Mail size={14} />
           </CardIcon>
-          <span className="text-[15.5px] font-bold tracking-[-0.01em]">Alias</span>
+          <span className="text-[15.5px] font-bold tracking-[-0.01em]">{t('aliases.title')}</span>
         </div>
         <div className="flex min-w-0 items-center gap-3">
           <label className="flex min-w-0 items-center gap-2 text-cream/65">
@@ -55,12 +59,14 @@ export function AliasesCard(props: AliasesCardProps) {
             <input
               value={search}
               onChange={(e) => onSearchChange(e.target.value)}
-              placeholder="buscar alias"
-              aria-label="Buscar alias"
+              placeholder={t('aliases.search.placeholder')}
+              aria-label={t('aliases.search.label')}
               className="w-28 min-w-0 font-mono text-xs text-cream placeholder:text-cream/45"
             />
           </label>
-          <span className="flex-none font-mono text-[11px] text-cream/60">{totalCount} reglas</span>
+          <span className="flex-none font-mono text-[11px] text-cream/60">
+            {tn('aliases.count', totalCount)}
+          </span>
         </div>
       </div>
 
@@ -72,6 +78,7 @@ export function AliasesCard(props: AliasesCardProps) {
         // as text so we do not destroy configuration made outside the panel.
         const currentDest = getSingleForwardDestination(rule);
         const editable = currentDest !== null && verifiedDests.length > 0;
+        const aliasName = rule.name ?? t('aliases.row.fallbackName');
         return (
           <div
             key={rule.id}
@@ -89,7 +96,7 @@ export function AliasesCard(props: AliasesCardProps) {
                   value={currentDest}
                   disabled={pending}
                   onChange={(e) => onChangeRuleDest(rule, e.target.value)}
-                  aria-label={`Destino de ${rule.name ?? 'alias'}`}
+                  aria-label={t('aliases.row.destLabel', { alias: aliasName })}
                   className="w-full cursor-pointer appearance-none truncate rounded-[8px] bg-white/[0.04] py-1 pl-2 pr-6 font-mono text-[13px] text-cream/70 disabled:cursor-wait disabled:opacity-60"
                 >
                   {/* The current destination may have become unverified: it is kept as an
@@ -111,7 +118,7 @@ export function AliasesCard(props: AliasesCardProps) {
               </div>
             ) : (
               <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-cream/70">
-                {getRuleDest(rule) || '—'}
+                {getRuleDest(i18n, rule) || '—'}
               </span>
             )}
             <span
@@ -119,20 +126,20 @@ export function AliasesCard(props: AliasesCardProps) {
                 enabled ? 'text-positive' : 'text-cream/60'
               }`}
             >
-              {enabled ? 'activo' : 'pausado'}
+              {enabled ? t('aliases.row.active') : t('aliases.row.paused')}
             </span>
             <Switch
               on={enabled}
               disabled={pending}
-              label={enabled ? 'Pausar alias' : 'Activar alias'}
+              label={enabled ? t('aliases.row.pause') : t('aliases.row.enable')}
               onToggle={() => onToggleRule(rule)}
             />
             <button
               type="button"
               onClick={() => onDeleteRule(rule.id)}
               disabled={pending}
-              title="Eliminar alias"
-              aria-label={`Eliminar ${rule.name ?? 'alias'}`}
+              title={t('aliases.row.delete')}
+              aria-label={t('aliases.row.deleteNamed', { alias: aliasName })}
               className="flex-none text-cream/65 transition-colors duration-200 hover:text-accent-dark disabled:cursor-wait disabled:opacity-60 disabled:hover:text-cream/65 enabled:cursor-pointer"
             >
               <Trash2 size={14} />
@@ -160,16 +167,16 @@ export function AliasesCard(props: AliasesCardProps) {
         <input
           value={newLocal}
           onChange={(e) => onLocalChange(e.target.value)}
-          placeholder="nuevo-alias"
-          aria-label="Parte local del nuevo alias"
+          placeholder={t('aliases.new.placeholder')}
+          aria-label={t('aliases.new.label')}
           className="w-[130px] font-mono text-[13px] text-cream placeholder:text-cream/45"
         />
         <span className="font-mono text-[13px] text-cream/60">@{domain || '...'}</span>
         <button
           type="button"
           onClick={onGenerate}
-          title="Generar alias aleatorio"
-          aria-label="Generar alias aleatorio"
+          title={t('aliases.new.generate')}
+          aria-label={t('aliases.new.generate')}
           className="cursor-pointer text-cream/65 transition-colors duration-200 hover:text-accent"
         >
           <Shuffle size={14} />
@@ -177,8 +184,8 @@ export function AliasesCard(props: AliasesCardProps) {
         <button
           type="button"
           onClick={onCopyPreview}
-          title={`Copiar ${previewText}`}
-          aria-label={`Copiar ${previewText}`}
+          title={t('aliases.new.copy', { address: previewText })}
+          aria-label={t('aliases.new.copy', { address: previewText })}
           className={`cursor-pointer transition-colors duration-200 ${
             copied ? 'text-positive' : 'text-cream/65 hover:text-accent'
           }`}
@@ -190,10 +197,12 @@ export function AliasesCard(props: AliasesCardProps) {
             value={dest}
             onChange={(e) => onDestChange(e.target.value)}
             disabled={verifiedDests.length === 0}
-            aria-label="Destino del nuevo alias"
+            aria-label={t('aliases.new.destLabel')}
             className="cursor-pointer appearance-none rounded-[10px] bg-white/[0.04] py-[7px] pl-3 pr-8 font-mono text-xs text-cream/75 disabled:cursor-not-allowed disabled:text-cream/65"
           >
-            {verifiedDests.length === 0 && <option value="">sin destinos verificados</option>}
+            {verifiedDests.length === 0 && (
+              <option value="">{t('aliases.new.noVerifiedDests')}</option>
+            )}
             {verifiedDests.map((d) => (
               <option key={d.id} value={d.email} className="bg-surface text-cream">
                 {d.email}
@@ -207,7 +216,7 @@ export function AliasesCard(props: AliasesCardProps) {
           />
         </div>
         <button type="submit" className={pillButtonClass} disabled={!canCreate || loading}>
-          Añadir alias
+          {t('aliases.new.submit')}
         </button>
         {aliasError && (
           <span className="w-full font-mono text-xs text-accent-dark">{aliasError}</span>

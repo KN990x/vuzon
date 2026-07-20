@@ -3,6 +3,7 @@ import { getPanelAuthCredentials } from '../../config/panel-auth-env.js';
 import { asyncHandler } from '../../bootstrap/async-handler.js';
 import { createApiRateLimiter } from '../../platform/http/rate-limiters.js';
 import {
+  CATCH_ALL_MUTATION_CODE,
   CATCH_ALL_MUTATION_ERROR,
   isCatchAllRule,
   isCatchAllRuleId,
@@ -69,14 +70,19 @@ export function buildRuleUpdatePayload(rule, enabled, overrides = {}) {
 }
 
 function rejectCatchAllMutation(res) {
-  return res.status(400).json({ error: CATCH_ALL_MUTATION_ERROR });
+  return res.status(400).json({
+    error: CATCH_ALL_MUTATION_ERROR,
+    code: CATCH_ALL_MUTATION_CODE,
+  });
 }
 
 /**
  * /api response contract (verified in tests/integration/server/app.test.js):
  *   - reads     → { result }
  *   - mutations → { ok: true }, plus `result` when Cloudflare returns the resource
- *   - errors    → { error } with the matching HTTP status
+ *   - errors    → { error, code, params? } with the matching HTTP status; `error` is an
+ *                 English fallback and `code` is what the bilingual SPA renders
+ *                 (platform/http/error-codes.js)
  * `/api/login` and `/api/logout` keep their own `{ success: true }`.
  */
 export function registerApiRoutes(app, {

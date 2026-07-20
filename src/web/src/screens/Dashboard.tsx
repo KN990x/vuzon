@@ -10,6 +10,8 @@ import {
 } from '../lib/rules';
 import { isVerifiedStatus } from '../lib/verification';
 import type { Destination, FormErrors, Profile, Rule } from '../lib/types';
+import { useI18n } from '../i18n/context';
+import { translateApiError } from '../i18n/api-errors';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { Toast } from '../components/Toast';
@@ -20,9 +22,9 @@ import { DestinationsCard } from '../components/DestinationsCard';
 // /api/me is not listed here: email and rootDomain come from server environment
 // variables and do not change during the session, so it is fetched once on mount.
 const REFRESH_ENDPOINTS = [
-  { path: '/api/rules', label: 'reglas' },
-  { path: '/api/addresses', label: 'destinatarios' },
-  { path: '/api/rules/catch-all', label: 'catch-all' },
+  { path: '/api/rules', labelKey: 'dashboard.resource.rules' },
+  { path: '/api/addresses', labelKey: 'dashboard.resource.addresses' },
+  { path: '/api/rules/catch-all', labelKey: 'dashboard.resource.catchAll' },
 ] as const;
 
 interface ListResponse<T> {
@@ -30,6 +32,8 @@ interface ListResponse<T> {
 }
 
 export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
+  const i18n = useI18n();
+  const { t } = i18n;
   const [profile, setProfile] = useState<Profile>({ rootDomain: '' });
   const [rules, setRules] = useState<Rule[]>([]);
   const [dests, setDests] = useState<Destination[]>([]);
@@ -42,8 +46,11 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
   const [newAlias, setNewAlias] = useState({ local: '', dest: '' });
   const [newDestInput, setNewDestInput] = useState('');
 
+  // The toast holds already-translated text: it lives ~5s, so re-translating it on a
+  // language switch would be pointless machinery. Form errors do NOT — they stay on
+  // screen until the next attempt, so they are kept raw and translated at render.
   const [statusMsg, setStatusMsg] = useState('');
-  const [errors, setErrors] = useState<FormErrors>({ alias: '', dest: '' });
+  const [errors, setErrors] = useState<FormErrors>({ alias: null, dest: null });
   const [copied, setCopied] = useState(false);
 
   const statusTimerRef = useRef<number | null>(null);
@@ -51,6 +58,10 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
   const refreshDepthRef = useRef(0);
   const onUnauthorizedRef = useRef(onUnauthorized);
   onUnauthorizedRef.current = onUnauthorized;
+  // Same trick as onUnauthorizedRef: keeping the translator out of the callback deps
+  // stops a language switch from re-running `refreshAll` and refetching everything.
+  const i18nRef = useRef(i18n);
+  i18nRef.current = i18n;
 
   useEffect(
     () => () => {
@@ -87,7 +98,7 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
     }, 5000);
   }, []);
 
-  /** Cualquier 401 devuelve al login por estado de cliente (caso de uso 14). */
+  /** Any 401 goes back to login through client state (no server redirect). */
   const api = useCallback(
     async <T,>(path: string, method = 'GET', body: Record<string, unknown> | null = null) => {
       try {
@@ -116,13 +127,13 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
       let nextDests: Destination[] | null = null;
 
       results.forEach((result, i) => {
-        const { path, label } = REFRESH_ENDPOINTS[i];
+        const { path, labelKey } = REFRESH_ENDPOINTS[i];
         if (result.status !== 'fulfilled') {
           if (path === '/api/rules/catch-all') {
             setCatchAll(null);
           }
-          const msg = (result.reason as Error | undefined)?.message || String(result.reason);
-          failures.push(`${label}: ${msg}`);
+          const msg = translateApiError(i18nRef.current, result.reason);
+          failures.push(`${i18nRef.current.t(labelKey)}: ${msg}`);
           return;
         }
 
@@ -145,7 +156,9 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
       }
 
       if (failures.length > 0) {
-        setStatus(`Carga parcial: ${failures.join(' · ')}`);
+        setStatus(i18nRef.current.t('dashboard.status.partialLoad', {
+          details: failures.join(' · '),
+        }));
       } else {
         setStatus('');
       }
@@ -170,7 +183,11 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
         if (!cancelled) setProfile(value || { rootDomain: '' });
       })
       .catch((err: unknown) => {
-        if (!cancelled) setStatus(`perfil: ${(err as Error).message}`);
+        if (!cancelled) {
+          setStatus(i18nRef.current.t('dashboard.status.profileError', {
+            message: translateApiError(i18nRef.current, err),
+          }));
+        }
       });
 
     return () => {
@@ -190,13 +207,13 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
   let aliasListEmptyMessage = '';
   if (filteredRules.length === 0) {
     if (search) {
-      aliasListEmptyMessage = 'No se encontraron alias.';
+      aliasListEmptyMessage = t('aliases.empty.noResults');
     } else if (catchAll) {
-      aliasListEmptyMessage = 'No hay alias personalizados; solo aplica el catch-all.';
+      aliasListEmptyMessage = t('aliases.empty.onlyCatchAll');
     } else if (rules.length === 0) {
-      aliasListEmptyMessage = 'No hay alias creados.';
+      aliasListEmptyMessage = t('aliases.empty.none');
     } else {
-      aliasListEmptyMessage = 'No se encontraron alias.';
+      aliasListEmptyMessage = t('aliases.empty.noResults');
     }
   }
 
@@ -212,7 +229,12 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
   const catchAllLabel = catchAll === null ? '—' : catchAll.enabled ? 'ON' : 'OFF';
 
   function clearErrors() {
-    setErrors({ alias: '', dest: '' });
+    setErrors({ alias: null, dest: null });
+  }
+
+  /** Shorthand for the many `setStatus('Error: …')` call sites. */
+  function setErrorStatus(err: unknown) {
+    setStatus(t('dashboard.status.error', { message: translateApiError(i18n, err) }));
   }
 
   async function logout() {
@@ -253,11 +275,11 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
 
       try {
         await api('/api/rules', 'POST', { localPart, destEmail: newAlias.dest });
-        setStatus('Alias creado');
+        setStatus(t('dashboard.status.aliasCreated'));
         setNewAlias((prev) => ({ ...prev, local: '' }));
         await refreshAll();
       } catch (err) {
-        setErrors((prev) => ({ ...prev, alias: (err as Error).message }));
+        setErrors((prev) => ({ ...prev, alias: err }));
       }
     });
   }
@@ -271,11 +293,11 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
       clearErrors();
       try {
         await api('/api/addresses', 'POST', { email: newDestInput });
-        setStatus('Añadido. Revisa tu correo para verificar.');
+        setStatus(t('dashboard.status.destAdded'));
         setNewDestInput('');
         await refreshAll();
       } catch (err) {
-        setErrors((prev) => ({ ...prev, dest: interpretAddDestError(err) }));
+        setErrors((prev) => ({ ...prev, dest: err }));
       }
     });
   }
@@ -286,9 +308,9 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
         const action = rule.enabled ? 'disable' : 'enable';
         await api(`/api/rules/${rule.id}/${action}`, 'POST');
         await refreshAll();
-        setStatus('Alias actualizado');
+        setStatus(t('dashboard.status.aliasUpdated'));
       } catch (err) {
-        setStatus(`Error: ${(err as Error).message}`);
+        setErrorStatus(err);
       }
     });
   }
@@ -302,9 +324,9 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
       try {
         await api(`/api/rules/${rule.id}`, 'PUT', { destEmail });
         await refreshAll();
-        setStatus('Destino actualizado');
+        setStatus(t('dashboard.status.destUpdated'));
       } catch (err) {
-        setStatus(`Error: ${(err as Error).message}`);
+        setErrorStatus(err);
       }
     });
   }
@@ -313,7 +335,7 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
     if (busy.has(`rule:${id}`)) {
       return;
     }
-    if (!window.confirm('¿Eliminar alias permanentemente?')) {
+    if (!window.confirm(t('dashboard.confirm.deleteAlias'))) {
       return;
     }
 
@@ -322,10 +344,10 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
         await api(`/api/rules/${id}`, 'DELETE');
         // Optimistic filtering for immediate visual feedback; refreshAll re-syncs the rest.
         setRules((prev) => prev.filter((rule) => rule.id !== id));
-        setStatus('Alias eliminado');
+        setStatus(t('dashboard.status.aliasDeleted'));
         await refreshAll();
       } catch (err) {
-        setStatus(`Error: ${(err as Error).message}`);
+        setErrorStatus(err);
         await refreshAll();
       }
     });
@@ -335,17 +357,17 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
     if (busy.has(`dest:${id}`)) {
       return;
     }
-    if (!window.confirm('¿Eliminar destinatario? Si hay reglas usándolo, dejarán de funcionar.')) {
+    if (!window.confirm(t('dashboard.confirm.deleteDest'))) {
       return;
     }
 
     await runExclusive(`dest:${id}`, async () => {
       try {
         await api(`/api/addresses/${id}`, 'DELETE');
-        setStatus('Destinatario eliminado');
+        setStatus(t('dashboard.status.destDeleted'));
         await refreshAll();
       } catch (err) {
-        setStatus(`Error: ${(err as Error).message}`);
+        setErrorStatus(err);
       }
     });
   }
@@ -365,7 +387,7 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
       return;
     }
 
-    const result = await copyTextToClipboard(previewText);
+    const result = await copyTextToClipboard(previewText, t('dashboard.copyPrompt'));
     if (result.copied) {
       setCopied(true);
       if (copiedTimerRef.current != null) {
@@ -376,7 +398,7 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
       }, 2000);
     }
     if (result.failed) {
-      setStatus('No se pudo copiar (¿Usas HTTPS?)');
+      setStatus(t('dashboard.status.copyFailed'));
     }
   }
 
@@ -393,7 +415,7 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
         <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
           <div>
             <div className="mb-2.5 font-mono text-[11px] uppercase tracking-[0.22em] text-cream/65">
-              Panel de enrutamiento
+              {t('dashboard.eyebrow')}
             </div>
             <h1 className="m-0 text-[34px] font-bold tracking-[-0.035em]">
               {profile.rootDomain || '…'}
@@ -402,11 +424,11 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
           <div className="flex gap-6 font-mono text-xs text-cream/65">
             <div className="flex flex-col items-end gap-1">
               <span className="font-sans text-[22px] font-bold text-cream">{activeCount}</span>
-              alias activos
+              {t('dashboard.activeAliases')}
             </div>
             <div className="flex flex-col items-end gap-1">
               <span className="font-sans text-[22px] font-bold text-accent">{catchAllLabel}</span>
-              catch-all
+              {t('dashboard.catchAll')}
             </div>
           </div>
         </div>
@@ -439,7 +461,7 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
               canCreate={canCreateAlias}
               loading={busy.has('create-alias')}
               onCreate={() => void createAlias()}
-              aliasError={errors.alias}
+              aliasError={errors.alias === null ? '' : translateApiError(i18n, errors.alias)}
             />
           </div>
           <div className="flex w-full flex-none flex-col gap-6 lg:w-80">
@@ -455,7 +477,7 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
               onDelete={(id) => void deleteDest(id)}
               loading={busy.has('add-dest')}
               isDestPending={(id) => busy.has(`dest:${id}`)}
-              error={errors.dest}
+              error={errors.dest === null ? '' : interpretAddDestError(i18n, errors.dest)}
             />
           </div>
         </div>

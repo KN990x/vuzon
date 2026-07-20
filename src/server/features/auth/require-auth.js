@@ -1,4 +1,5 @@
 import { getPanelAuthCredentials } from '../../config/panel-auth-env.js';
+import { ERROR_CODES } from '../../platform/http/error-codes.js';
 import { isSessionIssuanceValid } from './session-epoch.js';
 
 /**
@@ -10,7 +11,10 @@ export function createRequireAuth({ env = process.env } = {}) {
 
   return function requireAuth(req, res, next) {
     if (!authUser || !authPass) {
-      return res.status(500).json({ error: 'Credenciales de servidor no configuradas (AUTH_USER/AUTH_PASS)' });
+      return res.status(500).json({
+        error: 'Server credentials are not configured (AUTH_USER/AUTH_PASS)',
+        code: ERROR_CODES.AUTH_CREDENTIALS_MISSING,
+      });
     }
 
     // `issuedAt` is checked against the in-memory revocation mark: a cookie copied
@@ -20,6 +24,9 @@ export function createRequireAuth({ env = process.env } = {}) {
       return next();
     }
 
-    return res.status(401).json({ error: 'No autorizado' });
+    return res.status(401).json({
+      error: 'Unauthorized',
+      code: ERROR_CODES.AUTH_UNAUTHORIZED,
+    });
   };
 }

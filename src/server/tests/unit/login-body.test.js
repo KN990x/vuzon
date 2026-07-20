@@ -18,22 +18,23 @@ test('loginBodySchema: applies trim', () => {
   assert.deepEqual(parsed, { username: 'admin', password: 'secret' });
 });
 
+// The issue messages are translation slugs, not prose: see format-zod-error.js.
 test('loginBodySchema: rejects an empty value after trim', () => {
   assert.throws(
     () => loginBodySchema.parse({ username: '   ', password: 'x' }),
-    /Usuario requerido/,
+    /username\.required/,
   );
   assert.throws(
     () => loginBodySchema.parse({ username: 'x', password: '   ' }),
-    /Contraseña requerida/,
+    /password\.required/,
   );
 });
 
 test('loginBodySchema: rejects missing fields or an invalid type', () => {
-  assert.throws(() => loginBodySchema.parse({}), /Usuario requerido/);
+  assert.throws(() => loginBodySchema.parse({}), /username\.required/);
   assert.throws(
     () => loginBodySchema.parse({ username: 1, password: 'x' }),
-    /Usuario inválido/,
+    /username\.invalid/,
   );
 });
 
@@ -41,10 +42,10 @@ test('loginBodySchema: rejects overly long fields', () => {
   const long = 'a'.repeat(257);
   assert.throws(
     () => loginBodySchema.parse({ username: long, password: 'x' }),
-    /demasiado largo/i,
+    /username\.too_long/,
   );
   assert.throws(
     () => loginBodySchema.parse({ username: 'x', password: long }),
-    /demasiado larga/i,
+    /password\.too_long/,
   );
 });

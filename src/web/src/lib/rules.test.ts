@@ -7,13 +7,20 @@ import {
   interpretAddDestError,
   ruleMatchesCatchAllSlot,
 } from './rules';
+import { createTranslator } from '../i18n/locale';
 import type { Rule } from './types';
+
+// Worker/drop descriptions and error text are localised, so these helpers take a
+// translator. English is asserted here; the Spanish wording is covered by the catalogue
+// parity test.
+const en = createTranslator('en');
+const es = createTranslator('es');
 
 test('getSingleForwardDestination: a forward to a single address is editable', () => {
   expect(
     getSingleForwardDestination({ id: 'r', actions: [{ type: 'forward', value: ['a@x.com'] }] }),
   ).toBe('a@x.com');
-  // Cloudflare también ha devuelto el destino como cadena suelta.
+  // Cloudflare has also returned the destination as a bare string.
   expect(
     getSingleForwardDestination({ id: 'r', actions: [{ type: 'forward', value: 'a@x.com' }] }),
   ).toBe('a@x.com');
@@ -51,37 +58,40 @@ test('getSingleForwardDestination: empty or invalid input returns null', () => {
 
 test('getRuleDest: forward joins addresses', () => {
   expect(
-    getRuleDest({ id: 'r', actions: [{ type: 'forward', value: ['a@x.com', 'b@x.com'] }] }),
+    getRuleDest(en, { id: 'r', actions: [{ type: 'forward', value: ['a@x.com', 'b@x.com'] }] }),
   ).toBe('a@x.com, b@x.com');
 });
 
 test('getRuleDest: worker with a value', () => {
-  expect(getRuleDest({ id: 'r', actions: [{ type: 'worker', value: ['mi-worker'] }] })).toBe(
-    'Worker: mi-worker',
+  expect(getRuleDest(en, { id: 'r', actions: [{ type: 'worker', value: ['my-worker'] }] })).toBe(
+    'Worker: my-worker',
   );
 });
 
 test('getRuleDest: worker without a value', () => {
-  expect(getRuleDest({ id: 'r', actions: [{ type: 'worker', value: [] }] })).toBe('Email Worker');
+  expect(getRuleDest(en, { id: 'r', actions: [{ type: 'worker', value: [] }] })).toBe(
+    'Email Worker',
+  );
 });
 
-test('getRuleDest: drop', () => {
-  expect(getRuleDest({ id: 'r', actions: [{ type: 'drop' }] })).toBe('Descartar');
+test('getRuleDest: drop is described in the active language', () => {
+  expect(getRuleDest(en, { id: 'r', actions: [{ type: 'drop' }] })).toBe('Discard');
+  expect(getRuleDest(es, { id: 'r', actions: [{ type: 'drop' }] })).toBe('Descartar');
 });
 
 test('getRuleDest: several actions', () => {
   expect(
-    getRuleDest({
+    getRuleDest(en, {
       id: 'r',
       actions: [{ type: 'forward', value: ['u@d.com'] }, { type: 'drop' }],
     }),
-  ).toBe('u@d.com · Descartar');
+  ).toBe('u@d.com · Discard');
 });
 
 test('getRuleDest: no actions', () => {
-  expect(getRuleDest({ id: 'r', actions: [] })).toBe('');
-  expect(getRuleDest({ id: 'r' })).toBe('');
-  expect(getRuleDest(null)).toBe('');
+  expect(getRuleDest(en, { id: 'r', actions: [] })).toBe('');
+  expect(getRuleDest(en, { id: 'r' })).toBe('');
+  expect(getRuleDest(en, null)).toBe('');
 });
 
 test('ruleMatchesCatchAllSlot: matcher type all with no catch-all loaded', () => {
@@ -151,20 +161,29 @@ test('generateRandomLocalPart: discards out-of-range bytes without bias and keep
   spy.mockRestore();
 });
 
-test('interpretAddDestError: a 429 from the local limiter is detected by status', () => {
-  expect(interpretAddDestError(new ApiError('Demasiadas peticiones. Espera unos minutos.', 429))).toBe(
-    'Límite de solicitudes alcanzado. Espera unos segundos.',
+test('interpretAddDestError: a 429 from the local limiter is shown without the Error prefix', () => {
+  const err = new ApiError('Too many requests.', 429, { code: 'rate_limit.api' });
+  expect(interpretAddDestError(en, err)).toBe(
+    'Too many requests. Wait a moment and try again.',
+  );
+  expect(interpretAddDestError(es, err)).toBe(
+    'Demasiadas peticiones. Espera un momento e inténtalo de nuevo.',
   );
 });
 
-test('interpretAddDestError: an ApiError with another status keeps its message', () => {
-  expect(interpretAddDestError(new ApiError('Email inválido', 400))).toBe('Error: Email inválido');
+test('interpretAddDestError: another status is translated by code under the Error prefix', () => {
+  const err = new ApiError('Invalid data', 400, {
+    code: 'validation.invalid',
+    params: { issues: [{ field: 'email', code: 'email.invalid' }] },
+  });
+  expect(interpretAddDestError(en, err)).toBe('Error: Email: invalid email format');
+  expect(interpretAddDestError(es, err)).toBe('Error: Email: formato de correo inválido');
 });
 
-test('interpretAddDestError: a generic error keeps its message', () => {
-  expect(interpretAddDestError(new Error('Email inválido'))).toBe('Error: Email inválido');
+test('interpretAddDestError: an error with no code falls back to its own message', () => {
+  expect(interpretAddDestError(en, new Error('Boom'))).toBe('Error: Boom');
 });
 
 test('interpretAddDestError: empty value', () => {
-  expect(interpretAddDestError(undefined)).toBe('Error: Desconocido');
+  expect(interpretAddDestError(en, undefined)).toBe('Error: Something went wrong');
 });

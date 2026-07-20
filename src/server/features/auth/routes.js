@@ -1,5 +1,6 @@
 import { getPanelAuthCredentials } from '../../config/panel-auth-env.js';
 import { sendApiRouteError } from '../../platform/http/api-route-error.js';
+import { ERROR_CODES } from '../../platform/http/error-codes.js';
 import { createLoginRateLimiter, createLogoutRateLimiter } from '../../platform/http/rate-limiters.js';
 import { SESSION_COOKIE_NAME } from '../../platform/session/middleware.js';
 import { loginBodySchema } from './login-body.js';
@@ -16,7 +17,10 @@ export function registerAuthRoutes(app, {
   app.post('/api/login', loginLimiter, (req, res) => {
     const { authUser, authPass } = getPanelAuthCredentials(env);
     if (!authUser || !authPass) {
-      return res.status(500).json({ error: 'Credenciales de servidor no configuradas (AUTH_USER/AUTH_PASS)' });
+      return res.status(500).json({
+        error: 'Server credentials are not configured (AUTH_USER/AUTH_PASS)',
+        code: ERROR_CODES.AUTH_CREDENTIALS_MISSING,
+      });
     }
 
     let username;
@@ -31,7 +35,10 @@ export function registerAuthRoutes(app, {
     const passOk = timingSafeStringEqual(password, authPass);
 
     if (!userOk || !passOk) {
-      return res.status(401).json({ error: 'Credenciales incorrectas' });
+      return res.status(401).json({
+        error: 'Invalid credentials',
+        code: ERROR_CODES.AUTH_INVALID_CREDENTIALS,
+      });
     }
 
     req.session = {

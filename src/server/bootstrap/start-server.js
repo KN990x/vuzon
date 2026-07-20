@@ -88,7 +88,7 @@ export function registerGracefulShutdown(server, {
     shuttingDown = true;
     console.log(`Received ${signal}: shutting the server down…`);
 
-    // Si un cliente mantiene la conexión abierta, no esperamos indefinidamente.
+    // If a client holds the connection open, do not wait indefinitely.
     const forceTimer = setTimeout(() => {
       console.error('Graceful shutdown timed out; exiting anyway.');
       exitProcess(1);

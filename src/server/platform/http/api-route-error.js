@@ -1,19 +1,22 @@
 import { z } from 'zod';
 import { CloudflareApiError } from '../cloudflare/client.js';
-import { formatZodError } from './format-zod-error.js';
+import { ERROR_CODES } from './error-codes.js';
+import { collectZodIssues, formatZodError } from './format-zod-error.js';
 import { PanelRequestError } from './panel-request-error.js';
 
-const GENERIC_CLOUDFLARE_CLIENT_MSG = 'No se pudo completar la operación con Cloudflare. Revisa la configuración o inténtalo más tarde.';
+const GENERIC_CLOUDFLARE_CLIENT_MSG = 'Could not complete the operation with Cloudflare. Check the configuration or try again later.';
 
 /**
  * @param {unknown} err
- * @returns {{ status: number, message: string }}
+ * @returns {{ status: number, message: string, code: string, params?: Record<string, unknown> }}
  */
 export function resolveApiRouteError(err) {
   if (err instanceof z.ZodError) {
     return {
       status: 400,
       message: formatZodError(err),
+      code: ERROR_CODES.VALIDATION_INVALID,
+      params: { issues: collectZodIssues(err) },
     };
   }
 
@@ -22,22 +25,26 @@ export function resolveApiRouteError(err) {
     return {
       status: err.status,
       message: err.message,
+      code: err.code || ERROR_CODES.SERVER_INTERNAL,
+      params: err.params,
     };
   }
 
   if (err instanceof CloudflareApiError) {
-    console.error('Error de API Cloudflare:', err.message, { code: err.code, details: err.details });
+    console.error('Cloudflare API error:', err.message, { code: err.code, details: err.details });
     const status = normalizeCloudflareHttpStatus(err.status);
     return {
       status,
       message: GENERIC_CLOUDFLARE_CLIENT_MSG,
+      code: ERROR_CODES.CLOUDFLARE_GENERIC,
     };
   }
 
-  console.error('Error en ruta API:', err);
+  console.error('API route error:', err);
   return {
     status: 500,
-    message: 'Error interno del servidor',
+    message: 'Internal server error',
+    code: ERROR_CODES.SERVER_INTERNAL,
   };
 }
 
@@ -58,8 +65,12 @@ function normalizeCloudflareHttpStatus(status) {
 }
 
 export function sendApiRouteError(res, err) {
-  const { status, message } = resolveApiRouteError(err);
-  return res.status(status).json({ error: message });
+  const { status, message, code, params } = resolveApiRouteError(err);
+  const body = { error: message, code };
+  if (params && Object.keys(params).length > 0) {
+    body.params = params;
+  }
+  return res.status(status).json(body);
 }
 
 export function createApiErrorHandler() {

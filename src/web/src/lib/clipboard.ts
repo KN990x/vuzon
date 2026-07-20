@@ -5,15 +5,18 @@ export interface CopyResult {
 }
 
 /**
- * Copia con fallback: Clipboard API → execCommand('copy') → prompt manual.
- * (La Clipboard API falla fuera de HTTPS/localhost.)
+ * Copy with a fallback chain: Clipboard API → execCommand('copy') → manual prompt.
+ * (The Clipboard API fails outside HTTPS/localhost.)
+ *
+ * `promptLabel` is passed in by the caller instead of being written here: this module
+ * stays free of user-facing copy, which lives in the i18n catalogues.
  */
-export async function copyTextToClipboard(text: string): Promise<CopyResult> {
+export async function copyTextToClipboard(text: string, promptLabel: string): Promise<CopyResult> {
   try {
     await navigator.clipboard.writeText(text);
     return { copied: true, failed: false };
   } catch (err) {
-    console.error('Error al copiar:', err);
+    console.error('Clipboard copy failed:', err);
   }
 
   const textArea = document.createElement('textarea');
@@ -32,9 +35,9 @@ export async function copyTextToClipboard(text: string): Promise<CopyResult> {
 
   if (!copied) {
     try {
-      prompt('Copia tu alias manualmente:', text);
+      prompt(promptLabel, text);
     } catch {
-      // diálogos bloqueados (iframe/sandbox): el toast de error ya avisa
+      // dialogs blocked (iframe/sandbox): the error toast already warns the user
     }
     return { copied: false, failed: true };
   }

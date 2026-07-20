@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiRequest, UnauthorizedError } from './lib/api';
+import { useI18n } from './i18n/context';
 import { pillButtonClass } from './components/primitives';
 import { Login } from './screens/Login';
 import { Dashboard } from './screens/Dashboard';
@@ -12,6 +13,7 @@ type Session = 'checking' | 'anon' | 'authed' | 'error';
  * A network failure or 5xx does NOT end the session: a retry is offered instead.
  */
 export default function App() {
+  const { t } = useI18n();
   const [session, setSession] = useState<Session>('checking');
 
   useEffect(() => {
@@ -38,7 +40,7 @@ export default function App() {
     return (
       <main className="flex min-h-screen items-center justify-center bg-ink font-mono text-cream/70">
         <p role="status" className="m-0 text-[13px] uppercase tracking-[0.22em]">
-          Cargando…
+          {t('app.loading')}
         </p>
       </main>
     );
@@ -48,10 +50,10 @@ export default function App() {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-5 bg-ink px-6 font-sans text-cream">
         <p role="alert" className="m-0 text-center font-mono text-[13px] text-cream/70">
-          No se pudo comprobar la sesión. Revisa la conexión con el servidor.
+          {t('app.sessionCheckFailed')}
         </p>
         <button type="button" className={pillButtonClass} onClick={() => setSession('checking')}>
-          Reintentar
+          {t('app.retry')}
         </button>
       </main>
     );

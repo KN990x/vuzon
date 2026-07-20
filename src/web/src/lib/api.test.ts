@@ -56,18 +56,23 @@ test('sends method, JSON body and credentials on mutations', async () => {
   expect(JSON.parse(options.body as string)).toEqual({ username: 'u', password: 'p' });
 });
 
-test('401 throws UnauthorizedError with the body message', async () => {
-  stubFetch({ status: 401, body: { error: 'Credenciales incorrectas' } });
-  await expect(apiRequest('/api/login', 'POST', {})).rejects.toThrowError(
-    new UnauthorizedError('Credenciales incorrectas'),
-  );
+test('401 throws UnauthorizedError with the body message and code', async () => {
+  stubFetch({
+    status: 401,
+    body: { error: 'Invalid credentials', code: 'auth.invalid_credentials' },
+  });
+  const error = await apiRequest('/api/login', 'POST', {}).catch((err: unknown) => err);
+  expect(error).toBeInstanceOf(UnauthorizedError);
+  expect((error as UnauthorizedError).message).toBe('Invalid credentials');
+  expect((error as UnauthorizedError).code).toBe('auth.invalid_credentials');
 });
 
 test('401 without a JSON body uses the generic message', async () => {
   stubFetch({ status: 401, contentType: 'text/html', body: null });
   const error = await apiRequest('/api/me').catch((err: unknown) => err);
   expect(error).toBeInstanceOf(UnauthorizedError);
-  expect((error as Error).message).toBe('Sesión expirada');
+  expect((error as Error).message).toBe('Session expired');
+  expect((error as UnauthorizedError).code).toBe('auth.unauthorized');
 });
 
 test('a non-JSON response with a redirect is treated as an expired session', async () => {
@@ -75,25 +80,41 @@ test('a non-JSON response with a redirect is treated as an expired session', asy
   await expect(apiRequest('/api/me')).rejects.toBeInstanceOf(UnauthorizedError);
 });
 
-test('a non-JSON response without a redirect throws a generic error with the status', async () => {
+// A non-JSON or unreadable body carries no server code, so the client attaches its own:
+// the screens must be able to tell a proxy HTML page apart from a real API error without
+// matching on message text.
+test('a non-JSON response without a redirect throws a client-side code with the status', async () => {
   stubFetch({ status: 502, contentType: 'text/html' });
-  await expect(apiRequest('/api/me')).rejects.toThrowError(
-    'Respuesta inesperada del servidor (502)',
-  );
+  const error = await apiRequest('/api/me').catch((err: unknown) => err);
+  expect(error).toBeInstanceOf(ApiError);
+  expect((error as ApiError).status).toBe(502);
+  expect((error as ApiError).code).toBe('client.non_json');
+  expect((error as ApiError).params).toEqual({ status: 502 });
 });
 
 test('Unreadable JSON throws an error carrying the status', async () => {
   stubFetch({ status: 200, invalidJson: true });
-  await expect(apiRequest('/api/me')).rejects.toThrowError(
-    'Respuesta JSON inválida del servidor (200)',
-  );
+  const error = await apiRequest('/api/me').catch((err: unknown) => err);
+  expect(error).toBeInstanceOf(ApiError);
+  expect((error as ApiError).status).toBe(200);
+  expect((error as ApiError).code).toBe('client.invalid_json');
 });
 
-test('HTTP error with a body uses data.error', async () => {
-  stubFetch({ status: 400, body: { error: 'Alias: El alias no puede estar vacío' } });
-  await expect(apiRequest('/api/rules', 'POST', {})).rejects.toThrowError(
-    'Alias: El alias no puede estar vacío',
-  );
+test('HTTP error with a body uses data.error and carries code + params', async () => {
+  stubFetch({
+    status: 400,
+    body: {
+      error: 'Alias: the alias cannot be empty',
+      code: 'validation.invalid',
+      params: { issues: [{ field: 'localPart', code: 'alias.empty' }] },
+    },
+  });
+  const error = await apiRequest('/api/rules', 'POST', {}).catch((err: unknown) => err);
+  expect((error as ApiError).message).toBe('Alias: the alias cannot be empty');
+  expect((error as ApiError).code).toBe('validation.invalid');
+  expect((error as ApiError).params).toEqual({
+    issues: [{ field: 'localPart', code: 'alias.empty' }],
+  });
 });
 
 test('HTTP error without a message uses Error <status>', async () => {
@@ -102,9 +123,10 @@ test('HTTP error without a message uses Error <status>', async () => {
 });
 
 test('non-401 HTTP error throws ApiError carrying the status', async () => {
-  stubFetch({ status: 429, body: { error: 'Demasiadas peticiones. Espera unos minutos.' } });
+  stubFetch({ status: 429, body: { error: 'Too many requests.', code: 'rate_limit.api' } });
   const error = await apiRequest('/api/addresses', 'POST', {}).catch((err: unknown) => err);
   expect(error).toBeInstanceOf(ApiError);
   expect((error as ApiError).status).toBe(429);
-  expect((error as ApiError).message).toBe('Demasiadas peticiones. Espera unos minutos.');
+  expect((error as ApiError).message).toBe('Too many requests.');
+  expect((error as ApiError).code).toBe('rate_limit.api');
 });

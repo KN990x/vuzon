@@ -1,10 +1,13 @@
 import { z } from 'zod';
 
-/** IDs de recursos Cloudflare (zonas, cuentas, reglas, direcciones en rutas). */
+/**
+ * Cloudflare resource ids (zones, accounts, rules, addresses in paths).
+ * The issue messages are slugs, not prose: see platform/http/format-zod-error.js.
+ */
 export const cloudflareResourceIdSchema = z.string()
-  .min(1, 'Identificador inválido')
-  .max(64, 'Identificador demasiado largo')
-  .regex(/^[A-Za-z0-9_-]+$/, 'Identificador con caracteres no permitidos');
+  .min(1, 'id.empty')
+  .max(64, 'id.too_long')
+  .regex(/^[A-Za-z0-9_-]+$/, 'id.charset');
 
 /**
  * Minimal shape of an Email Routing rule as Cloudflare returns it, with only the fields

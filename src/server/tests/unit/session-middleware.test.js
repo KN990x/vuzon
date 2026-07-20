@@ -31,7 +31,7 @@ test('the creation options add a 7-day maxAge on top of the clear options', () =
   const create = getSessionCookieOptions({ cookieSecure: true });
 
   assert.equal(create.maxAge, SEVEN_DAYS_MS);
-  // Mismos atributos de identidad: si divergen, clearCookie no borraría la cookie.
+  // Same identity attributes: if they diverge, clearCookie would not delete the cookie.
   for (const key of ['path', 'httpOnly', 'sameSite', 'secure']) {
     assert.equal(create[key], clear[key], `${key} must match between creation and clearing`);
   }

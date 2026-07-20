@@ -12,6 +12,7 @@ import { registerApiRoutes } from '../features/email-routing/routes.js';
 import { registerPageRoutes } from '../features/pages/routes.js';
 import { createCloudflareClient } from '../platform/cloudflare/client.js';
 import { createApiErrorHandler } from '../platform/http/api-route-error.js';
+import { ERROR_CODES } from '../platform/http/error-codes.js';
 import {
   createApiRateLimiter,
   createLoginRateLimiter,
@@ -108,7 +109,7 @@ export function createApp({
   // The /api JSON 404 must be registered BEFORE registerPageRoutes' SPA catch-all:
   // reversed, an unknown GET /api/... would return index.html.
   app.use('/api', (_req, res) => {
-    res.status(404).json({ error: 'No encontrado' });
+    res.status(404).json({ error: 'Not found', code: ERROR_CODES.SERVER_NOT_FOUND });
   });
   registerPageRoutes(app, { publicDir });
   app.use(createApiErrorHandler());

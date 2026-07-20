@@ -1,6 +1,7 @@
 import { Check, Clock, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import type { Destination } from '../lib/types';
 import { isVerifiedStatus } from '../lib/verification';
+import { useI18n } from '../i18n/context';
 import { CardIcon, pillButtonClass } from './primitives';
 
 const ROW_DIVIDER = 'shadow-[inset_0_-1px_0_rgba(255,255,255,0.04)]';
@@ -19,13 +20,15 @@ interface DestinationsCardProps {
 export function DestinationsCard({
   dests, newDestInput, onInputChange, onAdd, onDelete, loading, isDestPending, error,
 }: DestinationsCardProps) {
+  const { t } = useI18n();
+
   return (
     <section className="overflow-hidden rounded-card bg-surface">
       <div className="flex items-center gap-2.5 px-[18px] py-3.5 shadow-[inset_0_-1px_0_rgba(255,255,255,0.06)]">
         <CardIcon>
           <ShieldCheck size={14} />
         </CardIcon>
-        <span className="text-[15px] font-bold tracking-[-0.01em]">Destinos verificados</span>
+        <span className="text-[15px] font-bold tracking-[-0.01em]">{t('dests.title')}</span>
       </div>
 
       {dests.map((dest) => {
@@ -39,20 +42,20 @@ export function DestinationsCard({
             {verified ? (
               <span className="flex flex-none items-center gap-[5px] font-mono text-[10px] uppercase tracking-[0.08em] text-positive">
                 <Check size={12} aria-hidden />
-                Verificada
+                {t('dests.verified')}
               </span>
             ) : (
               <span className="flex flex-none items-center gap-[5px] font-mono text-[10px] uppercase tracking-[0.08em] text-cream/60">
                 <Clock size={12} aria-hidden />
-                Pendiente
+                {t('dests.pending')}
               </span>
             )}
             <button
               type="button"
               onClick={() => onDelete(dest.id)}
               disabled={pending}
-              title="Eliminar destinatario"
-              aria-label={`Eliminar ${dest.email}`}
+              title={t('dests.delete')}
+              aria-label={t('dests.deleteNamed', { email: dest.email })}
               className="flex-none text-cream/65 transition-colors duration-200 hover:text-accent-dark disabled:cursor-wait disabled:opacity-60 disabled:hover:text-cream/65 enabled:cursor-pointer"
             >
               <Trash2 size={13} />
@@ -63,7 +66,7 @@ export function DestinationsCard({
 
       {dests.length === 0 && (
         <div className={`px-[18px] py-3 font-mono text-xs text-cream/60 ${ROW_DIVIDER}`}>
-          Sin destinos todavía.
+          {t('dests.empty')}
         </div>
       )}
 
@@ -82,12 +85,12 @@ export function DestinationsCard({
             type="email"
             value={newDestInput}
             onChange={(e) => onInputChange(e.target.value)}
-            placeholder="tu@correo.com"
-            aria-label="Nuevo destinatario"
+            placeholder={t('dests.new.placeholder')}
+            aria-label={t('dests.new.label')}
             className="min-w-0 flex-1 font-mono text-[13px] text-cream placeholder:text-cream/45"
           />
           <button type="submit" className={pillButtonClass} disabled={!newDestInput || loading}>
-            Añadir
+            {t('dests.new.submit')}
           </button>
         </div>
         {error && <p className="m-0 mt-2 font-mono text-xs text-accent-dark">{error}</p>}
