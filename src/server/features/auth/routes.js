@@ -5,7 +5,11 @@ import { createLoginRateLimiter, createLogoutRateLimiter } from '../../platform/
 import { SESSION_COOKIE_NAME } from '../../platform/session/middleware.js';
 import { loginBodySchema } from './login-body.js';
 import { timingSafeStringEqual } from './safe-string-equal.js';
-import { nextIssuedAt, revokeSessionsIssuedUntilNow } from './session-epoch.js';
+import {
+  isSessionIssuanceValid,
+  nextIssuedAt,
+  revokeSessionsIssuedUntilNow,
+} from './session-epoch.js';
 
 export function registerAuthRoutes(app, {
   env = process.env,
@@ -56,9 +60,16 @@ export function registerAuthRoutes(app, {
   // carries `skipSuccessfulRequests`, and since logout always answers 200 it would never
   // consume quota, leaving the endpoint effectively unbounded.
   app.post('/api/logout', logoutLimiter, (req, res) => {
-    // Clearing the cookie only removes it from THIS browser; the revocation mark also
-    // invalidates any copy of the cookie still within its maxAge.
-    revokeSessionsIssuedUntilNow();
+    // Only a live session may bump the global revocation mark. An anonymous POST must
+    // not invalidate everyone else's cookies (and must not be a CSRF DoS vector).
+    const hasLiveSession = Boolean(
+      req.session?.authenticated && isSessionIssuanceValid(req.session.issuedAt),
+    );
+    if (hasLiveSession) {
+      // Clearing the cookie only removes it from THIS browser; the revocation mark also
+      // invalidates any copy of the cookie still within its maxAge.
+      revokeSessionsIssuedUntilNow();
+    }
     req.session = null;
     res.clearCookie(sessionCookieName, sessionCookieClearOptions);
     return res.json({ success: true });

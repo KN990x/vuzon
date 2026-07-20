@@ -402,12 +402,91 @@ test('HTTP integration: logout invalidates a copy of the session cookie', async 
     const before = await fetch(`${baseUrl}/api/me`, { headers: { Cookie: stolenCookie } });
     assert.equal(before.status, 200);
 
-    const logoutRes = await fetch(`${baseUrl}/api/logout`, { method: 'POST' });
+    // Legitimate logout must carry the session cookie — that is what bumps revocation.
+    const logoutRes = await fetch(`${baseUrl}/api/logout`, {
+      method: 'POST',
+      headers: { Cookie: stolenCookie },
+    });
     assert.equal(logoutRes.status, 200);
 
     // The cookie is still within its maxAge, but the revocation mark invalidates it.
     const after = await fetch(`${baseUrl}/api/me`, { headers: { Cookie: stolenCookie } });
     assert.equal(after.status, 401);
+  } finally {
+    resetSessionEpochForTests();
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+  }
+});
+
+test('HTTP integration: anonymous logout does not revoke other sessions', async () => {
+  const env = {
+    AUTH_USER: 'testuser',
+    AUTH_PASS: 'test-secret-pass',
+    CF_ZONE_ID: 'zone_test_1',
+    CF_ACCOUNT_ID: 'acct_test_1',
+    DOMAIN: 'example.com',
+    NODE_ENV: 'development',
+  };
+
+  const { app } = createApp({
+    env,
+    cloudflareClient: createMockCloudflareClient(),
+    sessionSecret: 'test-session-secret-32chars!!',
+  });
+
+  const { server, baseUrl } = await listen(app);
+
+  try {
+    resetSessionEpochForTests();
+
+    const loginRes = await fetch(`${baseUrl}/api/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'testuser', password: 'test-secret-pass' }),
+    });
+    assert.equal(loginRes.status, 200);
+    const sessionCookie = sessionCookieHeaderFromResponse(loginRes);
+
+    const logoutRes = await fetch(`${baseUrl}/api/logout`, { method: 'POST' });
+    assert.equal(logoutRes.status, 200);
+
+    const meRes = await fetch(`${baseUrl}/api/me`, { headers: { Cookie: sessionCookie } });
+    assert.equal(meRes.status, 200);
+  } finally {
+    resetSessionEpochForTests();
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+  }
+});
+
+test('HTTP integration: anonymous logout is idempotent (200)', async () => {
+  const env = {
+    AUTH_USER: 'testuser',
+    AUTH_PASS: 'test-secret-pass',
+    CF_ZONE_ID: 'zone_test_1',
+    CF_ACCOUNT_ID: 'acct_test_1',
+    DOMAIN: 'example.com',
+    NODE_ENV: 'development',
+  };
+
+  const { app } = createApp({
+    env,
+    cloudflareClient: createMockCloudflareClient(),
+    sessionSecret: 'test-session-secret-32chars!!',
+  });
+
+  const { server, baseUrl } = await listen(app);
+
+  try {
+    resetSessionEpochForTests();
+
+    const logoutRes = await fetch(`${baseUrl}/api/logout`, { method: 'POST' });
+    assert.equal(logoutRes.status, 200);
+    const body = await logoutRes.json();
+    assert.deepEqual(body, { success: true });
   } finally {
     resetSessionEpochForTests();
     await new Promise((resolve) => {

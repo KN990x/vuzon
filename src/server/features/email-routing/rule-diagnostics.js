@@ -15,23 +15,50 @@ import { PanelRequestError } from '../../platform/http/panel-request-error.js';
  */
 
 /**
- * (Reduced) mirror of `isVerifiedStatus` in src/web/src/lib/verification.ts.
+ * Mirror of `isVerifiedStatus` in src/web/src/lib/verification.ts.
  * Cloudflare has returned this field as a boolean, a string and a timestamp depending
- * on the API version, so any of those shapes is accepted.
+ * on the API version, so any of those shapes is accepted. Both sides are checked
+ * against src/shared/verified-status-cases.json.
  * @param {unknown} value
  * @returns {boolean}
  */
+const POSITIVE_VERIFICATION_STRINGS = new Set([
+  'true',
+  '1',
+  'yes',
+  'verified',
+  'active',
+  'enabled',
+]);
+
+const ISO_TIMESTAMP_REGEX =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
+
+/**
+ * @param {string} value
+ * @returns {boolean}
+ */
+function isIsoTimestampString(value) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return false;
+  }
+  if (!ISO_TIMESTAMP_REGEX.test(trimmed)) {
+    return false;
+  }
+  return !Number.isNaN(Date.parse(trimmed));
+}
+
 export function isVerifiedAddress(value) {
   if (value === true || value === 1) {
     return true;
   }
   if (typeof value === 'string') {
     const normalized = value.toLowerCase().trim();
-    if (normalized === 'true' || normalized === 'verified' || normalized === 'active') {
+    if (POSITIVE_VERIFICATION_STRINGS.has(normalized)) {
       return true;
     }
-    // Verification timestamp: its mere presence means the address is verified.
-    return !Number.isNaN(Date.parse(value));
+    return isIsoTimestampString(value);
   }
   if (typeof value === 'object' && value !== null) {
     return value.status === 'verified' || value.verification_status === 'active';

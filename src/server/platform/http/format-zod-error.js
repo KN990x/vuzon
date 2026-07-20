@@ -24,7 +24,7 @@ const ISSUE_MESSAGES = {
   'alias.empty': 'the alias cannot be empty',
   'alias.too_long': 'the alias is too long',
   'alias.charset':
-    'only lowercase letters, digits, dots and hyphens; it must start and end with a letter or digit',
+    'only lowercase letters, digits, dots, underscores and hyphens; must start and end with a letter or digit; no consecutive separators',
   'dest_email.invalid': 'invalid destination email',
   'username.required': 'username required',
   'username.invalid': 'invalid username',

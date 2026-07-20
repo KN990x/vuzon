@@ -49,33 +49,34 @@ function parseCloudflareRule(rule) {
 /**
  * PUT payload built from the existing rule: Cloudflare demands the full object, so we
  * send back the fields it already had and change only what was asked for.
+ *
+ * Unknown fields from a `.passthrough()` parse are preserved — a future Cloudflare
+ * property must survive enable/disable. Known read-only / echo-only fields returned on
+ * GET (`id`, `tag`, `created`, `modified`, `created_on`, `modified_on`) are stripped
+ * because Cloudflare rejects or ignores them on PUT.
  * @param {Record<string, unknown>} rule Rule validated by `parseCloudflareRule`.
  * @param {boolean} enabled
  * @param {{ actions?: unknown[] }} [overrides] New `actions` (change destination).
  */
 export function buildRuleUpdatePayload(rule, enabled, overrides = {}) {
-  const payload = {
-    name: rule.name,
-    enabled,
-    matchers: rule.matchers,
-  };
+  // Read-only / echo-only fields Cloudflare returns on GET but rejects or ignores on PUT.
+  const readOnlyKeys = new Set(['id', 'tag', 'created', 'modified', 'created_on', 'modified_on']);
+  const payload = { enabled };
+  for (const [key, value] of Object.entries(rule)) {
+    if (!readOnlyKeys.has(key)) {
+      payload[key] = value;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(overrides, 'actions')) {
+    payload.actions = overrides.actions;
+  }
 
   // `actions` is optional in cloudflareRuleSchema, so a response without it validates.
   // Sending `actions: undefined` would drop the key from the JSON anyway; being explicit
   // keeps the payload honest about what we are and are not changing.
-  const actions = overrides.actions ?? rule.actions;
-  if (typeof actions !== 'undefined') {
-    payload.actions = actions;
-  }
-
-  if (typeof rule.priority !== 'undefined') {
-    payload.priority = rule.priority;
-  }
-  if (typeof rule.source === 'string' && rule.source.length > 0) {
-    payload.source = rule.source;
-  }
-  if (typeof rule.owner_worker_tag === 'string' && rule.owner_worker_tag.length > 0) {
-    payload.owner_worker_tag = rule.owner_worker_tag;
+  if (typeof payload.actions === 'undefined') {
+    delete payload.actions;
   }
 
   return payload;

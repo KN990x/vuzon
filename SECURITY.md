@@ -33,7 +33,7 @@ vuzon is a **single-user, self-hosted panel** that talks only to the Cloudflare 
 - **The session cookie is signed, not encrypted.** It carries no secrets — only a login marker and an issue timestamp.
 - **Plain HTTP keeps working.** `COOKIE_SECURE` and HSTS are opt-in so the panel can run on a LAN without TLS. Running it exposed to the internet without a TLS-terminating proxy is a deployment choice, not a bug in vuzon.
 - **No CSRF token.** Protection relies on `sameSite: 'lax'` cookies, JSON-only mutations and the absence of CORS. A report showing that this combination can be bypassed *is* in scope.
-- **Session revocation is in-memory.** Logging out invalidates existing cookies until the process restarts; this is documented behaviour.
+- **Session revocation is in-memory.** A logout with a live session invalidates existing cookies until the process restarts; an anonymous `POST /api/logout` clears only the caller's cookie and does not bump the revocation mark.
 
 Reports that require an attacker to already hold the `CF_API_TOKEN`, the panel credentials or shell access to the host are out of scope.
 

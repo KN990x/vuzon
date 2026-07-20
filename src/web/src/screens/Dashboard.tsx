@@ -116,6 +116,8 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
   const refreshAll = useCallback(async () => {
     // `refreshAll` is called nested from the mutations; the counter keeps the inner
     // refresh from switching the indicator off while the outer one is still running.
+    // On a clean load it also clears `status` — mutation success toasts must be set
+    // *after* awaiting this, or they flash and disappear.
     refreshDepthRef.current += 1;
     if (refreshDepthRef.current === 1) {
       addBusy('refresh');
@@ -275,9 +277,9 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
 
       try {
         await api('/api/rules', 'POST', { localPart, destEmail: newAlias.dest });
-        setStatus(t('dashboard.status.aliasCreated'));
         setNewAlias((prev) => ({ ...prev, local: '' }));
         await refreshAll();
+        setStatus(t('dashboard.status.aliasCreated'));
       } catch (err) {
         setErrors((prev) => ({ ...prev, alias: err }));
       }
@@ -293,9 +295,9 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
       clearErrors();
       try {
         await api('/api/addresses', 'POST', { email: newDestInput });
-        setStatus(t('dashboard.status.destAdded'));
         setNewDestInput('');
         await refreshAll();
+        setStatus(t('dashboard.status.destAdded'));
       } catch (err) {
         setErrors((prev) => ({ ...prev, dest: err }));
       }
@@ -344,11 +346,11 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
         await api(`/api/rules/${id}`, 'DELETE');
         // Optimistic filtering for immediate visual feedback; refreshAll re-syncs the rest.
         setRules((prev) => prev.filter((rule) => rule.id !== id));
+        await refreshAll();
         setStatus(t('dashboard.status.aliasDeleted'));
-        await refreshAll();
       } catch (err) {
-        setErrorStatus(err);
         await refreshAll();
+        setErrorStatus(err);
       }
     });
   }
@@ -364,8 +366,8 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
     await runExclusive(`dest:${id}`, async () => {
       try {
         await api(`/api/addresses/${id}`, 'DELETE');
-        setStatus(t('dashboard.status.destDeleted'));
         await refreshAll();
+        setStatus(t('dashboard.status.destDeleted'));
       } catch (err) {
         setErrorStatus(err);
       }

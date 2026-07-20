@@ -11,12 +11,13 @@ export const addressSchema = z.object({
 });
 
 export const ruleSchema = z.object({
-  // Must start and end alphanumeric: ".", "..", "-alias" or "alias." produce invalid
-  // addresses that Cloudflare rejects with a generic, confusing error.
+  // Must start and end alphanumeric, and `.` / `_` / `-` may not be consecutive:
+  // ".", "..", "-alias", "alias.", "a..b" produce invalid addresses that Cloudflare
+  // rejects with a generic, confusing error.
   localPart: z.string()
     .min(1, 'alias.empty')
     .max(64, 'alias.too_long')
-    .regex(/^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/, 'alias.charset'),
+    .regex(/^[a-z0-9]+(?:[._-][a-z0-9]+)*$/, 'alias.charset'),
   destEmail: z.string().email('dest_email.invalid'),
 });
 

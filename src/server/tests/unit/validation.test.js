@@ -21,6 +21,12 @@ test('ruleSchema: rejects aliases not starting or ending alphanumeric', () => {
   }
 });
 
+test('ruleSchema: rejects consecutive separators', () => {
+  for (const localPart of ['a..b', 'a.-b', 'a--b', 'a__.b', 'a._b']) {
+    assert.equal(parseLocalPart(localPart).success, false, `should reject "${localPart}"`);
+  }
+});
+
 test('ruleSchema: rejects uppercase, spaces and characters outside the allowed set', () => {
   for (const localPart of ['Alias', 'mi alias', 'ali@s', 'ali+as', 'aliás']) {
     assert.equal(parseLocalPart(localPart).success, false, `should reject "${localPart}"`);

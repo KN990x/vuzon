@@ -146,7 +146,7 @@ export const en = {
   'error.issue.alias.empty': 'the alias cannot be empty',
   'error.issue.alias.too_long': 'the alias is too long',
   'error.issue.alias.charset':
-    'only lowercase letters, digits, dots and hyphens; it must start and end with a letter or digit',
+    'only lowercase letters, digits, dots, underscores and hyphens; must start and end with a letter or digit; no consecutive separators',
   'error.issue.dest_email.invalid': 'invalid destination email',
   'error.issue.username.required': 'username required',
   'error.issue.username.invalid': 'invalid username',

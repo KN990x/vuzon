@@ -1,41 +1,30 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { expect, test } from 'vitest';
 import { isVerifiedStatus } from './verification';
 
-test('booleans and numbers', () => {
-  expect(isVerifiedStatus(true)).toBe(true);
-  expect(isVerifiedStatus(1)).toBe(true);
-  expect(isVerifiedStatus(false)).toBe(false);
-  expect(isVerifiedStatus(0)).toBe(false);
-});
+const casesPath = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..',
+  '..',
+  '..',
+  'src',
+  'shared',
+  'verified-status-cases.json',
+);
 
-test('positive strings (with normalization)', () => {
-  expect(isVerifiedStatus('verified')).toBe(true);
-  expect(isVerifiedStatus('  TRUE ')).toBe(true);
-  expect(isVerifiedStatus('sí')).toBe(true);
-  expect(isVerifiedStatus('active')).toBe(true);
-});
+test('verified status: client matches the shared case table', () => {
+  const cases = JSON.parse(fs.readFileSync(casesPath, 'utf8')) as Array<{
+    value: unknown;
+    verified: boolean;
+    why: string;
+  }>;
 
-test('negative strings', () => {
-  expect(isVerifiedStatus('pending')).toBe(false);
-  expect(isVerifiedStatus('')).toBe(false);
-  expect(isVerifiedStatus('no')).toBe(false);
-});
+  expect(cases.length).toBeGreaterThan(0);
 
-test('an ISO timestamp counts as verified', () => {
-  expect(isVerifiedStatus('2024-01-15T10:30:00Z')).toBe(true);
-  expect(isVerifiedStatus('2024-01-15T10:30:00.123+02:00')).toBe(true);
-  expect(isVerifiedStatus('2024-13-45T99:99:99Z')).toBe(false);
-  expect(isVerifiedStatus('2024-01-15')).toBe(false);
-});
-
-test('Cloudflare status objects', () => {
-  expect(isVerifiedStatus({ status: 'verified' })).toBe(true);
-  expect(isVerifiedStatus({ verification_status: 'active' })).toBe(true);
-  expect(isVerifiedStatus({ status: 'pending' })).toBe(false);
-  expect(isVerifiedStatus({})).toBe(false);
-});
-
-test('null or unknown values', () => {
-  expect(isVerifiedStatus(null)).toBe(false);
-  expect(isVerifiedStatus(undefined)).toBe(false);
+  for (const { value, verified, why } of cases) {
+    expect(isVerifiedStatus(value), why).toBe(verified);
+  }
 });

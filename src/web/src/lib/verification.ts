@@ -1,7 +1,15 @@
+/**
+ * Shapes Cloudflare has returned (or may return) for destination verification.
+ * Keep in lockstep with `isVerifiedAddress` in rule-diagnostics.js — both sides
+ * are checked against src/shared/verified-status-cases.json.
+ */
 const POSITIVE_VERIFICATION_STRINGS = new Set([
-  'true', '1', 'yes', 'y', 'active', 'enabled', 'verified', 'verificado',
-  'si', 'sí', 'on', 'ok', 'okay', 'approved', 'success', 'successful',
-  'complete', 'completed', 'confirmado', 'confirmed', 'valid', 'validado',
+  'true',
+  '1',
+  'yes',
+  'verified',
+  'active',
+  'enabled',
 ]);
 
 const ISO_TIMESTAMP_REGEX =

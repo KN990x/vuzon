@@ -136,7 +136,7 @@ export const es = {
   'error.issue.alias.empty': 'el alias no puede estar vacío',
   'error.issue.alias.too_long': 'el alias es demasiado largo',
   'error.issue.alias.charset':
-    'solo minúsculas, números, puntos y guiones; debe empezar y acabar en letra o número',
+    'solo minúsculas, números, puntos, guiones bajos y guiones; debe empezar y acabar en letra o número; sin separadores consecutivos',
   'error.issue.dest_email.invalid': 'email de destino inválido',
   'error.issue.username.required': 'usuario requerido',
   'error.issue.username.invalid': 'usuario inválido',
