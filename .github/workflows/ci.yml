@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+        # version from package.json#packageManager
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate repository
+        run: pnpm run check
+
+      - name: Verify Docker image build
+        run: docker build -t vuzon-ci .
+
+      # `docker build` no prueba que la imagen arranque. Este smoke test la ejecuta con
+      # el mismo endurecimiento del compose (read_only, cap_drop, no-new-privileges) y
+      # comprueba /healthz y el HTML de la SPA. Definir CF_ZONE_ID y CF_ACCOUNT_ID salta
+      # la autodetección, así que no hace falta ninguna credencial real de Cloudflare.
+      - name: Smoke test the image (boots, hardened, serves the SPA)
+        run: |
+          set -euo pipefail
+          docker run -d --name vuzon-smoke \
+            --read-only --tmpfs /tmp \
+            --cap-drop ALL --security-opt no-new-privileges:true \
+            -e DOMAIN=ci-smoke-test.invalid \
+            -e AUTH_USER=ci \
+            -e AUTH_PASS=ci-smoke-test-password \
+            -e CF_API_TOKEN=ci-smoke-test-token \
+            -e CF_ZONE_ID=ci_smoke_zone \
+            -e CF_ACCOUNT_ID=ci_smoke_account \
+            -e SESSION_SECRET="$(openssl rand -hex 32)" \
+            -p 8001:8001 vuzon-ci
+
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8001/healthz > /dev/null 2>&1; then
+              echo "healthz OK tras ${i}s"; break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "El contenedor no respondió a /healthz:"; docker logs vuzon-smoke; exit 1
+            fi
+            sleep 1
+          done
+
+          curl -fsS http://127.0.0.1:8001/ | grep -q '<div id="root">'
+          # La API sin sesión debe responder 401 JSON, no el index.html de la SPA.
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8001/api/me)" = "401"
+
+      - name: Tear down smoke test
+        if: always()
+        run: docker rm -f vuzon-smoke 2>/dev/null || true

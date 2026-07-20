@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!--
+    Marca de vuzon: buzón negro sobre disco ámbar, igual que docs/assets/logo.png.
+    Mismos tokens que la UI (ver el bloque @theme de src/web/src/index.css):
+    color accent #ff8a1e sobre color ink #0a0a0a. El favicon anterior era
+    violeta y cian, de otra marca, y no coincidía ni con el logo ni con el panel.
+  -->
+  <circle cx="16" cy="16" r="16" fill="#ff8a1e"/>
+  <g fill="#0a0a0a">
+    <!-- Bandera levantada -->
+    <path d="M20.9 6.4c0-.55.45-1 1-1h3.3c.55 0 1 .45 1 1v2.4c0 .55-.45 1-1 1h-2.3v3.1a1 1 0 0 1-2 0z"/>
+    <!-- Cuerpo del buzón (arco) -->
+    <path d="M6.9 22.1v-5.3a5.9 5.9 0 0 1 5.9-5.9h6.4a5.9 5.9 0 0 1 5.9 5.9v5.3z"/>
+    <!-- Poste -->
+    <rect x="14.6" y="21.2" width="2.8" height="6.6" rx="1.1"/>
+  </g>
+  <!-- Ranura del correo: hueco ámbar que hace legible el buzón a 16 px -->
+  <rect x="10.2" y="15.5" width="8.4" height="2" rx="1" fill="#ff8a1e"/>
+</svg>

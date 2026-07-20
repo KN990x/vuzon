@@ -1,0 +1,15 @@
+# Development: build the image from the repository instead of GHCR.
+#
+# Merge with the base compose (port mapping, optional .env):
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up --build -d
+#
+# Force a full rebuild (e.g. after changing dependencies in pnpm-lock):
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml build --no-cache
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d
+services:
+  vuzon:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Local name for the built image (no useful pull from a public registry).
+    image: vuzon-local

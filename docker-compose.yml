@@ -1,0 +1,31 @@
+services:
+  vuzon:
+    container_name: vuzon
+    image: ghcr.io/kn990x/vuzon
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      PORT: "8001"
+    restart: unless-stopped
+    # PID 1 con reaping de zombies y reenvío de señales: el proceso recibe el SIGTERM
+    # de `docker stop` y cierra ordenadamente en vez de morir por SIGKILL.
+    init: true
+    # El proceso no escribe en disco (sesión en cookie, sin base de datos).
+    # /tmp en tmpfs es el acompañante habitual de read_only: cubre cualquier escritura
+    # temporal que Node pueda necesitar sin dar acceso de escritura a la imagen.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "${VUZON_PORT:-8001}:8001"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||8001)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3

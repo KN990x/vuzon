@@ -1,0 +1,143 @@
+/*
+ * Fuentes autoalojadas (la CSP del servidor solo permite font-src 'self').
+ * Solo los subsets latinos: los imports sin subset (`400.css`) arrastran también
+ * cirílico, griego y vietnamita — 36 ficheros para una UI en español.
+ * `latin` cubre á é í ó ú ñ ü; `latin-ext` se mantiene por si el dominio o un
+ * correo de destino traen diacríticos menos comunes.
+ */
+@import '@fontsource/space-grotesk/latin-400.css';
+@import '@fontsource/space-grotesk/latin-500.css';
+@import '@fontsource/space-grotesk/latin-700.css';
+@import '@fontsource/space-grotesk/latin-ext-400.css';
+@import '@fontsource/space-grotesk/latin-ext-500.css';
+@import '@fontsource/space-grotesk/latin-ext-700.css';
+@import '@fontsource/jetbrains-mono/latin-400.css';
+@import '@fontsource/jetbrains-mono/latin-500.css';
+@import '@fontsource/jetbrains-mono/latin-ext-400.css';
+@import '@fontsource/jetbrains-mono/latin-ext-500.css';
+
+@import 'tailwindcss';
+
+/*
+ * Tokens extraídos del diseño sincronizado de Claude Design
+ * ("vuzon Demo.dc.html", proyecto b069302b-854d-4773-b4f3-a9396bdc8736).
+ */
+@theme {
+  --color-ink: #0a0a0a; /* fondo de página */
+  --color-surface: #111111; /* tarjetas sólidas */
+  --color-cream: #f4efe6; /* texto principal */
+  --color-accent: #ff8a1e;
+  --color-accent-dark: #d96d00;
+  --color-accent-soft: #ffb46e;
+  --color-positive: #7bc97e;
+
+  --font-sans: 'Space Grotesk', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --radius-card: 1rem; /* 16px — tarjetas sólidas */
+  --radius-panel: 1.25rem; /* 20px — paneles de vidrio */
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-ink);
+  color: var(--color-cream);
+  font-family: var(--font-sans);
+}
+
+input {
+  outline: none;
+  border: none;
+  background: transparent;
+}
+
+/*
+ * Tratamiento de vidrio del diseño: fondo ámbar casi transparente + blur +
+ * brillo interior, con borde degradado dibujado en ::before mediante el
+ * truco de mask-composite (padding 1px).
+ */
+/* Nota: .glass no fija position (los usos llevan relative/fixed de Tailwind). */
+.glass {
+  background: rgba(255, 138, 30, 0.02);
+  backdrop-filter: blur(4px);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.06);
+}
+
+.glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 180, 110, 0.35),
+    transparent 55%,
+    rgba(255, 180, 110, 0.12)
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Aparición de página del diseño (animation:fadeIn .2s ease). */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.2s ease;
+}
+
+/*
+ * Toast: entra y sale con una transición de opacidad + desplazamiento. Sustituye a
+ * framer-motion, que se cargaba entero (~150 KB) para animar este único elemento.
+ * El nodo permanece montado y se oculta con opacity/visibility, de modo que la
+ * salida también se anima sin necesidad de orquestar el desmontaje.
+ */
+.toast {
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease,
+    visibility 0.2s;
+}
+
+.toast[data-visible='false'] {
+  opacity: 0;
+  transform: translate(-50%, 16px);
+  visibility: hidden;
+}
+
+.toast[data-visible='true'] {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  visibility: visible;
+}
+
+/* Variante de la cabecera fija: blur más fuerte y borde más tenue. */
+.glass-header {
+  backdrop-filter: blur(24px);
+}
+
+.glass-header::before {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 180, 110, 0.28),
+    transparent 55%,
+    rgba(255, 180, 110, 0.1)
+  );
+}

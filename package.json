@@ -1,0 +1,25 @@
+{
+  "name": "vuzon",
+  "version": "1.2.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.14.0",
+  "engines": {
+    "node": ">=24",
+    "pnpm": ">=11.14.0"
+  },
+  "scripts": {
+    "build": "pnpm --filter @vuzon/web run build",
+    "check": "pnpm run build && pnpm run check:syntax && pnpm run lint && pnpm run test && pnpm --filter @vuzon/web run test",
+    "check:syntax": "find src/server -name '*.js' -not -path '*/node_modules/*' -print0 | xargs -0 -n1 node --check",
+    "lint": "eslint . && pnpm --filter @vuzon/web run lint",
+    "start": "pnpm run build && pnpm --filter @vuzon/server run start",
+    "test": "pnpm --filter @vuzon/server run test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "esbuild": "^0.28.1",
+    "eslint": "^9.39.2",
+    "globals": "^16.5.0"
+  }
+}

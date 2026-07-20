@@ -1,0 +1,40 @@
+version: 2
+updates:
+  # ecosystem "npm" also covers pnpm-lock.yaml (no separate "pnpm" ecosystem)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 10
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 5
+    ignore:
+      # La imagen base se queda en la línea LTS de Node y los saltos de major se
+      # revisan a mano: subir solo el Dockerfile dejaría la imagen ejecutando una
+      # versión que CI (node-version: 24) nunca prueba. Para cambiar de LTS hay que
+      # tocar Dockerfile, ambos workflows y engines.node a la vez.
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
