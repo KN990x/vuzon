@@ -75,7 +75,7 @@ export function createApiRateLimiter(options = {}) {
 }
 
 /**
- * Soft limit for the authenticated panel page.
+ * Soft limit for the panel SPA (served without authentication).
  * @param {import('express-rate-limit').Options} [options]
  */
 export function createPagesRateLimiter(options = {}) {

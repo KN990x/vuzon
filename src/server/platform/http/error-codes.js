@@ -33,6 +33,8 @@ export const ERROR_CODES = Object.freeze({
   DEST_UNKNOWN: 'dest.unknown',
   DEST_UNVERIFIED: 'dest.unverified',
   DEST_IN_USE: 'dest.in_use',
+  DEST_USAGE_CHECK_FAILED: 'dest.usage_check_failed',
+  CSRF_BLOCKED: 'csrf.blocked',
   CLOUDFLARE_GENERIC: 'cloudflare.generic',
   SERVER_INTERNAL: 'server.internal',
   SERVER_NOT_FOUND: 'server.not_found',

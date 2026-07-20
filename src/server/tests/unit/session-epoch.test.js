@@ -18,10 +18,10 @@ test('session-epoch: at startup, any session with issuedAt is valid', () => {
 
 test('session-epoch: revoking invalidates earlier sessions and not later ones', () => {
   resetSessionEpochForTests();
-  const antes = 1_000;
+  const before = 1_000;
   revokeSessionsIssuedUntilNow(2_000);
 
-  assert.equal(isSessionIssuanceValid(antes), false);
+  assert.equal(isSessionIssuanceValid(before), false);
   assert.equal(isSessionIssuanceValid(2_000), false, 'the exact instant is revoked too');
   assert.equal(isSessionIssuanceValid(2_001), true);
 

@@ -1,9 +1,9 @@
 /*
  * Self-hosted fonts (the server's CSP only allows font-src 'self').
  * Latin subsets only: the subset-less imports (`400.css`) also drag in Cyrillic, Greek
- * and Vietnamese — 36 files for a Spanish-language UI.
- * `latin` covers á é í ó ú ñ ü; `latin-ext` is kept in case the domain or a destination
- * address carries less common diacritics.
+ * and Vietnamese — dozens of extra files for a bilingual EN/ES UI.
+ * `latin` / `latin-ext` cover the diacritics in both catalogues (á é í ó ú ñ ü, etc.)
+ * and less common marks that may appear in a domain or destination address.
  */
 @import '@fontsource/space-grotesk/latin-400.css';
 @import '@fontsource/space-grotesk/latin-500.css';
@@ -19,13 +19,12 @@
 @import 'tailwindcss';
 
 /*
- * Tokens extracted from the design synced from Claude Design
- * ("vuzon Demo.dc.html", proyecto b069302b-854d-4773-b4f3-a9396bdc8736).
+ * Design tokens from the design system.
  */
 @theme {
-  --color-ink: #0a0a0a; /* fondo de página */
-  --color-surface: #111111; /* tarjetas sólidas */
-  --color-cream: #f4efe6; /* texto principal */
+  --color-ink: #0a0a0a; /* page background */
+  --color-surface: #111111; /* solid cards */
+  --color-cream: #f4efe6; /* primary text */
   --color-accent: #ff8a1e;
   --color-accent-dark: #d96d00;
   --color-accent-soft: #ffb46e;
@@ -34,8 +33,8 @@
   --font-sans: 'Space Grotesk', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 
-  --radius-card: 1rem; /* 16px — tarjetas sólidas */
-  --radius-panel: 1.25rem; /* 20px — paneles de vidrio */
+  --radius-card: 1rem; /* 16px — solid cards */
+  --radius-panel: 1.25rem; /* 20px — glass panels */
 }
 
 html,

@@ -26,7 +26,7 @@ test('Clipboard API available: copies and does not fail', async () => {
     clipboard: { writeText: async () => {} },
   });
 
-  const result = await copyTextToClipboard('alias@example.com');
+  const result = await copyTextToClipboard('alias@example.com', 'Copy this address');
   expect(result).toEqual({ copied: true, failed: false });
 });
 
@@ -43,7 +43,7 @@ test('Clipboard API fails and execCommand true: copies', async () => {
   vi.stubGlobal('prompt', promptSpy);
   stubDocument(true);
 
-  const result = await copyTextToClipboard('alias@example.com');
+  const result = await copyTextToClipboard('alias@example.com', 'Copy this address');
   expect(result).toEqual({ copied: true, failed: false });
   expect(promptSpy).not.toHaveBeenCalled();
 });
@@ -64,9 +64,10 @@ test('Clipboard API and execCommand both fail: falls back to prompt and flags fa
   });
   stubDocument(false);
 
-  const result = await copyTextToClipboard('manual@example.com');
+  const result = await copyTextToClipboard('manual@example.com', 'Copy this address');
   expect(result).toEqual({ copied: false, failed: true });
   expect(prompts).toHaveLength(1);
+  expect(prompts[0].msg).toBe('Copy this address');
   expect(prompts[0].value).toBe('manual@example.com');
 });
 
@@ -84,6 +85,6 @@ test('prompt blocked (iframe/sandbox): still reports failure without throwing', 
   });
   stubDocument(false);
 
-  const result = await copyTextToClipboard('x@y.com');
+  const result = await copyTextToClipboard('x@y.com', 'Copy this address');
   expect(result).toEqual({ copied: false, failed: true });
 });

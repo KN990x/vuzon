@@ -13,6 +13,8 @@ import {
   NOT_EDITABLE_RULE_ERROR,
 } from './single-forward-guard.js';
 import { CloudflareApiError } from '../../platform/cloudflare/client.js';
+import { ERROR_CODES } from '../../platform/http/error-codes.js';
+import { PanelRequestError } from '../../platform/http/panel-request-error.js';
 import { cloudflareRuleSchema } from '../../shared/cloudflare-schemas.js';
 import {
   destinationInUseError,
@@ -107,7 +109,9 @@ function rejectNotEditableRule(res) {
  *   - errors    → { error, code, params? } with the matching HTTP status; `error` is an
  *                 English fallback and `code` is what the bilingual SPA renders
  *                 (platform/http/error-codes.js)
- * `/api/login` and `/api/logout` keep their own `{ success: true }`.
+ * Exceptions (flat envelopes, no `{ result }`):
+ *   - `GET /api/me` → `{ rootDomain }`
+ *   - `/api/login` and `/api/logout` → `{ success: true }`
  */
 export function registerApiRoutes(app, {
   env = process.env,
@@ -137,6 +141,7 @@ export function registerApiRoutes(app, {
     return res.json({ ok: true, result: apiRes });
   };
 
+  // Flat envelope (not `{ result }`) — kept for the SPA `Profile` type.
   app.get('/api/me', ...gate, (_req, res) => {
     res.json({
       rootDomain: getPanelDomain(env),
@@ -171,7 +176,13 @@ export function registerApiRoutes(app, {
     const [addresses, rules, catchAll] = await Promise.all([
       fetchAllCloudflare(`/accounts/${env.CF_ACCOUNT_ID}/email/routing/addresses`),
       fetchAllCloudflare(`/zones/${env.CF_ZONE_ID}/email/routing/rules`),
-      fetchCloudflare(`/zones/${env.CF_ZONE_ID}/email/routing/rules/catch_all`),
+      fetchCloudflare(`/zones/${env.CF_ZONE_ID}/email/routing/rules/catch_all`).catch(() => {
+        // Never delete blindly when catch-all usage cannot be verified.
+        throw new PanelRequestError(
+          'Could not verify whether this destination is still in use. Try again later.',
+          { status: 502, code: ERROR_CODES.DEST_USAGE_CHECK_FAILED },
+        );
+      }),
     ]);
 
     const address = (Array.isArray(addresses) ? addresses : []).find(
@@ -227,10 +238,17 @@ export function registerApiRoutes(app, {
       throw err;
     }
 
-    const [addresses, rules] = await Promise.all([
-      fetchAllCloudflare(`/accounts/${env.CF_ACCOUNT_ID}/email/routing/addresses`),
-      fetchAllCloudflare(`/zones/${env.CF_ZONE_ID}/email/routing/rules`),
-    ]);
+    let addresses;
+    let rules;
+    try {
+      [addresses, rules] = await Promise.all([
+        fetchAllCloudflare(`/accounts/${env.CF_ACCOUNT_ID}/email/routing/addresses`),
+        fetchAllCloudflare(`/zones/${env.CF_ZONE_ID}/email/routing/rules`),
+      ]);
+    } catch {
+      // Diagnostic fetches must not mask the original creation failure.
+      throw err;
+    }
 
     if (hasRuleForAlias(rules, aliasEmail)) {
       throw duplicateAliasError(aliasEmail);
@@ -269,7 +287,7 @@ export function registerApiRoutes(app, {
     }
 
     const destination = inspectDestination(addresses, destEmail);
-    if (!destination.exists) {
+    if (!destination.exists || !destination.email) {
       throw unknownDestinationError(destEmail);
     }
     if (!destination.verified) {
@@ -280,7 +298,7 @@ export function registerApiRoutes(app, {
       name: aliasEmail,
       enabled: true,
       matchers: [{ type: 'literal', field: 'to', value: aliasEmail }],
-      actions: [{ type: 'forward', value: [destEmail] }],
+      actions: [{ type: 'forward', value: [destination.email] }],
     };
 
     let apiRes;
@@ -305,7 +323,7 @@ export function registerApiRoutes(app, {
 
     const addresses = await fetchAllCloudflare(`/accounts/${env.CF_ACCOUNT_ID}/email/routing/addresses`);
     const destination = inspectDestination(addresses, destEmail);
-    if (!destination.exists) {
+    if (!destination.exists || !destination.email) {
       throw unknownDestinationError(destEmail);
     }
     if (!destination.verified) {
@@ -324,7 +342,7 @@ export function registerApiRoutes(app, {
 
     const parsedRule = parseCloudflareRule(rule);
     const payload = buildRuleUpdatePayload(parsedRule, parsedRule.enabled ?? true, {
-      actions: [{ type: 'forward', value: [destEmail] }],
+      actions: [{ type: 'forward', value: [destination.email] }],
     });
 
     const apiRes = await fetchCloudflare(`/zones/${env.CF_ZONE_ID}/email/routing/rules/${ruleId}`, 'PUT', payload);

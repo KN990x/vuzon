@@ -180,22 +180,22 @@ pnpm install
 
 The backend exposes login/session endpoints plus a REST proxy to Cloudflare. Cloudflare-facing routes and `GET /api/me` require an authenticated session.
 
-Response envelope: reads return `{ result }`, mutations `{ ok: true }` (plus `result` when Cloudflare returns the resource), errors `{ error, code, params? }` — `error` is an English fallback and `code` is what the bilingual panel renders from. `/api/login` and `/api/logout` keep `{ success: true }`. All `/api/*` responses are sent with `Cache-Control: no-store`.
+Response envelope: reads return `{ result }`, mutations `{ ok: true }` (plus `result` when Cloudflare returns the resource), errors `{ error, code, params? }` — `error` is an English fallback and `code` is what the bilingual panel renders from. Exceptions with a flat envelope: `GET /api/me` → `{ rootDomain }`; `/api/login` and `/api/logout` keep `{ success: true }`. All `/api/*` responses are sent with `Cache-Control: no-store`.
 
 - `GET  /healthz` - Public endpoint that returns `{ ok: true }`.
 - `POST /api/login` - Authenticates with `{ username, password }`. Wrong credentials return `401`.
 - `POST /api/logout` - Closes the current session.
-- `GET  /api/me` - Returns `{ email, rootDomain }` for the authenticated user.
+- `GET  /api/me` - Returns `{ rootDomain }` for the authenticated user (flat envelope, not `{ result }`).
 - `GET  /api/addresses` - Lists destination addresses.
 - `POST /api/addresses` - Creates destination address `{ email }`.
 - `DELETE /api/addresses/:id` - Deletes destination address.
 - `GET  /api/rules` - Lists rules/aliases.
-- `POST /api/rules` - Creates rule `{ localPart, destEmail }` where `localPart` must already be lowercase and match `^[a-z0-9._-]+$` (1-64 chars), and `destEmail` must be a valid email **and an already-verified destination on the account**.
+- `POST /api/rules` - Creates rule `{ localPart, destEmail }` where `localPart` must already be lowercase and match `^[a-z0-9]+(?:[._-][a-z0-9]+)*$` (1-64 chars; must start and end alphanumeric; no consecutive separators), and `destEmail` must be a valid email **and an already-verified destination on the account**.
 - `PUT  /api/rules/:id` - Changes an existing alias's destination `{ destEmail }`. Same catch-all guard and destination checks as above.
 - `DELETE /api/rules/:id` - Deletes rule.
 - `POST /api/rules/:id/enable` - Enables rule.
 - `POST /api/rules/:id/disable` - Disables rule.
 
-Unauthenticated requests to `/api/*` return `401 { error: "No autorizado" }` and do not redirect to the login page.
+Unauthenticated requests to `/api/*` return `401 { error: "Unauthorized", code: "auth.unauthorized" }` and do not redirect to the login page.
 
 > Cloudflare API references for rules and addresses: official Cloudflare documentation.

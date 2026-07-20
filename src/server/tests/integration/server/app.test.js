@@ -377,9 +377,12 @@ test('HTTP integration: security headers on /healthz', async () => {
     const res = await fetch(`${baseUrl}/healthz`);
     assert.equal(res.status, 200);
     assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
-    assert.equal(res.headers.get('x-frame-options'), 'SAMEORIGIN');
+    assert.equal(res.headers.get('x-frame-options'), 'DENY');
+    assert.equal(res.headers.get('cross-origin-opener-policy'), 'same-origin');
+    assert.equal(res.headers.get('cross-origin-resource-policy'), 'same-origin');
     assert.ok((res.headers.get('referrer-policy') || '').length > 0);
     assert.ok((res.headers.get('content-security-policy') || '').includes("default-src 'self'"));
+    assert.ok((res.headers.get('content-security-policy') || '').includes("frame-ancestors 'none'"));
     assert.ok((res.headers.get('permissions-policy') || '').includes('camera=()'));
     // Express advertises itself by default; nothing useful comes from telling the world.
     assert.equal(res.headers.get('x-powered-by'), null);
@@ -881,6 +884,60 @@ const DIAGNOSTICS_ENV = {
   DOMAIN: 'example.com',
   NODE_ENV: 'development',
 };
+
+test('HTTP integration: POST/PUT /api/rules write the canonical destination email', async () => {
+  const posts = [];
+  const puts = [];
+  const base = createMockCloudflareClient();
+  const cloudflareClient = {
+    ...base,
+    async fetchCloudflare(requestPath, method = 'GET', body = null) {
+      if (requestPath.includes('/email/routing/rules') && method === 'POST') {
+        posts.push(body);
+      }
+      if (method === 'PUT') {
+        puts.push({ requestPath, body });
+      }
+      return base.fetchCloudflare(requestPath, method, body);
+    },
+  };
+
+  const { app } = createApp({
+    env: { ...DIAGNOSTICS_ENV },
+    cloudflareClient,
+    sessionSecret: 'test-session-secret-32chars!!',
+  });
+  const { server, baseUrl } = await listen(app);
+
+  try {
+    resetSessionEpochForTests();
+    const sessionCookie = await loginAndGetCookie(baseUrl);
+    const headers = { 'Content-Type': 'application/json', Cookie: sessionCookie };
+
+    const created = await fetch(`${baseUrl}/api/rules`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ localPart: 'nuevo', destEmail: 'DEST@Example.com' }),
+    });
+    assert.equal(created.status, 200);
+    assert.equal(posts.length, 1);
+    assert.deepEqual(posts[0].actions, [{ type: 'forward', value: ['dest@example.com'] }]);
+
+    const updated = await fetch(`${baseUrl}/api/rules/rule1`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ destEmail: 'DEST@Example.com' }),
+    });
+    assert.equal(updated.status, 200);
+    assert.equal(puts.length, 1);
+    assert.deepEqual(puts[0].body.actions, [{ type: 'forward', value: ['dest@example.com'] }]);
+  } finally {
+    resetSessionEpochForTests();
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+  }
+});
 
 test('HTTP integration: creating an alias with an unverified destination gives an actionable message', async () => {
   const base = createMockCloudflareClient();
@@ -1469,6 +1526,101 @@ test('HTTP integration: DELETE /api/addresses/:id refuses a destination still us
     assert.deepEqual(await readJson(free), { ok: true });
     assert.equal(addressDeleteCalls, 1);
   } finally {
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+  }
+});
+
+test('HTTP integration: DELETE /api/addresses/:id fails explicitly when catch-all cannot be checked', async () => {
+  let addressDeleteCalls = 0;
+  const base = createMockCloudflareClient();
+  const cloudflareClient = {
+    async fetchCloudflare(requestPath, method = 'GET', body = null) {
+      if (requestPath.includes('/email/routing/addresses') && method === 'DELETE') {
+        addressDeleteCalls += 1;
+        return { id: 'deleted' };
+      }
+      if (requestPath.endsWith('/email/routing/rules/catch_all') && method === 'GET') {
+        throw new CloudflareApiError('upstream catch-all failure', { status: 500, code: 'x' });
+      }
+      return base.fetchCloudflare(requestPath, method, body);
+    },
+    async fetchAllCloudflare(requestPath) {
+      if (requestPath.includes('/email/routing/addresses')) {
+        return [{ id: 'addr-free', email: 'free@example.com', verified: true }];
+      }
+      if (requestPath.includes('/email/routing/rules')) {
+        return [];
+      }
+      return [];
+    },
+  };
+
+  const { app } = createApp({
+    env: { ...DIAGNOSTICS_ENV },
+    cloudflareClient,
+    sessionSecret: 'test-session-secret-32chars!!',
+  });
+  const { server, baseUrl } = await listen(app);
+
+  try {
+    resetSessionEpochForTests();
+    const sessionCookie = await loginAndGetCookie(baseUrl);
+
+    const res = await fetch(`${baseUrl}/api/addresses/addr-free`, {
+      method: 'DELETE',
+      headers: { Cookie: sessionCookie },
+    });
+    assert.equal(res.status, 502);
+    const data = await readJson(res);
+    assert.equal(data.code, ERROR_CODES.DEST_USAGE_CHECK_FAILED);
+    assert.equal(addressDeleteCalls, 0, 'must not DELETE when catch-all check fails');
+  } finally {
+    resetSessionEpochForTests();
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+  }
+});
+
+test('HTTP integration: same-origin guard blocks a mismatched Origin on mutations', async () => {
+  const { app } = createApp({
+    env: { ...DIAGNOSTICS_ENV },
+    cloudflareClient: createMockCloudflareClient(),
+    sessionSecret: 'test-session-secret-32chars!!',
+  });
+  const { server, baseUrl } = await listen(app);
+
+  try {
+    resetSessionEpochForTests();
+    const sessionCookie = await loginAndGetCookie(baseUrl);
+
+    const blocked = await fetch(`${baseUrl}/api/rules`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: sessionCookie,
+        Origin: 'http://evil.test',
+      },
+      body: JSON.stringify({ localPart: 'x', destEmail: 'dest@example.com' }),
+    });
+    assert.equal(blocked.status, 403);
+    const blockedBody = await readJson(blocked);
+    assert.equal(blockedBody.code, ERROR_CODES.CSRF_BLOCKED);
+
+    // curl-style: no Origin and no Sec-Fetch-Site still works.
+    const allowed = await fetch(`${baseUrl}/api/addresses`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: sessionCookie,
+      },
+      body: JSON.stringify({ email: 'new@example.com' }),
+    });
+    assert.equal(allowed.status, 200);
+  } finally {
+    resetSessionEpochForTests();
     await new Promise((resolve) => {
       server.close(resolve);
     });

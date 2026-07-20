@@ -20,3 +20,7 @@ test('getDomainConfigurationIssue: rejects whitespace only', () => {
 test('getPanelDomain: trims whitespace', () => {
   assert.equal(getPanelDomain({ DOMAIN: '  example.com  ' }), 'example.com');
 });
+
+test('getPanelDomain: lowercases the domain', () => {
+  assert.equal(getPanelDomain({ DOMAIN: 'Example.COM' }), 'example.com');
+});

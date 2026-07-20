@@ -37,7 +37,7 @@ const ISSUE_MESSAGES = {
   'id.charset': 'identifier contains characters that are not allowed',
 };
 
-export const GENERIC_VALIDATION_MESSAGE = 'Invalid data';
+const GENERIC_VALIDATION_MESSAGE = 'Invalid data';
 
 /**
  * @param {unknown} error

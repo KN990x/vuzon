@@ -40,12 +40,12 @@ test('auto-configure: detects zone and account from DOMAIN', async () => {
 });
 
 test('auto-configure: the domain is encoded in the query', async () => {
-  const env = { ...BASE_ENV, DOMAIN: 'mi dominio.com' };
+  const env = { ...BASE_ENV, DOMAIN: 'my domain.com' };
   const cloudflareClient = createZoneClient([{ id: 'z', account: { id: 'a' } }]);
 
   await ensureCloudflareIdentifiers({ env, cloudflareClient });
 
-  assert.equal(cloudflareClient.calls[0], '/zones?name=mi%20dominio.com');
+  assert.equal(cloudflareClient.calls[0], '/zones?name=my%20domain.com');
 });
 
 test('auto-configure: with no zones it explains the token may belong to another account', async () => {

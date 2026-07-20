@@ -17,7 +17,9 @@ import {
   createApiRateLimiter,
   createLoginRateLimiter,
   createLogoutRateLimiter,
+  createPagesRateLimiter,
 } from '../platform/http/rate-limiters.js';
+import { createSameOriginGuard } from '../platform/http/same-origin-guard.js';
 import { resolvePublicDir } from './resolve-public-dir.js';
 
 const JSON_BODY_LIMIT = '256kb';
@@ -27,7 +29,7 @@ const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   "base-uri 'self'",
   "form-action 'self'",
-  "frame-ancestors 'self'",
+  "frame-ancestors 'none'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data:",
@@ -39,9 +41,11 @@ const CONTENT_SECURITY_POLICY = [
 function createSecurityHeadersMiddleware({ hsts = false } = {}) {
   return function securityHeadersMiddleware(_req, res, next) {
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+    res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
     res.setHeader('Content-Security-Policy', CONTENT_SECURITY_POLICY);
     if (hsts) {
       // No includeSubDomains/preload: on a homelab the domain may have HTTP subdomains.
@@ -75,6 +79,7 @@ export function createApp({
   loginLimiter = createLoginRateLimiter(),
   logoutLimiter = createLogoutRateLimiter(),
   apiLimiter = createApiRateLimiter(),
+  pagesLimiter = createPagesRateLimiter(),
 } = {}) {
   const runtime = getServerRuntime(env);
   const app = express();
@@ -86,13 +91,16 @@ export function createApp({
   // HSTS only with COOKIE_SECURE=1 (deployed behind TLS); on plain-HTTP homelabs it must not be sent.
   app.use(createSecurityHeadersMiddleware({ hsts: runtime.cookieSecure }));
   app.use(createApiCacheControlMiddleware());
-  // CSRF invariant (no explicit token). It rests on three pillars:
+  // CSRF invariant (no explicit token). It rests on four pillars:
   //   1. Session cookie with sameSite: 'lax' (platform/session/middleware.js).
   //   2. Mutations only via JSON: express.json without urlencoded (a cross-site <form>
   //      cannot send application/json without a CORS preflight).
   //   3. No CORS: no external origin can fetch with credentials.
-  // Changing any of the three means revisiting this decision.
+  //   4. Same-origin guard on /api mutations (platform/http/same-origin-guard.js):
+  //      rejects mismatched Origin; allows curl (no Origin / no Sec-Fetch-Site).
+  // Changing any of these means revisiting this decision.
   app.use(express.json({ limit: JSON_BODY_LIMIT }));
+  app.use(createSameOriginGuard());
   app.use(createSessionMiddleware({
     sessionSecret,
     cookieSecure: runtime.cookieSecure,
@@ -113,7 +121,7 @@ export function createApp({
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'Not found', code: ERROR_CODES.SERVER_NOT_FOUND });
   });
-  registerPageRoutes(app, { publicDir });
+  registerPageRoutes(app, { publicDir, pagesLimiter });
   app.use(createApiErrorHandler());
 
   return {

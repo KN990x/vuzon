@@ -40,7 +40,7 @@ test('ruleSchema: rejects an empty alias or one over 64 characters', () => {
 });
 
 test('ruleSchema: requires a destEmail in email format', () => {
-  assert.equal(ruleSchema.safeParse({ localPart: 'alias', destEmail: 'no-es-un-correo' }).success, false);
+  assert.equal(ruleSchema.safeParse({ localPart: 'alias', destEmail: 'not-an-email' }).success, false);
   assert.equal(ruleSchema.safeParse({ localPart: 'alias' }).success, false);
 });
 
@@ -48,4 +48,17 @@ test('addressSchema: validates the destination email format', () => {
   assert.equal(addressSchema.safeParse({ email: 'dest@example.com' }).success, true);
   assert.equal(addressSchema.safeParse({ email: 'dest@' }).success, false);
   assert.equal(addressSchema.safeParse({}).success, false);
+});
+
+test('ruleSchema and addressSchema: trim email whitespace', () => {
+  const ruleParsed = ruleSchema.safeParse({ localPart: 'alias', destEmail: '  dest@example.com  ' });
+  assert.equal(ruleParsed.success, true);
+  if (ruleParsed.success) {
+    assert.equal(ruleParsed.data.destEmail, 'dest@example.com');
+  }
+  const addressParsed = addressSchema.safeParse({ email: '  dest@example.com  ' });
+  assert.equal(addressParsed.success, true);
+  if (addressParsed.success) {
+    assert.equal(addressParsed.data.email, 'dest@example.com');
+  }
 });

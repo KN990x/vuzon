@@ -55,7 +55,7 @@
 </p>
 
 <p align="center">
-  <img src="./docs/assets/dashboard.png" alt="Panel de vuzon: lista de alias con su destino, tarjeta de catch-all y destinos verificados" width="100%">
+  <img src="./docs/assets/dashboard.png" alt="vuzon panel: alias list with destinations, catch-all card, and verified destinations" width="100%">
 </p>
 
 <a id="english"></a>

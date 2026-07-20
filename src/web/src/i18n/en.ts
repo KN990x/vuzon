@@ -134,6 +134,9 @@ export const en = {
   'error.dest.in_use':
     'Cannot delete {email}: it is still used by {aliases}. '
     + 'Remove or re-point those rules first.',
+  'error.dest.usage_check_failed':
+    'Could not verify whether this destination is still in use. Try again later.',
+  'error.csrf.blocked': 'Cross-origin request blocked.',
   'error.cloudflare.generic':
     'Could not complete the operation with Cloudflare. Check the configuration or try again later.',
   'error.server.internal': 'Internal server error',

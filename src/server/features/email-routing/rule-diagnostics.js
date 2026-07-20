@@ -69,7 +69,7 @@ export function isVerifiedAddress(value) {
 /**
  * @param {unknown[]} addresses Result of /email/routing/addresses.
  * @param {string} email
- * @returns {{ exists: boolean, verified: boolean }}
+ * @returns {{ exists: boolean, verified: boolean, email: string | null }}
  */
 export function inspectDestination(addresses, email) {
   const list = Array.isArray(addresses) ? addresses : [];
@@ -81,6 +81,8 @@ export function inspectDestination(addresses, email) {
   return {
     exists: Boolean(match),
     verified: Boolean(match) && isVerifiedAddress(match.verified),
+    // Exact form stored in Cloudflare — write this, not the raw request string.
+    email: typeof match?.email === 'string' ? match.email : null,
   };
 }
 

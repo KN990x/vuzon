@@ -123,6 +123,7 @@ export function registerGracefulShutdown(server, {
 export async function startServer({
   env = process.env,
   exitProcess = (code) => process.exit(code),
+  cloudflareClient: injectedCloudflareClient = null,
 } = {}) {
   try {
     const syncIssues = collectSynchronousStartupConfigurationIssues(env);
@@ -139,7 +140,7 @@ export async function startServer({
 
     env.CF_API_TOKEN = getCfApiToken(env);
 
-    const cloudflareClient = createCloudflareClient({ env });
+    const cloudflareClient = injectedCloudflareClient || createCloudflareClient({ env });
     await ensureCloudflareIdentifiers({ env, cloudflareClient });
     assertCloudflareEnvConfigured(env);
 
@@ -173,7 +174,7 @@ export async function startServer({
     console.error(`Fatal startup error: ${message}`);
     console.error(requiredEnvHelp(env));
     if (
-      /CF_ZONE_ID|CF_ACCOUNT_ID|\bzonas?\b|autoconfigur/i.test(message)
+      /CF_ZONE_ID|CF_ACCOUNT_ID|\bzones?\b|auto-?configur/i.test(message)
     ) {
       console.error(
         '   Zone/account: the token must belong to the account that owns DOMAIN; if several zones share the same name, set CF_ZONE_ID and CF_ACCOUNT_ID.',

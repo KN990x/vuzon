@@ -125,6 +125,9 @@ export const es = {
   'error.dest.in_use':
     'No se puede eliminar {email}: todavía lo usan {aliases}. '
     + 'Quita o cambia esas reglas primero.',
+  'error.dest.usage_check_failed':
+    'No se pudo comprobar si este destino sigue en uso. Inténtalo de nuevo más tarde.',
+  'error.csrf.blocked': 'Petición de otro origen bloqueada.',
   'error.cloudflare.generic':
     'No se pudo completar la operación con Cloudflare. Revisa la configuración o inténtalo más tarde.',
   'error.server.internal': 'Error interno del servidor',

@@ -127,10 +127,10 @@ test('placeholder-guard: AUTH_USER=admin is a legitimate choice', () => {
 test('placeholder-guard: a normal environment produces no warning', () => {
   assert.equal(
     getPlaceholderConfigurationIssue({
-      DOMAIN: 'midominio.dev',
+      DOMAIN: 'mydomain.dev',
       AUTH_USER: 'kn',
-      AUTH_PASS: 'una-contrasena-propia',
-      CF_API_TOKEN: 'token-real-de-cloudflare',
+      AUTH_PASS: 'a-password-of-my-own',
+      CF_API_TOKEN: 'real-cloudflare-token-value',
       SESSION_SECRET: '9f3c1a7d0e5b48620fa1c37d9e2b8054a6d13f7c2e908b45d61af03c7e5928bd',
     }),
     null,

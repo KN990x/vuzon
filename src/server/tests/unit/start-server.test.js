@@ -103,3 +103,40 @@ test('startServer: an invalid SESSION_SECRET in production uses exitProcess(1)',
     console.error = origError;
   }
 });
+
+test('startServer: a missing zone prints the actionable Zone/account hint', async () => {
+  const logged = [];
+  const origError = console.error;
+  console.error = (...args) => {
+    logged.push(args.join(' '));
+  };
+  try {
+    let exitCode = null;
+    const exitProcess = (code) => {
+      exitCode = code;
+      throw new Error('TEST_EXIT');
+    };
+    // No CF_ZONE_ID / CF_ACCOUNT_ID → auto-configure runs and finds no zone.
+    const env = {
+      DOMAIN: 'homelab.test',
+      AUTH_USER: 'admin',
+      AUTH_PASS: 'secret',
+      CF_API_TOKEN: 'tok',
+      NODE_ENV: 'development',
+      SESSION_SECRET: 'test-session-secret-32chars!!',
+    };
+    const cloudflareClient = {
+      async fetchCloudflare() {
+        return [];
+      },
+    };
+
+    await assert.rejects(() => startServer({ env, exitProcess, cloudflareClient }), /TEST_EXIT/);
+    assert.equal(exitCode, 1);
+    const text = logged.join('\n');
+    assert.match(text, /There is no "homelab\.test" zone/);
+    assert.match(text, /Zone\/account: the token must belong to the account that owns DOMAIN/);
+  } finally {
+    console.error = origError;
+  }
+});

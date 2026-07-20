@@ -1,10 +1,10 @@
 /**
- * Panel domain (trimmed). Used in email rules and /api/me.
+ * Panel domain (trimmed, lowercased). Used in email rules and /api/me.
  * @param {NodeJS.ProcessEnv} [env]
  * @returns {string}
  */
 export function getPanelDomain(env = process.env) {
-  return typeof env.DOMAIN === 'string' ? env.DOMAIN.trim() : '';
+  return typeof env.DOMAIN === 'string' ? env.DOMAIN.trim().toLowerCase() : '';
 }
 
 /**

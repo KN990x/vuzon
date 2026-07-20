@@ -7,7 +7,7 @@ export { cloudflareResourceIdSchema };
 // wording the user reads is picked by the browser (platform/http/format-zod-error.js).
 
 export const addressSchema = z.object({
-  email: z.string().email('email.invalid'),
+  email: z.string().trim().email('email.invalid'),
 });
 
 export const ruleSchema = z.object({
@@ -18,10 +18,10 @@ export const ruleSchema = z.object({
     .min(1, 'alias.empty')
     .max(64, 'alias.too_long')
     .regex(/^[a-z0-9]+(?:[._-][a-z0-9]+)*$/, 'alias.charset'),
-  destEmail: z.string().email('dest_email.invalid'),
+  destEmail: z.string().trim().email('dest_email.invalid'),
 });
 
 /** Update of an existing alias: only the destination may change. */
 export const ruleUpdateSchema = z.object({
-  destEmail: z.string().email('dest_email.invalid'),
+  destEmail: z.string().trim().email('dest_email.invalid'),
 });

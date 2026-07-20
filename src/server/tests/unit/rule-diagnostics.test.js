@@ -25,20 +25,20 @@ test('isVerifiedAddress: rejects pending values and junk', () => {
 test('inspectDestination: distinguishes unknown, pending and verified', () => {
   const addresses = [
     { email: 'ok@example.com', verified: true },
-    { email: 'pendiente@example.com', verified: false },
+    { email: 'pending@example.com', verified: false },
   ];
 
   assert.deepEqual(
     inspectDestination(addresses, 'ok@example.com'),
-    { exists: true, verified: true },
+    { exists: true, verified: true, email: 'ok@example.com' },
   );
   assert.deepEqual(
-    inspectDestination(addresses, 'pendiente@example.com'),
-    { exists: true, verified: false },
+    inspectDestination(addresses, 'pending@example.com'),
+    { exists: true, verified: false, email: 'pending@example.com' },
   );
   assert.deepEqual(
-    inspectDestination(addresses, 'nadie@example.com'),
-    { exists: false, verified: false },
+    inspectDestination(addresses, 'nobody@example.com'),
+    { exists: false, verified: false, email: null },
   );
 });
 
@@ -46,13 +46,27 @@ test('inspectDestination: compares ignoring case and whitespace', () => {
   const addresses = [{ email: 'OK@Example.com ', verified: true }];
   assert.deepEqual(
     inspectDestination(addresses, '  ok@example.COM'),
-    { exists: true, verified: true },
+    { exists: true, verified: true, email: 'OK@Example.com ' },
+  );
+});
+
+test('inspectDestination: returns the canonical Cloudflare email for mixed-case input', () => {
+  const addresses = [{ email: 'dest@example.com', verified: true }];
+  assert.deepEqual(
+    inspectDestination(addresses, 'DEST@Example.com'),
+    { exists: true, verified: true, email: 'dest@example.com' },
   );
 });
 
 test('inspectDestination: tolerates a missing or invalid list', () => {
-  assert.deepEqual(inspectDestination(null, 'x@y.com'), { exists: false, verified: false });
-  assert.deepEqual(inspectDestination([null, {}], 'x@y.com'), { exists: false, verified: false });
+  assert.deepEqual(
+    inspectDestination(null, 'x@y.com'),
+    { exists: false, verified: false, email: null },
+  );
+  assert.deepEqual(
+    inspectDestination([null, {}], 'x@y.com'),
+    { exists: false, verified: false, email: null },
+  );
 });
 
 test('hasRuleForAlias: detects an existing literal matcher', () => {
