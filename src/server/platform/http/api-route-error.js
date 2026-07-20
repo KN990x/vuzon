@@ -7,6 +7,43 @@ import { PanelRequestError } from './panel-request-error.js';
 const GENERIC_CLOUDFLARE_CLIENT_MSG = 'Could not complete the operation with Cloudflare. Check the configuration or try again later.';
 
 /**
+ * Body-parser (`express.json`) failure → the `{ error, code }` envelope.
+ *
+ * These errors are thrown by the middleware, before any route runs, and they carry their
+ * own 4xx `status` plus an `expose: true` marker. Without this branch they fell through to
+ * the generic case: a truncated request answered `500 server.internal` and wrote a
+ * `console.error` stack, which reads like a panel bug when it is a malformed client call.
+ *
+ * @param {unknown} err
+ * @returns {{ status: number, message: string, code: string } | null}
+ */
+function resolveBodyParserError(err) {
+  const type = typeof err?.type === 'string' ? err.type : '';
+  if (!type.startsWith('entity.') && !type.startsWith('encoding.')) {
+    return null;
+  }
+
+  const status = Number(err.status ?? err.statusCode);
+  if (!Number.isFinite(status) || status < 400 || status >= 500) {
+    return null;
+  }
+
+  if (type === 'entity.too.large') {
+    return {
+      status,
+      message: 'Request body too large',
+      code: ERROR_CODES.REQUEST_TOO_LARGE,
+    };
+  }
+
+  return {
+    status,
+    message: 'Malformed request body',
+    code: ERROR_CODES.REQUEST_MALFORMED,
+  };
+}
+
+/**
  * @param {unknown} err
  * @returns {{ status: number, message: string, code: string, params?: Record<string, unknown> }}
  */
@@ -28,6 +65,11 @@ export function resolveApiRouteError(err) {
       code: err.code || ERROR_CODES.SERVER_INTERNAL,
       params: err.params,
     };
+  }
+
+  const bodyParserError = resolveBodyParserError(err);
+  if (bodyParserError) {
+    return bodyParserError;
   }
 
   if (err instanceof CloudflareApiError) {

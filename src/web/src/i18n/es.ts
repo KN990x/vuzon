@@ -108,8 +108,12 @@ export const es = {
   'error.rate_limit.login': 'Demasiados intentos. Espera un momento e inténtalo de nuevo.',
   'error.rate_limit.api': 'Demasiadas peticiones. Espera un momento e inténtalo de nuevo.',
   'error.validation.invalid': 'Datos no válidos',
+  'error.request.malformed': 'El cuerpo de la petición no es JSON válido.',
+  'error.request.too_large': 'El cuerpo de la petición es demasiado grande.',
   'error.rules.catch_all_readonly':
     'No se puede modificar ni eliminar la regla catch-all desde esta API.',
+  'error.rules.not_editable':
+    'Esta regla no reenvía a una sola dirección y no se puede editar desde el panel.',
   'error.rules.duplicate_alias': 'El alias {alias} ya existe.',
   'error.dest.unknown':
     '{email} no está en la lista de destinos de la cuenta. Añádelo primero como destinatario.',

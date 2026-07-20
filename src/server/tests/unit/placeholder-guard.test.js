@@ -6,13 +6,14 @@ import { fileURLToPath } from 'node:url';
 import {
   getPlaceholderConfigurationIssue,
   PLACEHOLDER_EXEMPT_KEYS,
+  PLACEHOLDER_VALUES_BY_KEY,
 } from '../../config/placeholder-guard.js';
 
 const unitDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.join(unitDir, '..', '..', '..', '..'); // workspace root
 
 /**
- * Pares CLAVE=valor sin comentar de `.env.example`.
+ * Uncommented KEY=value pairs from `.env.example`.
  * @returns {Array<[string, string]>}
  */
 function readEnvExampleEntries() {
@@ -53,6 +54,46 @@ test('placeholder-guard: every .env.example value is covered or exempt', () => {
         + 'Add it to PLACEHOLDER_VALUES_BY_KEY (or to PLACEHOLDER_EXEMPT_KEYS with a reason).',
     );
     assert.match(issue, new RegExp(key));
+  }
+});
+
+/**
+ * The test above skips empty values, and `.env.example` currently ships every secret-bearing
+ * key empty — which means it walks zero keys and can no longer fail. These two tests are what
+ * keeps the guard from quietly becoming decoration:
+ *
+ *   1. the template must keep shipping those keys empty (a filled one is a published secret);
+ *   2. every value registered in PLACEHOLDER_VALUES_BY_KEY must still be rejected, so the list
+ *      does not rot into dead code once it stops being exercised by `.env.example`.
+ */
+const SECRET_BEARING_ENV_KEYS = ['SESSION_SECRET', 'AUTH_PASS', 'CF_API_TOKEN'];
+
+test('placeholder-guard: .env.example ships the secret-bearing keys empty', () => {
+  const entries = readEnvExampleEntries();
+
+  for (const key of SECRET_BEARING_ENV_KEYS) {
+    const entry = entries.find(([name]) => name === key);
+    assert.ok(entry, `.env.example no longer defines ${key}`);
+    assert.equal(
+      entry[1],
+      '',
+      `.env.example ships a value for ${key}. This file is public: leave it empty, `
+        + 'and register the value in PLACEHOLDER_VALUES_BY_KEY if it must exist as an example.',
+    );
+  }
+});
+
+test('placeholder-guard: every registered placeholder is still rejected', () => {
+  const registered = Object.entries(PLACEHOLDER_VALUES_BY_KEY);
+  assert.ok(registered.length > 0, 'expected at least one registered placeholder');
+
+  for (const [key, placeholders] of registered) {
+    assert.ok(placeholders.length > 0, `${key} is registered with no values`);
+    for (const value of placeholders) {
+      const issue = getPlaceholderConfigurationIssue({ [key]: value });
+      assert.ok(issue, `${key}=${value} is registered as a placeholder but not rejected`);
+      assert.match(issue, new RegExp(key));
+    }
   }
 });
 

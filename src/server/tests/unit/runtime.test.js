@@ -83,6 +83,26 @@ test('getServerRuntime includes trustProxy and cookieSecure', () => {
   assert.equal(r2.cookieSecure, true);
 });
 
+test('getServerRuntime: TRUST_PROXY without COOKIE_SECURE warns about spoofable X-Forwarded-For', () => {
+  const warnings = [];
+  const warn = (message) => warnings.push(message);
+
+  getServerRuntime({ TRUST_PROXY: '1' }, { warn });
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /TRUST_PROXY/);
+  assert.match(warnings[0], /rate limit/i);
+});
+
+test('getServerRuntime: TRUST_PROXY behind TLS, or unset, warns about nothing', () => {
+  const warnings = [];
+  const warn = (message) => warnings.push(message);
+
+  getServerRuntime({ TRUST_PROXY: '1', COOKIE_SECURE: '1' }, { warn });
+  getServerRuntime({ COOKIE_SECURE: '1' }, { warn });
+  getServerRuntime({}, { warn });
+  assert.deepEqual(warnings, []);
+});
+
 test('getListenPort: PORT=0 is valid (ephemeral)', () => {
   assert.equal(getListenPort({ PORT: '0' }), 0);
   assert.equal(getListenPort({ PORT: 0 }), 0);

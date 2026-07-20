@@ -13,6 +13,10 @@ import {
   CATCH_ALL_MUTATION_CODE,
   CATCH_ALL_MUTATION_ERROR,
 } from '../../../features/email-routing/catch-all-guard.js';
+import {
+  NOT_EDITABLE_RULE_CODE,
+  NOT_EDITABLE_RULE_ERROR,
+} from '../../../features/email-routing/single-forward-guard.js';
 import { resetSessionEpochForTests } from '../../../features/auth/session-epoch.js';
 
 function createMockCloudflareClient() {
@@ -356,6 +360,8 @@ test('HTTP integration: security headers on /healthz', async () => {
     assert.ok((res.headers.get('referrer-policy') || '').length > 0);
     assert.ok((res.headers.get('content-security-policy') || '').includes("default-src 'self'"));
     assert.ok((res.headers.get('permissions-policy') || '').includes('camera=()'));
+    // Express advertises itself by default; nothing useful comes from telling the world.
+    assert.equal(res.headers.get('x-powered-by'), null);
   } finally {
     await new Promise((resolve) => {
       server.close(resolve);
@@ -850,6 +856,63 @@ test('HTTP integration: creating an alias with an unknown destination says so ex
   }
 });
 
+test('HTTP integration: a duplicate alias is rejected even when Cloudflare would accept it', async () => {
+  // The dangerous case: Cloudflare accepts a duplicate matcher and answers 200, but only
+  // the first rule processes the mail. Diagnosing on the error branch never sees it, so
+  // the check has to happen before the POST — and the POST must never be issued.
+  const posts = [];
+  const base = createMockCloudflareClient();
+  const cloudflareClient = {
+    ...base,
+    async fetchCloudflare(requestPath, method = 'GET', body = null) {
+      if (requestPath.includes('/email/routing/rules') && method === 'POST') {
+        posts.push(body);
+      }
+      return base.fetchCloudflare(requestPath, method, body);
+    },
+    async fetchAllCloudflare(requestPath) {
+      if (requestPath.includes('/email/routing/rules')) {
+        return [{
+          id: 'rule1',
+          name: 'duplicado@example.com',
+          matchers: [{ type: 'literal', field: 'to', value: 'duplicado@example.com' }],
+          actions: [],
+        }];
+      }
+      return base.fetchAllCloudflare(requestPath);
+    },
+  };
+
+  const { app } = createApp({
+    env: { ...DIAGNOSTICS_ENV },
+    cloudflareClient,
+    sessionSecret: 'test-session-secret-32chars!!',
+  });
+  const { server, baseUrl } = await listen(app);
+
+  try {
+    resetSessionEpochForTests();
+    const sessionCookie = await loginAndGetCookie(baseUrl);
+
+    const res = await fetch(`${baseUrl}/api/rules`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: sessionCookie },
+      body: JSON.stringify({ localPart: 'duplicado', destEmail: 'dest@example.com' }),
+    });
+
+    assert.equal(res.status, 400);
+    const data = await readJson(res);
+    assert.equal(data.code, ERROR_CODES.RULES_DUPLICATE_ALIAS);
+    assert.deepEqual(data.params, { alias: 'duplicado@example.com' });
+    assert.deepEqual(posts, [], 'no duplicate rule may reach Cloudflare');
+  } finally {
+    resetSessionEpochForTests();
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+  }
+});
+
 test('HTTP integration: a duplicate alias is diagnosed after the Cloudflare failure', async () => {
   const base = createMockCloudflareClient();
   const cloudflareClient = {
@@ -1014,6 +1077,111 @@ test('HTTP integration: PUT /api/rules/:id changes the destination and respects 
     });
     assert.equal(unverified.status, 400);
     assert.equal((await readJson(unverified)).code, ERROR_CODES.DEST_UNKNOWN);
+  } finally {
+    resetSessionEpochForTests();
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+  }
+});
+
+test('HTTP integration: a rule that is not a single forward cannot be edited', async () => {
+  const puts = [];
+  const base = createMockCloudflareClient();
+  const cloudflareClient = {
+    ...base,
+    async fetchCloudflare(requestPath, method = 'GET', body = null) {
+      if (method === 'PUT') {
+        puts.push({ requestPath, body });
+      }
+      if (requestPath.endsWith('/email/routing/rules/worker_rule') && method === 'GET') {
+        return {
+          id: 'worker_rule',
+          name: 'worker@example.com',
+          enabled: true,
+          matchers: [{ type: 'literal', field: 'to', value: 'worker@example.com' }],
+          actions: [{ type: 'worker', value: ['my-worker'] }],
+        };
+      }
+      if (requestPath.endsWith('/email/routing/rules/fanout_rule') && method === 'GET') {
+        return {
+          id: 'fanout_rule',
+          name: 'fanout@example.com',
+          enabled: true,
+          matchers: [{ type: 'literal', field: 'to', value: 'fanout@example.com' }],
+          actions: [{ type: 'forward', value: ['a@example.com', 'b@example.com'] }],
+        };
+      }
+      return base.fetchCloudflare(requestPath, method, body);
+    },
+  };
+
+  const { app } = createApp({
+    env: { ...DIAGNOSTICS_ENV },
+    cloudflareClient,
+    sessionSecret: 'test-session-secret-32chars!!',
+  });
+  const { server, baseUrl } = await listen(app);
+
+  try {
+    resetSessionEpochForTests();
+    const sessionCookie = await loginAndGetCookie(baseUrl);
+    const headers = { 'Content-Type': 'application/json', Cookie: sessionCookie };
+
+    // A Worker rule and a fan-out rule both stay read-only: replacing their actions with
+    // a plain forward would destroy configuration made outside vuzon.
+    for (const ruleId of ['worker_rule', 'fanout_rule']) {
+      const res = await fetch(`${baseUrl}/api/rules/${ruleId}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ destEmail: 'dest@example.com' }),
+      });
+      assert.equal(res.status, 400, ruleId);
+      const data = await readJson(res);
+      assert.equal(data.code, NOT_EDITABLE_RULE_CODE, ruleId);
+      assert.equal(data.error, NOT_EDITABLE_RULE_ERROR, ruleId);
+    }
+
+    assert.deepEqual(puts, [], 'no non-editable rule may be overwritten in Cloudflare');
+  } finally {
+    resetSessionEpochForTests();
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+  }
+});
+
+test('HTTP integration: a malformed or oversized JSON body answers 4xx, not 500', async () => {
+  const { app } = createApp({
+    env: { ...DIAGNOSTICS_ENV },
+    cloudflareClient: createMockCloudflareClient(),
+    sessionSecret: 'test-session-secret-32chars!!',
+  });
+  const { server, baseUrl } = await listen(app);
+
+  try {
+    resetSessionEpochForTests();
+    const sessionCookie = await loginAndGetCookie(baseUrl);
+    const headers = { 'Content-Type': 'application/json', Cookie: sessionCookie };
+
+    // Truncated JSON: express.json throws before any route runs. It used to fall through
+    // to the generic branch and answer 500, which reads like a panel bug.
+    const malformed = await fetch(`${baseUrl}/api/rules`, {
+      method: 'POST',
+      headers,
+      body: '{"localPart": "x"',
+    });
+    assert.equal(malformed.status, 400);
+    assert.equal((await readJson(malformed)).code, ERROR_CODES.REQUEST_MALFORMED);
+
+    // Over the 256 kb limit.
+    const tooLarge = await fetch(`${baseUrl}/api/rules`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ localPart: 'x'.repeat(300 * 1024), destEmail: 'a@example.com' }),
+    });
+    assert.equal(tooLarge.status, 413);
+    assert.equal((await readJson(tooLarge)).code, ERROR_CODES.REQUEST_TOO_LARGE);
   } finally {
     resetSessionEpochForTests();
     await new Promise((resolve) => {

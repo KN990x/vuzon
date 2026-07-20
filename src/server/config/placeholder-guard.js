@@ -8,9 +8,11 @@
  * even going through the login limiter.
  *
  * The list is hard-coded here rather than read from `.env.example`: that file does not
- * exist inside the Docker image. The `placeholder-guard.test.js` test walks
- * `.env.example` and checks that every value is still covered, so adding a new template
- * value without registering it breaks CI.
+ * exist inside the Docker image. `placeholder-guard.test.js` walks `.env.example` and
+ * checks that every value is still covered, so adding a new template value without
+ * registering it breaks CI. It also asserts that the secret-bearing keys keep shipping
+ * empty and that every entry below is still rejected — otherwise the walk has nothing to
+ * inspect and this list quietly becomes dead code.
  */
 
 /**

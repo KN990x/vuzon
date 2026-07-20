@@ -410,7 +410,7 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
         onRefresh={() => void refreshAll()}
         onLogout={() => void logout()}
       />
-      {/* pb-12 en vez de pb-20: el aire que falta lo aporta ahora el pie. */}
+      {/* pb-12 instead of pb-20: the footer now supplies the missing breathing room. */}
       <main className="fade-in mx-auto max-w-[1180px] px-6 pb-12 pt-[104px]">
         <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
           <div>

@@ -96,13 +96,28 @@ export function getListenPort(env = process.env) {
   return n;
 }
 
-export function getServerRuntime(env = process.env) {
+export function getServerRuntime(env = process.env, { warn = console.warn } = {}) {
   const isProduction = env.NODE_ENV === 'production';
+  const cookieSecure = parseCookieSecure(env.COOKIE_SECURE);
+  const trustProxy = parseTrustProxy(env.TRUST_PROXY, { warn });
+
+  // Trusting the proxy means `X-Forwarded-For` decides the rate-limit key. With no TLS
+  // termination in front (the reliable signal for that is COOKIE_SECURE being off), the
+  // header is attacker-controlled and the login limiter can be bypassed one forged IP at
+  // a time — that is, silently no anti-brute-force at all. Same reasoning as the warning
+  // in parseTrustProxy: a security setting that quietly does nothing is the worst kind.
+  if (trustProxy !== false && !cookieSecure) {
+    warn(
+      'TRUST_PROXY is enabled but COOKIE_SECURE is not. If the panel is reachable without '
+        + 'a TLS-terminating reverse proxy in front, X-Forwarded-For can be spoofed and the '
+        + 'login rate limit bypassed. Set COOKIE_SECURE=1 behind TLS, or unset TRUST_PROXY.',
+    );
+  }
 
   return {
     port: getListenPort(env),
     isProduction,
-    cookieSecure: parseCookieSecure(env.COOKIE_SECURE),
-    trustProxy: parseTrustProxy(env.TRUST_PROXY),
+    cookieSecure,
+    trustProxy,
   };
 }

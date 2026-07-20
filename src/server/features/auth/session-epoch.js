@@ -21,6 +21,20 @@ export function revokeSessionsIssuedUntilNow(now = Date.now()) {
 }
 
 /**
+ * Stamp for a session being issued right now, guaranteed to survive the check below.
+ *
+ * `Date.now()` alone is not enough: logging out and logging back in within the same
+ * millisecond produced `issuedAt === revokedBefore`, which `isSessionIssuanceValid`
+ * rejects — the login succeeded and the very next request answered 401.
+ *
+ * @param {number} [now]
+ * @returns {number}
+ */
+export function nextIssuedAt(now = Date.now()) {
+  return Math.max(now, revokedBefore + 1);
+}
+
+/**
  * @param {unknown} issuedAt The `issuedAt` mark stored in the session at login time.
  * @returns {boolean}
  */

@@ -8,6 +8,11 @@ import {
   isCatchAllRule,
   isCatchAllRuleId,
 } from './catch-all-guard.js';
+import {
+  isSingleForwardRule,
+  NOT_EDITABLE_RULE_CODE,
+  NOT_EDITABLE_RULE_ERROR,
+} from './single-forward-guard.js';
 import { CloudflareApiError } from '../../platform/cloudflare/client.js';
 import { cloudflareRuleSchema } from '../../shared/cloudflare-schemas.js';
 import {
@@ -53,8 +58,15 @@ export function buildRuleUpdatePayload(rule, enabled, overrides = {}) {
     name: rule.name,
     enabled,
     matchers: rule.matchers,
-    actions: overrides.actions ?? rule.actions,
   };
+
+  // `actions` is optional in cloudflareRuleSchema, so a response without it validates.
+  // Sending `actions: undefined` would drop the key from the JSON anyway; being explicit
+  // keeps the payload honest about what we are and are not changing.
+  const actions = overrides.actions ?? rule.actions;
+  if (typeof actions !== 'undefined') {
+    payload.actions = actions;
+  }
 
   if (typeof rule.priority !== 'undefined') {
     payload.priority = rule.priority;
@@ -73,6 +85,13 @@ function rejectCatchAllMutation(res) {
   return res.status(400).json({
     error: CATCH_ALL_MUTATION_ERROR,
     code: CATCH_ALL_MUTATION_CODE,
+  });
+}
+
+function rejectNotEditableRule(res) {
+  return res.status(400).json({
+    error: NOT_EDITABLE_RULE_ERROR,
+    code: NOT_EDITABLE_RULE_CODE,
   });
 }
 
@@ -203,7 +222,21 @@ export function registerApiRoutes(app, {
 
     // Pre-flight check: the SPA already offers verified destinations only, but the
     // server cannot trust the client, and this way the error arrives clear right away.
-    const addresses = await fetchAllCloudflare(`/accounts/${env.CF_ACCOUNT_ID}/email/routing/addresses`);
+    //
+    // The rules list is fetched here too, not only in the error branch: Cloudflare
+    // ACCEPTS a duplicate matcher and answers 200, yet only the first rule processes the
+    // mail (see rule-diagnostics.js). Diagnosing after the failure never sees that case,
+    // so the user ended up with an alias that looks created and silently does nothing.
+    // Both lists in parallel: the happy path costs one round trip, not two.
+    const [addresses, rules] = await Promise.all([
+      fetchAllCloudflare(`/accounts/${env.CF_ACCOUNT_ID}/email/routing/addresses`),
+      fetchAllCloudflare(`/zones/${env.CF_ZONE_ID}/email/routing/rules`),
+    ]);
+
+    if (hasRuleForAlias(rules, aliasEmail)) {
+      throw duplicateAliasError(aliasEmail);
+    }
+
     const destination = inspectDestination(addresses, destEmail);
     if (!destination.exists) {
       throw unknownDestinationError(destEmail);
@@ -251,6 +284,11 @@ export function registerApiRoutes(app, {
     const rule = await fetchCloudflare(`/zones/${env.CF_ZONE_ID}/email/routing/rules/${ruleId}`);
     if (isCatchAllRule(rule)) {
       return rejectCatchAllMutation(res);
+    }
+    // Same shape of guarantee as the catch-all guard: this PUT replaces `actions`
+    // wholesale, so anything that is not a plain single forward stays read-only here.
+    if (!isSingleForwardRule(rule)) {
+      return rejectNotEditableRule(res);
     }
 
     const parsedRule = parseCloudflareRule(rule);

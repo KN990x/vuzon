@@ -93,7 +93,7 @@ export function registerGracefulShutdown(server, {
       console.error('Graceful shutdown timed out; exiting anyway.');
       exitProcess(1);
     }, graceMs);
-    // No mantiene vivo el event loop si el cierre termina antes.
+    // Does not keep the event loop alive if the shutdown finishes first.
     forceTimer.unref?.();
 
     server.close((err) => {

@@ -5,7 +5,7 @@ import { createLoginRateLimiter, createLogoutRateLimiter } from '../../platform/
 import { SESSION_COOKIE_NAME } from '../../platform/session/middleware.js';
 import { loginBodySchema } from './login-body.js';
 import { timingSafeStringEqual } from './safe-string-equal.js';
-import { revokeSessionsIssuedUntilNow } from './session-epoch.js';
+import { nextIssuedAt, revokeSessionsIssuedUntilNow } from './session-epoch.js';
 
 export function registerAuthRoutes(app, {
   env = process.env,
@@ -44,8 +44,8 @@ export function registerAuthRoutes(app, {
     req.session = {
       authenticated: true,
       username: authUser,
-      // Permite invalidar la cookie en el logout pese a ser autocontenida (session-epoch.js).
-      issuedAt: Date.now(),
+      // Lets logout invalidate the cookie even though it is self-contained (session-epoch.js).
+      issuedAt: nextIssuedAt(),
     };
 
     return res.json({ success: true });

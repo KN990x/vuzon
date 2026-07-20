@@ -8,12 +8,12 @@ services:
     environment:
       PORT: "8001"
     restart: unless-stopped
-    # PID 1 con reaping de zombies y reenvío de señales: el proceso recibe el SIGTERM
-    # de `docker stop` y cierra ordenadamente en vez de morir por SIGKILL.
+    # PID 1 with zombie reaping and signal forwarding: the process receives the SIGTERM
+    # from `docker stop` and shuts down cleanly instead of dying on SIGKILL.
     init: true
-    # El proceso no escribe en disco (sesión en cookie, sin base de datos).
-    # /tmp en tmpfs es el acompañante habitual de read_only: cubre cualquier escritura
-    # temporal que Node pueda necesitar sin dar acceso de escritura a la imagen.
+    # The process writes nothing to disk (session in a cookie, no database).
+    # /tmp on tmpfs is the usual companion to read_only: it covers any temporary write
+    # Node may need without granting write access to the image.
     read_only: true
     tmpfs:
       - /tmp

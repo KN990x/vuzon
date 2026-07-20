@@ -117,8 +117,12 @@ export const en = {
   'error.rate_limit.login': 'Too many attempts. Wait a moment and try again.',
   'error.rate_limit.api': 'Too many requests. Wait a moment and try again.',
   'error.validation.invalid': 'Invalid data',
+  'error.request.malformed': 'The request body is not valid JSON.',
+  'error.request.too_large': 'The request body is too large.',
   'error.rules.catch_all_readonly':
     'The catch-all rule cannot be modified or deleted from this API.',
+  'error.rules.not_editable':
+    'This rule does not forward to a single address and cannot be edited from the panel.',
   'error.rules.duplicate_alias': 'The alias {alias} already exists.',
   'error.dest.unknown':
     '{email} is not in the account\'s destination list. Add it as a destination first.',

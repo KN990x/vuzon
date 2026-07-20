@@ -44,7 +44,7 @@ function createSecurityHeadersMiddleware({ hsts = false } = {}) {
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     res.setHeader('Content-Security-Policy', CONTENT_SECURITY_POLICY);
     if (hsts) {
-      // Sin includeSubDomains/preload: en un homelab el dominio puede tener subdominios HTTP.
+      // No includeSubDomains/preload: on a homelab the domain may have HTTP subdomains.
       res.setHeader('Strict-Transport-Security', 'max-age=31536000');
     }
     next();
@@ -79,6 +79,8 @@ export function createApp({
   const runtime = getServerRuntime(env);
   const app = express();
 
+  // Nothing useful comes from telling the world which framework serves the panel.
+  app.disable('x-powered-by');
   app.set('trust proxy', runtime.trustProxy);
 
   // HSTS only with COOKIE_SECURE=1 (deployed behind TLS); on plain-HTTP homelabs it must not be sent.

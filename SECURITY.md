@@ -43,5 +43,5 @@ Most incidents come from configuration, not code:
 
 - Never commit your `.env`. Keep `CF_API_TOKEN`, `AUTH_PASS` and `SESSION_SECRET` out of version control.
 - Give the Cloudflare token only the three scopes listed in the README. It should not be an account-wide token.
-- Set a real `SESSION_SECRET` (`openssl rand -hex 32`). The value shipped in `.env.example` is rejected at startup on purpose.
+- Set a real `SESSION_SECRET` (`openssl rand -hex 32`). `.env.example` ships it empty on purpose, and the startup guard also rejects known template values and secrets with no entropy.
 - Put the panel behind TLS and set `COOKIE_SECURE=1` if it is reachable from outside your network.

@@ -178,6 +178,16 @@ export function createCloudflareClient({ env = process.env } = {}) {
         clearTimeout(timeoutId);
       }
     }
+
+    // Unreachable today (the last attempt always throws, since `canRetry` requires
+    // `attempt < MAX_GET_RETRIES`). Kept explicit so a future change to the retry
+    // conditions surfaces here instead of as a `TypeError` on `data.result`.
+    throw new CloudflareApiError('Cloudflare request exhausted its retries', {
+      status: 502,
+      code: 'retries_exhausted',
+      retryable: false,
+      details: { requestPath, method },
+    });
   }
 
   async function fetchCloudflare(requestPath, method = 'GET', body = null) {
@@ -220,7 +230,10 @@ export function createCloudflareClient({ env = process.env } = {}) {
         );
       }
 
-      if (data.result_info) {
+      // Only a real integer moves the cursor. A malformed `total_pages` used to stop the
+      // loop at page 1 and return a silently truncated list — the worst failure mode for
+      // a list of aliases, since the panel would show it as complete.
+      if (Number.isInteger(data.result_info?.total_pages)) {
         totalPages = data.result_info.total_pages;
       }
 

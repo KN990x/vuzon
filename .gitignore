@@ -1,4 +1,4 @@
-# Dependencias (workspace pnpm: node_modules real en la raíz + symlinks por paquete)
+# Dependencies (pnpm workspace: the real node_modules at the root + per-package symlinks)
 node_modules
 
 # Build
@@ -9,14 +9,14 @@ npm-debug.log*
 pnpm-debug.log*
 yarn-error.log*
 
-# Secretos y estado de sesión
+# Secrets and session state
 .env
 .env.*
 !.env.example
 .session_secret
 sessions
 
-# Editor y sistema operativo
+# Editor and operating system
 .DS_Store
 Thumbs.db
 *.swp
@@ -24,7 +24,7 @@ Thumbs.db
 .idea
 .vscode
 
-# Herramientas de agente: guías locales, fuera del repositorio público
+# Agent tooling: local guides, kept out of the public repository
 .claude/
 AGENTS.md
 CLAUDE.md

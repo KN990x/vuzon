@@ -20,7 +20,7 @@ sessions
 Thumbs.db
 *.swp
 
-# Documentación e imágenes del README: nada de esto entra en la imagen.
+# Documentation and README images: none of this belongs in the image.
 docs
 README.md
 CONTRIBUTING.md
