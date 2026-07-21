@@ -16,7 +16,7 @@ import {
 import {
   NOT_EDITABLE_RULE_CODE,
   NOT_EDITABLE_RULE_ERROR,
-} from '../../../features/email-routing/single-forward-guard.js';
+} from '../../../features/email-routing/rule-actions.js';
 import { resetSessionEpochForTests } from '../../../features/auth/session-epoch.js';
 
 function createMockCloudflareClient() {
@@ -917,7 +917,7 @@ test('HTTP integration: POST/PUT /api/rules write the canonical destination emai
     const created = await fetch(`${baseUrl}/api/rules`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ localPart: 'nuevo', destEmail: 'DEST@Example.com' }),
+      body: JSON.stringify({ localPart: 'nuevo', action: { type: 'forward', value: ['DEST@Example.com'] } }),
     });
     assert.equal(created.status, 200);
     assert.equal(posts.length, 1);
@@ -926,7 +926,7 @@ test('HTTP integration: POST/PUT /api/rules write the canonical destination emai
     const updated = await fetch(`${baseUrl}/api/rules/rule1`, {
       method: 'PUT',
       headers,
-      body: JSON.stringify({ destEmail: 'DEST@Example.com' }),
+      body: JSON.stringify({ action: { type: 'forward', value: ['DEST@Example.com'] } }),
     });
     assert.equal(updated.status, 200);
     assert.equal(puts.length, 1);
@@ -965,7 +965,7 @@ test('HTTP integration: creating an alias with an unverified destination gives a
     const res = await fetch(`${baseUrl}/api/rules`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Cookie: sessionCookie },
-      body: JSON.stringify({ localPart: 'nuevo', destEmail: 'dest@example.com' }),
+      body: JSON.stringify({ localPart: 'nuevo', action: { type: 'forward', value: ['dest@example.com'] } }),
     });
 
     assert.equal(res.status, 400);
@@ -998,7 +998,7 @@ test('HTTP integration: creating an alias with an unknown destination says so ex
     const res = await fetch(`${baseUrl}/api/rules`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Cookie: sessionCookie },
-      body: JSON.stringify({ localPart: 'nuevo', destEmail: 'desconocido@example.com' }),
+      body: JSON.stringify({ localPart: 'nuevo', action: { type: 'forward', value: ['desconocido@example.com'] } }),
     });
 
     assert.equal(res.status, 400);
@@ -1054,7 +1054,7 @@ test('HTTP integration: a duplicate alias is rejected even when Cloudflare would
     const res = await fetch(`${baseUrl}/api/rules`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Cookie: sessionCookie },
-      body: JSON.stringify({ localPart: 'duplicado', destEmail: 'dest@example.com' }),
+      body: JSON.stringify({ localPart: 'duplicado', action: { type: 'forward', value: ['dest@example.com'] } }),
     });
 
     assert.equal(res.status, 400);
@@ -1107,7 +1107,7 @@ test('HTTP integration: a duplicate alias is diagnosed after the Cloudflare fail
     const res = await fetch(`${baseUrl}/api/rules`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Cookie: sessionCookie },
-      body: JSON.stringify({ localPart: 'duplicado', destEmail: 'dest@example.com' }),
+      body: JSON.stringify({ localPart: 'duplicado', action: { type: 'forward', value: ['dest@example.com'] } }),
     });
 
     assert.equal(res.status, 400);
@@ -1150,7 +1150,7 @@ test('HTTP integration: a Cloudflare failure with no identifiable cause stays ge
     const res = await fetch(`${baseUrl}/api/rules`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Cookie: sessionCookie },
-      body: JSON.stringify({ localPart: 'otro', destEmail: 'dest@example.com' }),
+      body: JSON.stringify({ localPart: 'otro', action: { type: 'forward', value: ['dest@example.com'] } }),
     });
 
     assert.equal(res.status, 400);
@@ -1193,7 +1193,7 @@ test('HTTP integration: PUT /api/rules/:id changes the destination and respects 
     const ok = await fetch(`${baseUrl}/api/rules/rule1`, {
       method: 'PUT',
       headers,
-      body: JSON.stringify({ destEmail: 'dest@example.com' }),
+      body: JSON.stringify({ action: { type: 'forward', value: ['dest@example.com'] } }),
     });
     assert.equal(ok.status, 200);
     assert.equal(puts.length, 1);
@@ -1207,7 +1207,7 @@ test('HTTP integration: PUT /api/rules/:id changes the destination and respects 
     const bySlug = await fetch(`${baseUrl}/api/rules/catch_all`, {
       method: 'PUT',
       headers,
-      body: JSON.stringify({ destEmail: 'dest@example.com' }),
+      body: JSON.stringify({ action: { type: 'forward', value: ['dest@example.com'] } }),
     });
     assert.equal(bySlug.status, 400);
     const bySlugBody = await readJson(bySlug);
@@ -1217,7 +1217,7 @@ test('HTTP integration: PUT /api/rules/:id changes the destination and respects 
     const byId = await fetch(`${baseUrl}/api/rules/catch_all_rule`, {
       method: 'PUT',
       headers,
-      body: JSON.stringify({ destEmail: 'dest@example.com' }),
+      body: JSON.stringify({ action: { type: 'forward', value: ['dest@example.com'] } }),
     });
     assert.equal(byId.status, 400);
     const byIdBody = await readJson(byId);
@@ -1230,7 +1230,7 @@ test('HTTP integration: PUT /api/rules/:id changes the destination and respects 
     const unverified = await fetch(`${baseUrl}/api/rules/rule1`, {
       method: 'PUT',
       headers,
-      body: JSON.stringify({ destEmail: 'desconocido@example.com' }),
+      body: JSON.stringify({ action: { type: 'forward', value: ['desconocido@example.com'] } }),
     });
     assert.equal(unverified.status, 400);
     assert.equal((await readJson(unverified)).code, ERROR_CODES.DEST_UNKNOWN);
@@ -1242,7 +1242,251 @@ test('HTTP integration: PUT /api/rules/:id changes the destination and respects 
   }
 });
 
-test('HTTP integration: a rule that is not a single forward cannot be edited', async () => {
+/** Rules whose actions the panel must handle without destroying them. */
+function createSpecialRulesClient(puts) {
+  const base = createMockCloudflareClient();
+  const rules = {
+    worker_rule: {
+      id: 'worker_rule',
+      name: 'worker@example.com',
+      enabled: true,
+      matchers: [{ type: 'literal', field: 'to', value: 'worker@example.com' }],
+      actions: [{ type: 'worker', value: ['my-worker'] }],
+      source: 'wrangler',
+      owner_worker_tag: 'tag_abc123',
+    },
+    fanout_rule: {
+      id: 'fanout_rule',
+      name: 'fanout@example.com',
+      enabled: true,
+      matchers: [{ type: 'literal', field: 'to', value: 'fanout@example.com' }],
+      actions: [{ type: 'forward', value: ['a@example.com', 'b@example.com'] }],
+    },
+    alien_rule: {
+      id: 'alien_rule',
+      name: 'alien@example.com',
+      enabled: true,
+      matchers: [{ type: 'literal', field: 'to', value: 'alien@example.com' }],
+      // An action type vuzon has never heard of — exactly what a future Cloudflare
+      // feature looks like from here.
+      actions: [{ type: 'quarantine', value: ['somewhere'] }],
+    },
+  };
+
+  return {
+    ...base,
+    async fetchCloudflare(requestPath, method = 'GET', body = null) {
+      if (method === 'PUT') {
+        puts.push({ requestPath, body });
+      }
+      if (method === 'GET') {
+        const id = Object.keys(rules).find((key) => requestPath.endsWith(`/rules/${key}`));
+        if (id) {
+          return rules[id];
+        }
+      }
+      return base.fetchCloudflare(requestPath, method, body);
+    },
+  };
+}
+
+test('HTTP integration: a rule with an unknown action type cannot be edited', async () => {
+  const puts = [];
+  const { app } = createApp({
+    env: { ...DIAGNOSTICS_ENV },
+    cloudflareClient: createSpecialRulesClient(puts),
+    sessionSecret: 'test-session-secret-32chars!!',
+  });
+  const { server, baseUrl } = await listen(app);
+
+  try {
+    resetSessionEpochForTests();
+    const sessionCookie = await loginAndGetCookie(baseUrl);
+    const headers = { 'Content-Type': 'application/json', Cookie: sessionCookie };
+
+    // The PUT replaces `actions` wholesale, so a rule the panel cannot even describe is
+    // never rewritten — not even to rename it.
+    for (const body of [
+      { action: { type: 'forward', value: ['dest@example.com'] } },
+      { name: 'Renamed' },
+      { enabled: false },
+    ]) {
+      const res = await fetch(`${baseUrl}/api/rules/alien_rule`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(body),
+      });
+      assert.equal(res.status, 400, JSON.stringify(body));
+      const data = await readJson(res);
+      assert.equal(data.code, NOT_EDITABLE_RULE_CODE);
+      assert.equal(data.error, NOT_EDITABLE_RULE_ERROR);
+    }
+
+    assert.deepEqual(puts, [], 'no undescribable rule may be overwritten in Cloudflare');
+  } finally {
+    resetSessionEpochForTests();
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+  }
+});
+
+test('HTTP integration: renaming a Worker rule preserves its action untouched', async () => {
+  const puts = [];
+  const { app } = createApp({
+    env: { ...DIAGNOSTICS_ENV },
+    cloudflareClient: createSpecialRulesClient(puts),
+    sessionSecret: 'test-session-secret-32chars!!',
+  });
+  const { server, baseUrl } = await listen(app);
+
+  try {
+    resetSessionEpochForTests();
+    const sessionCookie = await loginAndGetCookie(baseUrl);
+    const headers = { 'Content-Type': 'application/json', Cookie: sessionCookie };
+
+    // The panel never WRITES a worker action; omitting `action` hands back the one
+    // Cloudflare gave us, so the binding (and the wrangler ownership) survives.
+    const renamed = await fetch(`${baseUrl}/api/rules/worker_rule`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ name: 'Support inbox', enabled: false }),
+    });
+    assert.equal(renamed.status, 200);
+    assert.equal(puts.length, 1);
+    assert.deepEqual(puts[0].body.actions, [{ type: 'worker', value: ['my-worker'] }]);
+    assert.equal(puts[0].body.name, 'Support inbox');
+    assert.equal(puts[0].body.enabled, false);
+    assert.equal(puts[0].body.source, 'wrangler');
+    assert.equal(puts[0].body.owner_worker_tag, 'tag_abc123');
+
+    // Switching it to a plain forward IS allowed — the panel asks first, and the whole
+    // point of the feature is that the user can take a rule back.
+    const switched = await fetch(`${baseUrl}/api/rules/worker_rule`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ action: { type: 'drop' } }),
+    });
+    assert.equal(switched.status, 200);
+    assert.deepEqual(puts[1].body.actions, [{ type: 'drop' }]);
+
+    // Same for a fan-out rule: preserved when untouched, replaceable on request.
+    const fanout = await fetch(`${baseUrl}/api/rules/fanout_rule`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ enabled: false }),
+    });
+    assert.equal(fanout.status, 200);
+    assert.deepEqual(puts[2].body.actions, [
+      { type: 'forward', value: ['a@example.com', 'b@example.com'] },
+    ]);
+  } finally {
+    resetSessionEpochForTests();
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+  }
+});
+
+test('HTTP integration: POST /api/rules can create a rule that drops the mail', async () => {
+  const posts = [];
+  const listed = [];
+  const base = createMockCloudflareClient();
+  const cloudflareClient = {
+    ...base,
+    async fetchCloudflare(requestPath, method = 'GET', body = null) {
+      if (requestPath.includes('/email/routing/rules') && method === 'POST') {
+        posts.push(body);
+      }
+      return base.fetchCloudflare(requestPath, method, body);
+    },
+    async fetchAllCloudflare(requestPath) {
+      listed.push(requestPath);
+      return base.fetchAllCloudflare(requestPath);
+    },
+  };
+
+  const { app } = createApp({
+    env: { ...DIAGNOSTICS_ENV },
+    cloudflareClient,
+    sessionSecret: 'test-session-secret-32chars!!',
+  });
+  const { server, baseUrl } = await listen(app);
+
+  try {
+    resetSessionEpochForTests();
+    const sessionCookie = await loginAndGetCookie(baseUrl);
+
+    const res = await fetch(`${baseUrl}/api/rules`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: sessionCookie },
+      body: JSON.stringify({ localPart: 'papelera', action: { type: 'drop' } }),
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(posts.length, 1);
+    assert.deepEqual(posts[0].actions, [{ type: 'drop' }]);
+    assert.deepEqual(posts[0].matchers, [
+      { type: 'literal', field: 'to', value: 'papelera@example.com' },
+    ]);
+    // Dropping mail has no destination to verify, so the address list is never fetched.
+    // The rules list still is: a duplicate matcher would silently shadow this rule.
+    assert.equal(listed.some((path) => path.includes('/email/routing/addresses')), false);
+    assert.equal(listed.some((path) => path.includes('/email/routing/rules')), true);
+  } finally {
+    resetSessionEpochForTests();
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+  }
+});
+
+test('HTTP integration: enable/disable actually flip the rule state', async () => {
+  const puts = [];
+  const base = createMockCloudflareClient();
+  const cloudflareClient = {
+    ...base,
+    async fetchCloudflare(requestPath, method = 'GET', body = null) {
+      if (method === 'PUT') {
+        puts.push(body);
+      }
+      return base.fetchCloudflare(requestPath, method, body);
+    },
+  };
+
+  const { app } = createApp({
+    env: { ...DIAGNOSTICS_ENV },
+    cloudflareClient,
+    sessionSecret: 'test-session-secret-32chars!!',
+  });
+  const { server, baseUrl } = await listen(app);
+
+  try {
+    resetSessionEpochForTests();
+    const sessionCookie = await loginAndGetCookie(baseUrl);
+    const headers = { Cookie: sessionCookie };
+
+    // The mock returns `enabled: true`, like Cloudflare does on every GET. Pausing must
+    // send `false` regardless — see the regression note in buildRuleUpdatePayload.
+    const paused = await fetch(`${baseUrl}/api/rules/rule1/disable`, { method: 'POST', headers });
+    assert.equal(paused.status, 200);
+    assert.equal(puts[0].enabled, false);
+
+    const resumed = await fetch(`${baseUrl}/api/rules/rule1/enable`, { method: 'POST', headers });
+    assert.equal(resumed.status, 200);
+    assert.equal(puts[1].enabled, true);
+
+    // Neither touches the action.
+    assert.deepEqual(puts[0].actions, [{ type: 'forward', value: ['dest@example.com'] }]);
+  } finally {
+    resetSessionEpochForTests();
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+  }
+});
+
+test('HTTP integration: PUT /api/rules/catch-all edits the fallback rule safely', async () => {
   const puts = [];
   const base = createMockCloudflareClient();
   const cloudflareClient = {
@@ -1250,24 +1494,6 @@ test('HTTP integration: a rule that is not a single forward cannot be edited', a
     async fetchCloudflare(requestPath, method = 'GET', body = null) {
       if (method === 'PUT') {
         puts.push({ requestPath, body });
-      }
-      if (requestPath.endsWith('/email/routing/rules/worker_rule') && method === 'GET') {
-        return {
-          id: 'worker_rule',
-          name: 'worker@example.com',
-          enabled: true,
-          matchers: [{ type: 'literal', field: 'to', value: 'worker@example.com' }],
-          actions: [{ type: 'worker', value: ['my-worker'] }],
-        };
-      }
-      if (requestPath.endsWith('/email/routing/rules/fanout_rule') && method === 'GET') {
-        return {
-          id: 'fanout_rule',
-          name: 'fanout@example.com',
-          enabled: true,
-          matchers: [{ type: 'literal', field: 'to', value: 'fanout@example.com' }],
-          actions: [{ type: 'forward', value: ['a@example.com', 'b@example.com'] }],
-        };
       }
       return base.fetchCloudflare(requestPath, method, body);
     },
@@ -1285,21 +1511,73 @@ test('HTTP integration: a rule that is not a single forward cannot be edited', a
     const sessionCookie = await loginAndGetCookie(baseUrl);
     const headers = { 'Content-Type': 'application/json', Cookie: sessionCookie };
 
-    // A Worker rule and a fan-out rule both stay read-only: replacing their actions with
-    // a plain forward would destroy configuration made outside vuzon.
-    for (const ruleId of ['worker_rule', 'fanout_rule']) {
-      const res = await fetch(`${baseUrl}/api/rules/${ruleId}`, {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify({ destEmail: 'dest@example.com' }),
-      });
-      assert.equal(res.status, 400, ruleId);
-      const data = await readJson(res);
-      assert.equal(data.code, NOT_EDITABLE_RULE_CODE, ruleId);
-      assert.equal(data.error, NOT_EDITABLE_RULE_ERROR, ruleId);
-    }
+    // Pausing it touches nothing else: the configured action is handed straight back,
+    // which is what keeps a Worker-backed catch-all intact.
+    const paused = await fetch(`${baseUrl}/api/rules/catch-all`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ enabled: false }),
+    });
+    assert.equal(paused.status, 200);
+    assert.equal(puts.length, 1);
+    assert.match(puts[0].requestPath, /\/email\/routing\/rules\/catch_all$/);
+    assert.equal(puts[0].body.enabled, false);
+    assert.deepEqual(puts[0].body.actions, [
+      { type: 'forward', value: ['catchall@example.com'] },
+    ]);
 
-    assert.deepEqual(puts, [], 'no non-editable rule may be overwritten in Cloudflare');
+    // Re-pointing it writes the canonical address and NEVER a different matcher: a
+    // catch-all that stopped catching everything would blackhole mail in silence.
+    const repointed = await fetch(`${baseUrl}/api/rules/catch-all`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({
+        enabled: true,
+        action: { type: 'forward', value: ['DEST@Example.com'] },
+        matchers: [{ type: 'literal', field: 'to', value: 'sneaky@example.com' }],
+      }),
+    });
+    assert.equal(repointed.status, 200);
+    assert.deepEqual(puts[1].body.actions, [{ type: 'forward', value: ['dest@example.com'] }]);
+    assert.deepEqual(puts[1].body.matchers, [{ type: 'all' }]);
+    assert.equal(puts[1].body.enabled, true);
+
+    const dropped = await fetch(`${baseUrl}/api/rules/catch-all`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ action: { type: 'drop' } }),
+    });
+    assert.equal(dropped.status, 200);
+    assert.deepEqual(puts[2].body.actions, [{ type: 'drop' }]);
+    assert.deepEqual(puts[2].body.matchers, [{ type: 'all' }]);
+
+    // Same destination checks as an alias.
+    const unknown = await fetch(`${baseUrl}/api/rules/catch-all`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ action: { type: 'forward', value: ['desconocido@example.com'] } }),
+    });
+    assert.equal(unknown.status, 400);
+    assert.equal((await readJson(unknown)).code, ERROR_CODES.DEST_UNKNOWN);
+
+    // An empty patch is a client bug, not a no-op write.
+    const empty = await fetch(`${baseUrl}/api/rules/catch-all`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({}),
+    });
+    assert.equal(empty.status, 400);
+    assert.equal((await readJson(empty)).code, ERROR_CODES.VALIDATION_INVALID);
+
+    // There is no way to delete it, and the generic rule routes still refuse it.
+    const deleted = await fetch(`${baseUrl}/api/rules/catch-all`, {
+      method: 'DELETE',
+      headers,
+    });
+    assert.equal(deleted.status, 400);
+    assert.equal((await readJson(deleted)).code, CATCH_ALL_MUTATION_CODE);
+
+    assert.equal(puts.length, 3, 'only the three valid edits may reach Cloudflare');
   } finally {
     resetSessionEpochForTests();
     await new Promise((resolve) => {
@@ -1335,7 +1613,7 @@ test('HTTP integration: a malformed or oversized JSON body answers 4xx, not 500'
     const tooLarge = await fetch(`${baseUrl}/api/rules`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ localPart: 'x'.repeat(300 * 1024), destEmail: 'a@example.com' }),
+      body: JSON.stringify({ localPart: 'x'.repeat(300 * 1024), action: { type: 'forward', value: ['a@example.com'] } }),
     });
     assert.equal(tooLarge.status, 413);
     assert.equal((await readJson(tooLarge)).code, ERROR_CODES.REQUEST_TOO_LARGE);
@@ -1603,7 +1881,7 @@ test('HTTP integration: same-origin guard blocks a mismatched Origin on mutation
         Cookie: sessionCookie,
         Origin: 'http://evil.test',
       },
-      body: JSON.stringify({ localPart: 'x', destEmail: 'dest@example.com' }),
+      body: JSON.stringify({ localPart: 'x', action: { type: 'forward', value: ['dest@example.com'] } }),
     });
     assert.equal(blocked.status, 403);
     const blockedBody = await readJson(blocked);

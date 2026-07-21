@@ -1,7 +1,7 @@
 import { ApiError } from './api';
 import { translateApiError } from '../i18n/api-errors';
 import type { Translator } from '../i18n/locale';
-import type { Rule, RuleAction } from './types';
+import type { Rule } from './types';
 
 /** Email Routing catch-all rule (matcher type all, or same id as the dedicated slot). */
 export function ruleMatchesCatchAllSlot(rule: Rule, catchAll: Rule | null): boolean {
@@ -14,72 +14,108 @@ export function ruleMatchesCatchAllSlot(rule: Rule, catchAll: Rule | null): bool
   return false;
 }
 
-function formatActionDestination({ t }: Translator, action: RuleAction): string {
-  if (!action || typeof action.type !== 'string') {
-    return '';
+/**
+ * `actions[].value` has been a string and an array of strings depending on the endpoint
+ * and the API version, so both shapes are normalized here once.
+ * Mirror of `actionValues` in src/server/features/email-routing/rule-actions.js.
+ */
+export function actionValues(raw: unknown): string[] {
+  const list = Array.isArray(raw) ? raw : [raw];
+  return list
+    .filter((entry): entry is string => typeof entry === 'string')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry !== '');
+}
+
+export type RuleActionKind = 'forward' | 'drop' | 'worker' | 'fanout' | 'unknown';
+
+export interface RuleActionSummary {
+  kind: RuleActionKind;
+  destinations: string[];
+  workerName: string | null;
+}
+
+const UNKNOWN_SUMMARY: RuleActionSummary = { kind: 'unknown', destinations: [], workerName: null };
+
+/**
+ * What does this rule actually do?
+ *
+ * Exact mirror of `describeRuleActions` in
+ * src/server/features/email-routing/rule-actions.js — the panel decides what to render
+ * from it, the server decides what it is allowed to rewrite. They must agree, or the UI
+ * offers an edit the API then refuses.
+ */
+export function describeRuleActions(rule: Rule | null | undefined): RuleActionSummary {
+  const actions = rule?.actions;
+  if (!Array.isArray(actions) || actions.length !== 1) {
+    return UNKNOWN_SUMMARY;
   }
 
-  const { type } = action;
-  const raw = action.value;
-  const parts = Array.isArray(raw)
-    ? raw.map((v) => (v == null ? '' : String(v))).filter(Boolean)
-    : raw != null && raw !== ''
-      ? [String(raw)]
-      : [];
+  const [action] = actions;
+  if (!action || typeof action !== 'object') {
+    return UNKNOWN_SUMMARY;
+  }
 
-  if (type === 'forward') {
-    return parts.length > 0 ? parts.join(', ') : '';
+  const values = actionValues(action.value);
+
+  if (action.type === 'drop') {
+    return { kind: 'drop', destinations: [], workerName: null };
   }
-  if (type === 'worker') {
-    return parts.length > 0
-      ? t('rule.action.worker', { value: parts.join(', ') })
-      : t('rule.action.workerDefault');
+  if (action.type === 'worker') {
+    return { kind: 'worker', destinations: [], workerName: values[0] ?? null };
   }
-  if (type === 'drop') {
-    return t('rule.action.drop');
+  if (action.type === 'forward') {
+    if (values.length === 0) {
+      return UNKNOWN_SUMMARY;
+    }
+    return {
+      kind: values.length === 1 ? 'forward' : 'fanout',
+      destinations: values,
+      workerName: null,
+    };
   }
-  return parts.length > 0 ? parts.join(', ') : '';
+
+  return UNKNOWN_SUMMARY;
+}
+
+/** Everything the panel can describe, it can also put back unchanged. */
+export function isPanelEditableRule(rule: Rule | null | undefined): boolean {
+  return describeRuleActions(rule).kind !== 'unknown';
 }
 
 /**
  * Human-readable destination of a rule. It takes the translator because a Worker or a
  * `drop` rule is described with words, not with an address.
  */
-export function getRuleDest(translator: Translator, rule: Rule | null | undefined): string {
-  const actions = rule?.actions;
-  if (!Array.isArray(actions) || actions.length === 0) {
-    return '';
+export function getRuleDest(
+  { t }: Translator,
+  rule: Rule | null | undefined,
+  summary: RuleActionSummary = describeRuleActions(rule),
+): string {
+  switch (summary.kind) {
+    case 'forward':
+    case 'fanout':
+      return summary.destinations.join(', ');
+    case 'drop':
+      return t('rule.action.drop');
+    case 'worker':
+      return summary.workerName
+        ? t('rule.action.worker', { value: summary.workerName })
+        : t('rule.action.workerDefault');
+    default:
+      // An action the panel does not model still deserves to show *something*, so the
+      // raw values are printed rather than an empty row.
+      return (rule?.actions ?? []).flatMap((action) => actionValues(action?.value)).join(' · ');
   }
-  const chunks = actions.map((action) => formatActionDestination(translator, action))
-    .filter(Boolean);
-  return chunks.length > 0 ? chunks.join(' · ') : '';
 }
 
 /**
- * Destination of a rule that forwards to ONE single address, or null.
- *
- * Only those rules can be edited from the panel with a dropdown: if the rule runs a
- * Worker, drops the mail or forwards to several addresses, replacing it with a plain
- * `forward` would destroy configuration made outside vuzon.
+ * Destination of a rule that forwards to ONE single address, or null — i.e. the rules
+ * whose destination can be swapped straight from the list, with no editor.
  */
 export function getSingleForwardDestination(rule: Rule | null | undefined): string | null {
-  const actions = rule?.actions;
-  if (!Array.isArray(actions) || actions.length !== 1) {
-    return null;
-  }
-
-  const [action] = actions;
-  if (!action || action.type !== 'forward') {
-    return null;
-  }
-
-  const values = Array.isArray(action.value) ? action.value : [action.value];
-  if (values.length !== 1) {
-    return null;
-  }
-
-  const [value] = values;
-  return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
+  const summary = describeRuleActions(rule);
+  return summary.kind === 'forward' ? summary.destinations[0] : null;
 }
 
 /**
@@ -104,15 +140,13 @@ export function findAliasesUsingDestination(
     if (!Array.isArray(actions)) {
       continue;
     }
-    const usesDest = actions.some((action) => {
-      if (!action || action.type !== 'forward') {
-        return false;
-      }
-      const values = Array.isArray(action.value) ? action.value : [action.value];
-      return values.some(
-        (value) => typeof value === 'string' && value.trim().toLowerCase() === target,
-      );
-    });
+    // Walks `actions` directly rather than through describeRuleActions: the warning must
+    // also fire for rules the panel cannot edit. Erring towards "still in use" is the
+    // safe direction — mirrors findRulesUsingDestination on the server.
+    const usesDest = actions.some((action) => (
+      action?.type === 'forward'
+      && actionValues(action.value).some((value) => value.toLowerCase() === target)
+    ));
     if (!usesDest) {
       continue;
     }

@@ -22,15 +22,15 @@ test('validation.invalid is expanded issue by issue', () => {
     params: {
       issues: [
         { field: 'localPart', code: 'alias.empty' },
-        { field: 'destEmail', code: 'dest_email.invalid' },
+        { field: 'action', code: 'dest_email.invalid' },
       ],
     },
   };
   expect(translateApiError(en, err)).toBe(
-    'Alias: the alias cannot be empty. Destination email: invalid destination email',
+    'Alias: the alias cannot be empty. Action: invalid destination email',
   );
   expect(translateApiError(es, err)).toBe(
-    'Alias: el alias no puede estar vacío. Email de destino: email de destino inválido',
+    'Alias: el alias no puede estar vacío. Acción: email de destino inválido',
   );
 });
 

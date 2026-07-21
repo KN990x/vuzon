@@ -87,6 +87,38 @@ export function inspectDestination(addresses, email) {
 }
 
 /**
+ * Panel action → the exact `actions[0]` object to send to Cloudflare.
+ *
+ * Every forwarded address must exist in the account AND be verified: Cloudflare refuses
+ * a forward to an unverified address with a generic error, and the panel would rather say
+ * which address and why. The email written is the one Cloudflare stores, not the string
+ * the client typed.
+ *
+ * @param {{ type: 'forward', value: string[] } | { type: 'drop' }} action
+ * @param {unknown[]} addresses Result of /email/routing/addresses.
+ * @returns {{ type: 'forward', value: string[] } | { type: 'drop' }}
+ */
+export function resolvePanelAction(action, addresses) {
+  if (action.type === 'drop') {
+    return { type: 'drop' };
+  }
+
+  return {
+    type: 'forward',
+    value: action.value.map((email) => {
+      const destination = inspectDestination(addresses, email);
+      if (!destination.exists || !destination.email) {
+        throw unknownDestinationError(email);
+      }
+      if (!destination.verified) {
+        throw unverifiedDestinationError(email);
+      }
+      return destination.email;
+    }),
+  };
+}
+
+/**
  * Is there already a rule matching exactly this address?
  * Cloudflare accepts duplicate patterns but only the first rule processes the mail, so
  * creating a duplicate leaves an alias that looks like it works and does not.

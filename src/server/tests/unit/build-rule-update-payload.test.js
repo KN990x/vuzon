@@ -21,6 +21,22 @@ test('buildRuleUpdatePayload: basic API alias without source', () => {
   });
 });
 
+test('buildRuleUpdatePayload: the requested enabled state wins over the rule current one', () => {
+  // Regression: the payload used to be seeded with `enabled` and then overwritten by the
+  // copy of the rule, which carries its own `enabled` on every GET. The result was that
+  // POST /api/rules/:id/disable sent `enabled: true` and the alias never paused.
+  const fromCloudflare = {
+    id: 'rule_abc',
+    name: 'a@example.com',
+    enabled: true,
+    matchers: [{ type: 'literal', field: 'to', value: 'a@example.com' }],
+    actions: [{ type: 'forward', value: ['d@x.com'] }],
+  };
+
+  assert.equal(buildRuleUpdatePayload(fromCloudflare, false).enabled, false);
+  assert.equal(buildRuleUpdatePayload({ ...fromCloudflare, enabled: false }, true).enabled, true);
+});
+
 test('buildRuleUpdatePayload: preserves source and owner_worker_tag from wrangler rules', () => {
   const payload = buildRuleUpdatePayload(
     {
@@ -72,4 +88,29 @@ test('buildRuleUpdatePayload: overrides.actions replaces the rule actions', () =
   );
 
   assert.deepEqual(payload.actions, [{ type: 'forward', value: ['new@x.com'] }]);
+});
+
+test('buildRuleUpdatePayload: overrides.name renames without touching the action', () => {
+  const payload = buildRuleUpdatePayload(
+    {
+      name: 'w@example.com',
+      matchers: [{ type: 'literal', field: 'to', value: 'w@example.com' }],
+      actions: [{ type: 'worker', value: ['email-worker'] }],
+    },
+    true,
+    { name: 'Support inbox' },
+  );
+
+  assert.equal(payload.name, 'Support inbox');
+  assert.deepEqual(payload.actions, [{ type: 'worker', value: ['email-worker'] }]);
+});
+
+test('buildRuleUpdatePayload: an omitted override preserves the Worker action verbatim', () => {
+  // This is what makes pausing or renaming a Worker rule safe: the panel never writes a
+  // `worker` action, it hands back the one Cloudflare gave it.
+  const actions = [{ type: 'worker', value: ['email-worker'] }];
+  const payload = buildRuleUpdatePayload({ name: 'w@example.com', actions }, false);
+
+  assert.deepEqual(payload.actions, actions);
+  assert.equal(payload.enabled, false);
 });

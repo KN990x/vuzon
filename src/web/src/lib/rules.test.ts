@@ -1,11 +1,13 @@
 import { expect, test, vi } from 'vitest';
 import { ApiError } from './api';
 import {
+  describeRuleActions,
   findAliasesUsingDestination,
   generateRandomLocalPart,
   getRuleDest,
   getSingleForwardDestination,
   interpretAddDestError,
+  isPanelEditableRule,
   ruleMatchesCatchAllSlot,
 } from './rules';
 import { createTranslator } from '../i18n/locale';
@@ -27,8 +29,8 @@ test('getSingleForwardDestination: a forward to a single address is editable', (
   ).toBe('a@x.com');
 });
 
-test('getSingleForwardDestination: anything that is not a plain forward is not editable', () => {
-  // Replacing any of these with a forward would destroy external configuration.
+test('getSingleForwardDestination: anything that is not a plain forward has no quick swap', () => {
+  // These are still editable — from the inline editor, which spells out what is replaced.
   expect(
     getSingleForwardDestination({ id: 'r', actions: [{ type: 'worker', value: ['w'] }] }),
   ).toBeNull();
@@ -106,13 +108,52 @@ test('getRuleDest: drop is described in the active language', () => {
   expect(getRuleDest(es, { id: 'r', actions: [{ type: 'drop' }] })).toBe('Descartar');
 });
 
-test('getRuleDest: several actions', () => {
+test('getRuleDest: an action the panel does not model still shows its raw values', () => {
+  // Several actions at once, or a type vuzon has never seen: not editable, but the row
+  // must still say something rather than render blank.
   expect(
     getRuleDest(en, {
       id: 'r',
       actions: [{ type: 'forward', value: ['u@d.com'] }, { type: 'drop' }],
     }),
-  ).toBe('u@d.com · Discard');
+  ).toBe('u@d.com');
+  expect(
+    getRuleDest(en, { id: 'r', actions: [{ type: 'quarantine', value: ['somewhere'] }] }),
+  ).toBe('somewhere');
+});
+
+test('describeRuleActions: mirrors the server classification', () => {
+  const cases: Array<[Rule['actions'], string]> = [
+    [[{ type: 'forward', value: ['a@x.com'] }], 'forward'],
+    [[{ type: 'forward', value: 'a@x.com' }], 'forward'],
+    [[{ type: 'forward', value: ['a@x.com', 'b@x.com'] }], 'fanout'],
+    [[{ type: 'drop' }], 'drop'],
+    [[{ type: 'worker', value: ['w'] }], 'worker'],
+    [[{ type: 'worker', value: [] }], 'worker'],
+    [[{ type: 'forward', value: ['  '] }], 'unknown'],
+    [[{ type: 'quarantine', value: ['x'] }], 'unknown'],
+    [[{ type: 'drop' }, { type: 'drop' }], 'unknown'],
+    [[], 'unknown'],
+    [undefined, 'unknown'],
+  ];
+
+  for (const [actions, kind] of cases) {
+    expect(describeRuleActions({ id: 'r', actions }).kind, JSON.stringify(actions)).toBe(kind);
+  }
+
+  expect(describeRuleActions(null).kind).toBe('unknown');
+  expect(describeRuleActions({ id: 'r', actions: [{ type: 'worker', value: ['w'] }] })).toEqual({
+    kind: 'worker',
+    destinations: [],
+    workerName: 'w',
+  });
+});
+
+test('isPanelEditableRule: only an undescribable action locks the editor', () => {
+  expect(isPanelEditableRule({ id: 'r', actions: [{ type: 'worker', value: ['w'] }] })).toBe(true);
+  expect(isPanelEditableRule({ id: 'r', actions: [{ type: 'drop' }] })).toBe(true);
+  expect(isPanelEditableRule({ id: 'r', actions: [{ type: 'quarantine' }] })).toBe(false);
+  expect(isPanelEditableRule(null)).toBe(false);
 });
 
 test('getRuleDest: no actions', () => {

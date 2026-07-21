@@ -14,20 +14,21 @@ test('formatZodError: maps the field to its English label and the slug to prose'
   assert.equal(message, 'Email: invalid email format');
 });
 
-test('formatZodError: uses the alias and destination-email labels', () => {
+test('formatZodError: uses the alias and action labels', () => {
+  const validAction = { type: 'forward', value: ['dest@example.com'] };
   assert.match(
-    formatZodError(errorFor(ruleSchema, { localPart: '', destEmail: 'dest@example.com' })),
+    formatZodError(errorFor(ruleSchema, { localPart: '', action: validAction })),
     /^Alias: /,
   );
   assert.match(
-    formatZodError(errorFor(ruleSchema, { localPart: 'alias', destEmail: 'x' })),
-    /^Destination email: /,
+    formatZodError(errorFor(ruleSchema, { localPart: 'alias', action: { type: 'nope' } })),
+    /^Action: /,
   );
 });
 
 test('formatZodError: joins several issues with a period', () => {
-  const message = formatZodError(errorFor(ruleSchema, { localPart: '', destEmail: 'x' }));
-  assert.match(message, /^Alias: .+\. Destination email: /);
+  const message = formatZodError(errorFor(ruleSchema, { localPart: '', action: { type: 'nope' } }));
+  assert.match(message, /^Alias: .+\. Action: /);
 });
 
 test('formatZodError: a field with no known label uses its own name', () => {
@@ -50,10 +51,14 @@ test('formatZodError: input without issues falls back to the generic message', (
 // above is only the fallback for clients with no catalogue.
 test('collectZodIssues: exposes the slug of every field', () => {
   assert.deepEqual(
-    collectZodIssues(errorFor(ruleSchema, { localPart: 'UPPER', destEmail: 'x' })),
+    collectZodIssues(errorFor(ruleSchema, {
+      localPart: 'UPPER',
+      action: { type: 'forward', value: ['x'] },
+    })),
     [
       { field: 'localPart', code: 'alias.charset' },
-      { field: 'destEmail', code: 'dest_email.invalid' },
+      // The path is ['action', 'value', 0]; only its head names the field the user sees.
+      { field: 'action', code: 'dest_email.invalid' },
     ],
   );
 });

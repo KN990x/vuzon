@@ -74,6 +74,8 @@ Give every service its own address (`netflix@yourdomain.com`, `shop@yourdomain.c
 
 - **Create, pause, and delete** aliases on your domain — a pause keeps the rule but stops delivery.
 - **Change an alias's destination** without deleting and recreating it.
+- **Choose what happens to the mail**: forward it to a verified address, or **discard it** — handy to make an address look valid while receiving nothing.
+- **Rename** a rule and **see every rule you own**, including the ones vuzon did not create: an Email Worker route shows its script, a fan-out shows all its addresses. Editing one of those replaces its action, so the panel asks first.
 - **Random alias generator** (8 characters, `crypto.getRandomValues` — never `Math.random`, since a guessable alias defeats the point).
 - **One-click copy** of the address you are about to create.
 - **Search** to filter aliases as the list grows.
@@ -85,7 +87,8 @@ Give every service its own address (`netflix@yourdomain.com`, `shop@yourdomain.c
 
 **Catch-all**
 
-- Shown **read-only**. The API refuses to modify or delete it, so you cannot break your fallback rule by accident from the panel.
+- **Pause it or change what it does** — forward the leftovers to a verified address, or discard them.
+- What you **cannot** do is break it: the API always writes the "match everything" matcher and offers no delete, so the fallback rule cannot quietly stop catching mail.
 
 **Interface**
 
@@ -205,9 +208,9 @@ Other developer-oriented variables (`VUZON_PUBLIC_DIR`): **[CONTRIBUTING.md](CON
 1. **Enable Email Routing** on the zone (Cloudflare dashboard).
 2. Add a **destination address** (a verification email is sent). It stays **Pending** until you click the link in that email.
 3. Sign in to vuzon and create an **alias (rule)** with a lowercase local part and a **verified** destination — or hit the shuffle icon for a random one.
-4. Later: **switch its destination** from the dropdown on the alias row, **pause** it with the toggle, or delete it.
+4. Later: **switch its destination** from the dropdown on the alias row, **pause** it with the toggle, open the **pencil** to change the action or rename it, or delete it.
 
-Aliases that run an Email Worker, drop mail, or forward to several addresses show as read-only text — vuzon will not overwrite routing you configured outside the panel.
+vuzon only writes actions it fully understands — forward to one verified address, or discard. A rule using anything else is shown but not editable here, so routing you configured outside the panel is never overwritten by a guess.
 
 ---
 
@@ -254,6 +257,8 @@ Da a cada servicio su propia dirección (`netflix@tudominio.com`, `tienda@tudomi
 
 - **Crear, pausar y borrar** alias de tu dominio — pausar conserva la regla pero detiene la entrega.
 - **Cambiar el destino de un alias** sin tener que borrarlo y volver a crearlo.
+- **Elegir qué pasa con el correo**: reenviarlo a una dirección verificada, o **descartarlo** — útil para que una dirección parezca válida sin recibir nada.
+- **Renombrar** una regla y **ver todas las que tienes**, incluidas las que no creó vuzon: una ruta a un Email Worker muestra su script, y un reenvío múltiple todas sus direcciones. Editar una de esas sustituye su acción, así que el panel pregunta antes.
 - **Generador de alias aleatorios** (8 caracteres, `crypto.getRandomValues` — nunca `Math.random`: un alias predecible anula el propósito del panel).
 - **Copiar con un clic** la dirección que estás a punto de crear.
 - **Búsqueda** para filtrar los alias según crece la lista.
@@ -265,7 +270,8 @@ Da a cada servicio su propia dirección (`netflix@tudominio.com`, `tienda@tudomi
 
 **Catch-all**
 
-- Se muestra en **solo lectura**. La API rechaza modificarlo o borrarlo, así que no puedes romper tu regla de reserva por accidente desde el panel.
+- **Páusalo o cambia lo que hace**: reenviar el correo sobrante a una dirección verificada, o descartarlo.
+- Lo que **no** puedes es romperlo: la API escribe siempre el matcher «todo» y no ofrece borrado, así que la regla de reserva no puede dejar de capturar correo sin que te enteres.
 
 **Interfaz**
 
@@ -383,9 +389,9 @@ Otras variables orientadas a desarrollo (`VUZON_PUBLIC_DIR`): **[CONTRIBUTING.md
 1. **Habilita Email Routing** en la zona (panel de Cloudflare).
 2. Añade una **dirección de destino** (se envía un correo de verificación). Queda en **Pendiente** hasta que pulses el enlace de ese correo.
 3. Inicia sesión en vuzon y crea un **alias (regla)** con una parte local en minúsculas y un destino **verificado** — o pulsa el icono de dados para uno aleatorio.
-4. Más adelante: **cambia su destino** desde el desplegable de la fila del alias, **pausa** con el interruptor, o bórralo.
+4. Más adelante: **cambia su destino** desde el desplegable de la fila del alias, **pausa** con el interruptor, abre el **lápiz** para cambiar la acción o renombrarlo, o bórralo.
 
-Los alias que ejecutan un Email Worker, descartan el correo o reenvían a varias direcciones se muestran como texto de solo lectura: vuzon no sobrescribe enrutamiento que hayas configurado fuera del panel.
+vuzon solo escribe acciones que entiende del todo: reenviar a una dirección verificada, o descartar. Una regla que use cualquier otra cosa se muestra pero no se edita aquí, así que el enrutamiento que hayas configurado fuera del panel nunca se sobrescribe a ciegas.
 
 ---
 

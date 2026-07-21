@@ -3,6 +3,7 @@ import { apiRequest, UnauthorizedError } from '../lib/api';
 import { copyTextToClipboard } from '../lib/clipboard';
 import { getDestSelectionState } from '../lib/dest-selection';
 import {
+  describeRuleActions,
   findAliasesUsingDestination,
   generateRandomLocalPart,
   getSingleForwardDestination,
@@ -10,13 +11,13 @@ import {
   ruleMatchesCatchAllSlot,
 } from '../lib/rules';
 import { isVerifiedStatus } from '../lib/verification';
-import type { Destination, FormErrors, Profile, Rule } from '../lib/types';
+import type { CatchAllPatch, Destination, FormErrors, Profile, Rule, RulePatch } from '../lib/types';
 import { useI18n } from '../i18n/context';
 import { translateApiError } from '../i18n/api-errors';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { Toast } from '../components/Toast';
-import { AliasesCard } from '../components/AliasesCard';
+import { AliasesCard, DROP_DEST_VALUE } from '../components/AliasesCard';
 import { CatchAllCard } from '../components/CatchAllCard';
 import { DestinationsCard } from '../components/DestinationsCard';
 
@@ -222,10 +223,11 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
 
   const normalizedLocalPart = newAlias.local.trim().toLowerCase();
   const previewText = `${normalizedLocalPart || 'alias'}@${profile.rootDomain || '...'}`;
+  const droppingNewAlias = newAlias.dest === DROP_DEST_VALUE;
   const canCreateAlias = Boolean(
     normalizedLocalPart &&
       profile.rootDomain &&
-      verifiedDests.some((dest) => dest.email === newAlias.dest),
+      (droppingNewAlias || verifiedDests.some((dest) => dest.email === newAlias.dest)),
   );
 
   const activeCount = withoutCatchAllDup.filter((rule) => rule.enabled).length;
@@ -276,8 +278,12 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
       const localPart = normalizedLocalPart;
       setNewAlias((prev) => ({ ...prev, local: localPart }));
 
+      const action = droppingNewAlias
+        ? { type: 'drop' as const }
+        : { type: 'forward' as const, value: [newAlias.dest] };
+
       try {
-        await api('/api/rules', 'POST', { localPart, destEmail: newAlias.dest });
+        await api('/api/rules', 'POST', { localPart, action });
         setNewAlias((prev) => ({ ...prev, local: '' }));
         await refreshAll();
         setStatus(t('dashboard.status.aliasCreated'));
@@ -323,11 +329,63 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
       return;
     }
 
+    await updateRule(rule, { action: { type: 'forward', value: [destEmail] } });
+  }
+
+  /**
+   * Patch of an existing rule. An omitted field is preserved server-side, so this is also
+   * the safe way to rename or pause a rule whose action the panel does not write itself.
+   *
+   * Replacing a Worker or fan-out action is confirmed first: the PUT overwrites `actions`
+   * wholesale and vuzon cannot put back what it did not create.
+   */
+  async function updateRule(rule: Rule, patch: RulePatch) {
+    if (Object.keys(patch).length === 0) {
+      return;
+    }
+
+    const { kind } = describeRuleActions(rule);
+    const replacesForeignAction = patch.action !== undefined
+      && (kind === 'worker' || kind === 'fanout');
+    if (replacesForeignAction && !window.confirm(t('rules.editor.confirmReplace'))) {
+      return;
+    }
+
     await runExclusive(`rule:${rule.id}`, async () => {
       try {
-        await api(`/api/rules/${rule.id}`, 'PUT', { destEmail });
+        await api(`/api/rules/${rule.id}`, 'PUT', patch);
         await refreshAll();
-        setStatus(t('dashboard.status.destUpdated'));
+        setStatus(t(patch.action ? 'dashboard.status.destUpdated' : 'dashboard.status.aliasUpdated'));
+      } catch (err) {
+        setErrorStatus(err);
+      }
+    });
+  }
+
+  async function updateCatchAll(patch: CatchAllPatch) {
+    if (Object.keys(patch).length === 0) {
+      return;
+    }
+
+    const { kind } = describeRuleActions(catchAll);
+    if (
+      patch.action !== undefined
+      && (kind === 'worker' || kind === 'fanout')
+      && !window.confirm(t('rules.editor.confirmReplace'))
+    ) {
+      return;
+    }
+    // Pausing it is not a small change: mail to an address with no alias stops being
+    // accepted at all, and nothing on screen would say so afterwards.
+    if (patch.enabled === false && !window.confirm(t('catchAll.confirmDisable'))) {
+      return;
+    }
+
+    await runExclusive('catch-all', async () => {
+      try {
+        await api('/api/rules/catch-all', 'PUT', patch);
+        await refreshAll();
+        setStatus(t('dashboard.status.catchAllUpdated'));
       } catch (err) {
         setErrorStatus(err);
       }
@@ -456,6 +514,7 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
               isRulePending={(id) => busy.has(`rule:${id}`)}
               onToggleRule={(rule) => void toggleRule(rule)}
               onChangeRuleDest={(rule, destEmail) => void changeRuleDest(rule, destEmail)}
+              onEditRule={updateRule}
               onDeleteRule={(id) => void deleteRule(id)}
               newLocal={newAlias.local}
               onLocalChange={handleLocalChange}
@@ -476,7 +535,13 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
             />
           </div>
           <div className="flex w-full flex-none flex-col gap-6 lg:w-80">
-            <CatchAllCard catchAll={catchAll} />
+            <CatchAllCard
+              catchAll={catchAll}
+              verifiedDests={verifiedDests}
+              busy={busy.has('catch-all')}
+              onToggle={() => void updateCatchAll({ enabled: !catchAll?.enabled })}
+              onEdit={updateCatchAll}
+            />
             <DestinationsCard
               dests={dests}
               newDestInput={newDestInput}

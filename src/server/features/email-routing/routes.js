@@ -8,10 +8,10 @@ import {
   isCatchAllRuleId,
 } from './catch-all-guard.js';
 import {
-  isSingleForwardRule,
+  isPanelEditableRule,
   NOT_EDITABLE_RULE_CODE,
   NOT_EDITABLE_RULE_ERROR,
-} from './single-forward-guard.js';
+} from './rule-actions.js';
 import { CloudflareApiError } from '../../platform/cloudflare/client.js';
 import { ERROR_CODES } from '../../platform/http/error-codes.js';
 import { PanelRequestError } from '../../platform/http/panel-request-error.js';
@@ -25,11 +25,13 @@ import {
   duplicateAliasError,
   hasRuleForAlias,
   inspectDestination,
+  resolvePanelAction,
   unknownDestinationError,
   unverifiedDestinationError,
 } from './rule-diagnostics.js';
 import {
   addressSchema,
+  catchAllUpdateSchema,
   cloudflareResourceIdSchema,
   ruleSchema,
   ruleUpdateSchema,
@@ -60,22 +62,35 @@ function parseCloudflareRule(rule) {
  * property must survive enable/disable. Known read-only / echo-only fields returned on
  * GET (`id`, `tag`, `created`, `modified`, `created_on`, `modified_on`) are stripped
  * because Cloudflare rejects or ignores them on PUT.
+ *
+ * An override that is NOT passed leaves the rule's own value in place. That is what lets
+ * a Worker rule be renamed or paused without the panel ever writing a `worker` action:
+ * the request omits `action`, so `actions` travels back exactly as it arrived.
  * @param {Record<string, unknown>} rule Rule validated by `parseCloudflareRule`.
  * @param {boolean} enabled
- * @param {{ actions?: unknown[] }} [overrides] New `actions` (change destination).
+ * @param {{ actions?: unknown[], name?: string }} [overrides]
  */
 export function buildRuleUpdatePayload(rule, enabled, overrides = {}) {
   // Read-only / echo-only fields Cloudflare returns on GET but rejects or ignores on PUT.
   const readOnlyKeys = new Set(['id', 'tag', 'created', 'modified', 'created_on', 'modified_on']);
-  const payload = { enabled };
+  const payload = {};
   for (const [key, value] of Object.entries(rule)) {
     if (!readOnlyKeys.has(key)) {
       payload[key] = value;
     }
   }
 
+  // AFTER the copy, never before: `enabled` is one of the fields Cloudflare returns on
+  // GET, so seeding the payload with it first meant the rule's current value overwrote
+  // the one we were asked for — and `/enable` and `/disable` both sent the state back
+  // unchanged.
+  payload.enabled = enabled;
+
   if (Object.prototype.hasOwnProperty.call(overrides, 'actions')) {
     payload.actions = overrides.actions;
+  }
+  if (Object.prototype.hasOwnProperty.call(overrides, 'name')) {
+    payload.name = overrides.name;
   }
 
   // `actions` is optional in cloudflareRuleSchema, so a response without it validates.
@@ -124,6 +139,21 @@ export function registerApiRoutes(app, {
   // burning the shared quota (otherwise an anonymous client could exhaust it and lock
   // out the legitimate user; with TRUST_PROXY off every IP collapses into one).
   const gate = [requireAuth, apiLimiter];
+
+  const listAddresses = () => fetchAllCloudflare(
+    `/accounts/${env.CF_ACCOUNT_ID}/email/routing/addresses`,
+  );
+
+  /**
+   * Validated panel action → Cloudflare action. The address list is only fetched for a
+   * `forward`: dropping mail needs no destination, so it costs no round trip.
+   */
+  const resolveAction = async (action) => (
+    action.type === 'drop'
+      ? resolvePanelAction(action, [])
+      : resolvePanelAction(action, await listAddresses())
+  );
+
   const updateRuleEnabledState = async (req, res, enabled) => {
     const ruleId = cloudflareResourceIdSchema.parse(req.params.id);
     if (isCatchAllRuleId(ruleId)) {
@@ -174,7 +204,7 @@ export function registerApiRoutes(app, {
     const addressId = cloudflareResourceIdSchema.parse(req.params.id);
 
     const [addresses, rules, catchAll] = await Promise.all([
-      fetchAllCloudflare(`/accounts/${env.CF_ACCOUNT_ID}/email/routing/addresses`),
+      listAddresses(),
       fetchAllCloudflare(`/zones/${env.CF_ZONE_ID}/email/routing/rules`),
       fetchCloudflare(`/zones/${env.CF_ZONE_ID}/email/routing/rules/catch_all`).catch(() => {
         // Never delete blindly when catch-all usage cannot be verified.
@@ -225,7 +255,7 @@ export function registerApiRoutes(app, {
    * client gets the usual generic message.
    * @returns {Promise<never>}
    */
-  const diagnoseRuleCreationFailure = async ({ err, aliasEmail, destEmail }) => {
+  const diagnoseRuleCreationFailure = async ({ err, aliasEmail, action }) => {
     const status = Number(err?.status);
     const isClientError = err instanceof CloudflareApiError
       && Number.isFinite(status)
@@ -242,7 +272,7 @@ export function registerApiRoutes(app, {
     let rules;
     try {
       [addresses, rules] = await Promise.all([
-        fetchAllCloudflare(`/accounts/${env.CF_ACCOUNT_ID}/email/routing/addresses`),
+        listAddresses(),
         fetchAllCloudflare(`/zones/${env.CF_ZONE_ID}/email/routing/rules`),
       ]);
     } catch {
@@ -254,19 +284,25 @@ export function registerApiRoutes(app, {
       throw duplicateAliasError(aliasEmail);
     }
 
-    const destination = inspectDestination(addresses, destEmail);
-    if (!destination.exists) {
-      throw unknownDestinationError(destEmail);
-    }
-    if (!destination.verified) {
-      throw unverifiedDestinationError(destEmail);
+    // A `drop` rule has no destination to blame, so the address checks are skipped and
+    // the original Cloudflare failure stands.
+    if (action.type === 'forward') {
+      for (const destEmail of action.value) {
+        const destination = inspectDestination(addresses, destEmail);
+        if (!destination.exists) {
+          throw unknownDestinationError(destEmail);
+        }
+        if (!destination.verified) {
+          throw unverifiedDestinationError(destEmail);
+        }
+      }
     }
 
     throw err;
   };
 
   app.post('/api/rules', ...gate, asyncHandler(async (req, res) => {
-    const { localPart, destEmail } = ruleSchema.parse(req.body);
+    const { localPart, action } = ruleSchema.parse(req.body);
     const aliasEmail = `${localPart}@${getPanelDomain(env)}`;
 
     // Pre-flight check: the SPA already offers verified destinations only, but the
@@ -278,7 +314,7 @@ export function registerApiRoutes(app, {
     // so the user ended up with an alias that looks created and silently does nothing.
     // Both lists in parallel: the happy path costs one round trip, not two.
     const [addresses, rules] = await Promise.all([
-      fetchAllCloudflare(`/accounts/${env.CF_ACCOUNT_ID}/email/routing/addresses`),
+      action.type === 'forward' ? listAddresses() : [],
       fetchAllCloudflare(`/zones/${env.CF_ZONE_ID}/email/routing/rules`),
     ]);
 
@@ -286,64 +322,88 @@ export function registerApiRoutes(app, {
       throw duplicateAliasError(aliasEmail);
     }
 
-    const destination = inspectDestination(addresses, destEmail);
-    if (!destination.exists || !destination.email) {
-      throw unknownDestinationError(destEmail);
-    }
-    if (!destination.verified) {
-      throw unverifiedDestinationError(destEmail);
-    }
-
     const payload = {
       name: aliasEmail,
       enabled: true,
       matchers: [{ type: 'literal', field: 'to', value: aliasEmail }],
-      actions: [{ type: 'forward', value: [destination.email] }],
+      actions: [resolvePanelAction(action, addresses)],
     };
 
     let apiRes;
     try {
       apiRes = await fetchCloudflare(`/zones/${env.CF_ZONE_ID}/email/routing/rules`, 'POST', payload);
     } catch (err) {
-      await diagnoseRuleCreationFailure({ err, aliasEmail, destEmail });
+      await diagnoseRuleCreationFailure({ err, aliasEmail, action });
     }
 
     res.json({ ok: true, result: apiRes });
   }));
 
-  // Change the destination of an existing alias. Same catch-all guard as
-  // enable/disable/delete: the catch-all rule stays read-only.
+  /**
+   * The ONLY way the catch-all reaches Cloudflare (see catch-all-guard.js).
+   *
+   * MUST stay registered before `PUT /api/rules/:id`: `cloudflareResourceIdSchema`
+   * accepts hyphens, so the parametrised route would happily swallow `catch-all` and
+   * ask Cloudflare for a rule that does not exist.
+   *
+   * `matchers` is forced here and never read from the request — `all` is the only shape
+   * Cloudflare accepts in this slot, and a catch-all that stopped catching everything
+   * would silently blackhole mail. Omitting `action` preserves whatever is configured,
+   * which is what makes a pure enable/disable safe on a Worker-backed catch-all.
+   */
+  app.put('/api/rules/catch-all', ...gate, asyncHandler(async (req, res) => {
+    const { action, enabled } = catchAllUpdateSchema.parse(req.body);
+
+    const catchAll = await fetchCloudflare(`/zones/${env.CF_ZONE_ID}/email/routing/rules/catch_all`);
+    const parsedRule = parseCloudflareRule(catchAll);
+
+    const overrides = {};
+    if (action !== undefined) {
+      overrides.actions = [await resolveAction(action)];
+    }
+
+    const payload = buildRuleUpdatePayload(parsedRule, enabled ?? parsedRule.enabled ?? true, overrides);
+    payload.matchers = [{ type: 'all' }];
+
+    const apiRes = await fetchCloudflare(
+      `/zones/${env.CF_ZONE_ID}/email/routing/rules/catch_all`,
+      'PUT',
+      payload,
+    );
+    return res.json({ ok: true, result: apiRes });
+  }));
+
+  // Edit an existing alias: its action, its name, or whether it is enabled. Same
+  // catch-all guard as enable/disable/delete — the fallback rule has its own endpoint.
   app.put('/api/rules/:id', ...gate, asyncHandler(async (req, res) => {
     const ruleId = cloudflareResourceIdSchema.parse(req.params.id);
     if (isCatchAllRuleId(ruleId)) {
       return rejectCatchAllMutation(res);
     }
 
-    const { destEmail } = ruleUpdateSchema.parse(req.body);
-
-    const addresses = await fetchAllCloudflare(`/accounts/${env.CF_ACCOUNT_ID}/email/routing/addresses`);
-    const destination = inspectDestination(addresses, destEmail);
-    if (!destination.exists || !destination.email) {
-      throw unknownDestinationError(destEmail);
-    }
-    if (!destination.verified) {
-      throw unverifiedDestinationError(destEmail);
-    }
+    const { action, name, enabled } = ruleUpdateSchema.parse(req.body);
 
     const rule = await fetchCloudflare(`/zones/${env.CF_ZONE_ID}/email/routing/rules/${ruleId}`);
     if (isCatchAllRule(rule)) {
       return rejectCatchAllMutation(res);
     }
     // Same shape of guarantee as the catch-all guard: this PUT replaces `actions`
-    // wholesale, so anything that is not a plain single forward stays read-only here.
-    if (!isSingleForwardRule(rule)) {
+    // wholesale, so a rule whose current action the panel cannot even describe is never
+    // rewritten — that is how configuration made outside vuzon survives.
+    if (!isPanelEditableRule(rule)) {
       return rejectNotEditableRule(res);
     }
 
+    const overrides = {};
+    if (action !== undefined) {
+      overrides.actions = [await resolveAction(action)];
+    }
+    if (name !== undefined) {
+      overrides.name = name;
+    }
+
     const parsedRule = parseCloudflareRule(rule);
-    const payload = buildRuleUpdatePayload(parsedRule, parsedRule.enabled ?? true, {
-      actions: [{ type: 'forward', value: [destination.email] }],
-    });
+    const payload = buildRuleUpdatePayload(parsedRule, enabled ?? parsedRule.enabled ?? true, overrides);
 
     const apiRes = await fetchCloudflare(`/zones/${env.CF_ZONE_ID}/email/routing/rules/${ruleId}`, 'PUT', payload);
     return res.json({ ok: true, result: apiRes });

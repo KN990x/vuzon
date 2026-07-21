@@ -10,7 +10,8 @@
 const FIELD_LABELS = {
   email: 'Email',
   localPart: 'Alias',
-  destEmail: 'Destination email',
+  action: 'Action',
+  name: 'Name',
   username: 'Username',
   password: 'Password',
 };
@@ -26,6 +27,11 @@ const ISSUE_MESSAGES = {
   'alias.charset':
     'only lowercase letters, digits, dots, underscores and hyphens; must start and end with a letter or digit; no consecutive separators',
   'dest_email.invalid': 'invalid destination email',
+  'action.type': 'the action must be "forward" or "drop"',
+  'action.forward_single': 'a forward action takes exactly one destination address',
+  'rule_name.empty': 'the name cannot be empty',
+  'rule_name.too_long': 'the name is too long',
+  'rule_update.empty': 'nothing to update: send an action, a name or an enabled flag',
   'username.required': 'username required',
   'username.invalid': 'invalid username',
   'username.too_long': 'username too long',

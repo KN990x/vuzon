@@ -47,6 +47,7 @@ export const en = {
   'dashboard.status.aliasUpdated': 'Alias updated',
   'dashboard.status.aliasDeleted': 'Alias deleted',
   'dashboard.status.destUpdated': 'Destination updated',
+  'dashboard.status.catchAllUpdated': 'Catch-all updated',
   'dashboard.status.destAdded': 'Added. Check your inbox to verify it.',
   'dashboard.status.destDeleted': 'Destination deleted',
   'dashboard.status.copyFailed': 'Could not copy (are you using HTTPS?)',
@@ -79,7 +80,32 @@ export const en = {
   'aliases.new.copy': 'Copy {address}',
   'aliases.new.destLabel': 'Destination of the new alias',
   'aliases.new.noVerifiedDests': 'no verified destinations',
+  'aliases.new.discard': 'Discard the mail',
   'aliases.new.submit': 'Add alias',
+  'aliases.row.edit': 'Edit alias',
+  'aliases.row.editNamed': 'Edit {alias}',
+
+  // Inline editor (RuleEditor.tsx), shared by an alias row and the catch-all card.
+  'rules.editor.actionLabel': 'What happens to the mail',
+  'rules.editor.action.keep': 'Keep current',
+  'rules.editor.action.forward': 'Forward it',
+  'rules.editor.action.drop': 'Discard it',
+  'rules.editor.destLabel': 'Destination',
+  'rules.editor.nameLabel': 'Name',
+  'rules.editor.namePlaceholder': 'optional label',
+  'rules.editor.save': 'Save',
+  'rules.editor.cancel': 'Cancel',
+  'rules.editor.noVerifiedDests':
+    'Add and verify a destination before forwarding mail to it.',
+  'rules.editor.workerNotice': 'This rule is handled by the Email Worker {name}.',
+  'rules.editor.workerNoticeDefault': 'This rule is handled by an Email Worker.',
+  'rules.editor.fanoutNotice': 'This rule forwards to several addresses: {addresses}.',
+  'rules.editor.unknownNotice':
+    'This rule uses an action the panel does not understand, so it can only be edited in Cloudflare.',
+  'rules.editor.replaceWarning':
+    'Saving another action replaces the current one. vuzon cannot restore it — you would have to set it up again in Cloudflare.',
+  'rules.editor.confirmReplace':
+    'This replaces the rule\'s current action, which vuzon cannot restore. Continue?',
 
   'dests.title': 'Verified destinations',
   'dests.verified': 'Verified',
@@ -96,10 +122,15 @@ export const en = {
   'catchAll.state.active': 'active',
   'catchAll.state.paused': 'paused',
   'catchAll.description':
-    'Any mail sent to an address without an alias is forwarded to the default destination. '
-    + 'This rule is managed from Cloudflare and is read-only here.',
+    'Any mail sent to an address without an alias of its own is handled by this rule. '
+    + 'It always matches every address — only what it does with the mail can be changed.',
   'catchAll.loadError': 'Could not load the catch-all rule',
   'catchAll.noAction': 'No action configured',
+  'catchAll.toggle.enable': 'Enable the catch-all',
+  'catchAll.toggle.pause': 'Pause the catch-all',
+  'catchAll.edit': 'Edit the catch-all',
+  'catchAll.confirmDisable':
+    'With the catch-all paused, mail sent to an address with no alias will be rejected. Continue?',
 
   'footer.coffee': 'Buy me a coffee',
 
@@ -124,7 +155,7 @@ export const en = {
   'error.rules.catch_all_readonly':
     'The catch-all rule cannot be modified or deleted from this API.',
   'error.rules.not_editable':
-    'This rule does not forward to a single address and cannot be edited from the panel.',
+    'This rule uses an action the panel does not understand, so it cannot be edited here.',
   'error.rules.duplicate_alias': 'The alias {alias} already exists.',
   'error.dest.unknown':
     '{email} is not in the account\'s destination list. Add it as a destination first.',
@@ -147,7 +178,8 @@ export const en = {
   // Field labels and per-issue slugs of a `validation.invalid` response.
   'error.field.email': 'Email',
   'error.field.localPart': 'Alias',
-  'error.field.destEmail': 'Destination email',
+  'error.field.action': 'Action',
+  'error.field.name': 'Name',
   'error.field.username': 'Username',
   'error.field.password': 'Password',
   'error.issue.email.invalid': 'invalid email format',
@@ -156,6 +188,11 @@ export const en = {
   'error.issue.alias.charset':
     'only lowercase letters, digits, dots, underscores and hyphens; must start and end with a letter or digit; no consecutive separators',
   'error.issue.dest_email.invalid': 'invalid destination email',
+  'error.issue.action.type': 'the action must be "forward" or "drop"',
+  'error.issue.action.forward_single': 'a forward action takes exactly one destination address',
+  'error.issue.rule_name.empty': 'the name cannot be empty',
+  'error.issue.rule_name.too_long': 'the name is too long',
+  'error.issue.rule_update.empty': 'nothing to update',
   'error.issue.username.required': 'username required',
   'error.issue.username.invalid': 'invalid username',
   'error.issue.username.too_long': 'username too long',

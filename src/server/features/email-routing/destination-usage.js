@@ -1,9 +1,14 @@
 import { ERROR_CODES } from '../../platform/http/error-codes.js';
 import { PanelRequestError } from '../../platform/http/panel-request-error.js';
+import { actionValues } from './rule-actions.js';
 
 /**
  * Does any action of this rule forward mail to `target` (already lowercased)?
- * `value` may be a string or an array — same shapes as `isSingleForwardRule`.
+ *
+ * This walks `actions` directly instead of going through `describeRuleActions`: the usage
+ * check must also see rules the panel cannot edit (several actions, an unknown type
+ * alongside a forward). Refusing to delete a destination is a safety answer — it has to
+ * err towards "still in use", never towards "I did not recognise the rule".
  * @param {unknown} rule
  * @param {string} target
  * @returns {boolean}
@@ -21,10 +26,7 @@ function ruleForwardsTo(rule, target) {
     if (!action || typeof action !== 'object' || action.type !== 'forward') {
       return false;
     }
-    const values = Array.isArray(action.value) ? action.value : [action.value];
-    return values.some(
-      (value) => typeof value === 'string' && value.trim().toLowerCase() === target,
-    );
+    return actionValues(action.value).some((value) => value.toLowerCase() === target);
   });
 }
 
