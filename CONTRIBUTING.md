@@ -34,6 +34,17 @@ pnpm start        # build + start the server
 
 For frontend development with hot reload, run the backend (`pnpm --filter @vuzon/server run start`) and, in another terminal, `pnpm --filter @vuzon/web run dev` — the Vite dev server proxies `/api` to `http://127.0.0.1:8001` (see `src/web/vite.config.ts`).
 
+Both dev servers listen on **every interface**, so the panel can be opened from another device on the LAN or over a Tailscale tailnet:
+
+| Server | Command | Port | Binds to |
+|---|---|---|---|
+| Vite (SPA, hot reload) | `pnpm --filter @vuzon/web run dev` | `5173` (Vite default, not pinned in the config) | `0.0.0.0` / `::` via `server.host: true` |
+| Express (backend / built SPA) | `pnpm start` | `8001` (`PORT`, else `VUZON_PORT`) | `0.0.0.0` / `::` — `app.listen(port)` takes no host |
+
+Vite rejects requests whose `Host` header is neither `localhost` nor an IP address, so `server.allowedHosts` lists `.ts.net` for Tailscale MagicDNS names; raw tailnet IPs (`100.x.y.z`) are accepted without it. Reaching the panel through the Vite proxy keeps the CSRF guard happy: the browser sends `Sec-Fetch-Site: same-origin`, and the proxy forwards the original `Host`, so `Origin` and `Host` still match.
+
+Only expose these ports on a trusted network — the dev server has no authentication of its own.
+
 ## Where to make changes
 
 - **Backend:** routes in `src/server/features/*/routes.js`; integrations in `src/server/platform/`; configuration in `src/server/config/`. Keep `src/server/server.js` as a thin entrypoint.
