@@ -48,6 +48,7 @@ export const es = {
   'account.notice': 'Cualquier otra sesión abierta se cerrará.',
   'account.cancel': 'Cancelar',
   'account.username.title': 'Cambiar usuario',
+  'account.username.current': 'Usuario actual: {username}',
   'account.username.new': 'Usuario nuevo',
   'account.username.currentPassword': 'Contraseña actual',
   'account.username.submit': 'Cambiar usuario',

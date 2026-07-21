@@ -117,8 +117,10 @@ export function registerAuthRoutes(app, {
     }
 
     const username = credentialStore.getUsername();
+    // 400, not 401: a wrong current password is a validation failure, not an expired
+    // session. The SPA treats every 401 as UnauthorizedError and may bounce to login.
     if (!(await credentialStore.verify({ username, password: body.currentPassword }))) {
-      return res.status(401).json({
+      return res.status(400).json({
         error: 'The current password is not correct',
         code: ERROR_CODES.AUTH_CURRENT_PASSWORD_INVALID,
       });
@@ -157,8 +159,9 @@ export function registerAuthRoutes(app, {
       return res.json({ success: true });
     }
 
+    // Same 400 (not 401) as the password route: see comment there.
     if (!(await credentialStore.verify({ username: currentUsername, password: body.currentPassword }))) {
-      return res.status(401).json({
+      return res.status(400).json({
         error: 'The current password is not correct',
         code: ERROR_CODES.AUTH_CURRENT_PASSWORD_INVALID,
       });

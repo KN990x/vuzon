@@ -3,6 +3,8 @@ const REQUEST_TIMEOUT_MS = 10_000;
 const MAX_GET_RETRIES = 2;
 const MAX_LIST_PAGES = 100;
 const MAX_LIST_ITEMS = 5000;
+/** Must match the `per_page` query sent below. */
+const LIST_PAGE_SIZE = 50;
 const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
 
 export class CloudflareApiError extends Error {
@@ -213,10 +215,13 @@ export function createCloudflareClient({ env = process.env } = {}) {
         );
       }
 
-      const data = await requestCloudflare(`${requestPath}${separator}page=${page}&per_page=50`);
+      const data = await requestCloudflare(
+        `${requestPath}${separator}page=${page}&per_page=${LIST_PAGE_SIZE}`,
+      );
 
-      if (data.result?.length) {
-        allResults = allResults.concat(data.result);
+      const pageResult = Array.isArray(data.result) ? data.result : [];
+      if (pageResult.length) {
+        allResults = allResults.concat(pageResult);
       }
 
       if (allResults.length > MAX_LIST_ITEMS) {
@@ -230,11 +235,16 @@ export function createCloudflareClient({ env = process.env } = {}) {
         );
       }
 
-      // Only a real integer moves the cursor. A malformed `total_pages` used to stop the
-      // loop at page 1 and return a silently truncated list — the worst failure mode for
-      // a list of aliases, since the panel would show it as complete.
+      // Prefer Cloudflare's own cursor when it is a real integer. If it is missing or
+      // malformed but this page came back full, keep walking until a short page — a
+      // truncated alias list is the worst failure mode (duplicates and dest-in-use look
+      // complete when they are not).
       if (Number.isInteger(data.result_info?.total_pages)) {
         totalPages = data.result_info.total_pages;
+      } else if (pageResult.length >= LIST_PAGE_SIZE) {
+        totalPages = page + 1;
+      } else {
+        totalPages = page;
       }
 
       page += 1;

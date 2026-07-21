@@ -53,6 +53,7 @@ export const en = {
   'account.notice': 'Any other session that is open will be signed out.',
   'account.cancel': 'Cancel',
   'account.username.title': 'Change username',
+  'account.username.current': 'Current username: {username}',
   'account.username.new': 'New username',
   'account.username.currentPassword': 'Current password',
   'account.username.submit': 'Change username',

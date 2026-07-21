@@ -1,5 +1,6 @@
 export interface Profile {
   rootDomain: string;
+  username: string;
 }
 
 export interface Destination {

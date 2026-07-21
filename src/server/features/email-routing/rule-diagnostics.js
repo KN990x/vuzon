@@ -119,24 +119,44 @@ export function resolvePanelAction(action, addresses) {
 }
 
 /**
- * Is there already a rule matching exactly this address?
+ * How many rules match exactly this address (literal `to` matcher)?
  * Cloudflare accepts duplicate patterns but only the first rule processes the mail, so
  * creating a duplicate leaves an alias that looks like it works and does not.
+ * @param {unknown[]} rules Result of /email/routing/rules.
+ * @param {string} aliasEmail
+ * @returns {number}
+ */
+export function countRulesForAlias(rules, aliasEmail) {
+  const list = Array.isArray(rules) ? rules : [];
+  const target = aliasEmail.trim().toLowerCase();
+  let count = 0;
+
+  for (const rule of list) {
+    if (!Array.isArray(rule?.matchers)) {
+      continue;
+    }
+    const matches = rule.matchers.some(
+      (matcher) => matcher
+        && matcher.type === 'literal'
+        && matcher.field === 'to'
+        && typeof matcher.value === 'string'
+        && matcher.value.trim().toLowerCase() === target,
+    );
+    if (matches) {
+      count += 1;
+    }
+  }
+
+  return count;
+}
+
+/**
  * @param {unknown[]} rules Result of /email/routing/rules.
  * @param {string} aliasEmail
  * @returns {boolean}
  */
 export function hasRuleForAlias(rules, aliasEmail) {
-  const list = Array.isArray(rules) ? rules : [];
-  const target = aliasEmail.trim().toLowerCase();
-
-  return list.some((rule) => Array.isArray(rule?.matchers) && rule.matchers.some(
-    (matcher) => matcher
-      && matcher.type === 'literal'
-      && matcher.field === 'to'
-      && typeof matcher.value === 'string'
-      && matcher.value.trim().toLowerCase() === target,
-  ));
+  return countRulesForAlias(rules, aliasEmail) > 0;
 }
 
 /**

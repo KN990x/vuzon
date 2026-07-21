@@ -24,7 +24,7 @@ interface AliasesCardProps {
   isRulePending: (id: string) => boolean;
   onToggleRule: (rule: Rule) => void;
   onChangeRuleDest: (rule: Rule, destEmail: string) => void;
-  onEditRule: (rule: Rule, patch: RuleEditorPatch) => Promise<void>;
+  onEditRule: (rule: Rule, patch: RuleEditorPatch) => Promise<boolean>;
   onDeleteRule: (id: string) => void;
   newLocal: string;
   onLocalChange: (value: string) => void;
@@ -179,7 +179,7 @@ export function AliasesCard(props: AliasesCardProps) {
               </span>
               <Switch
                 on={enabled}
-                disabled={pending}
+                disabled={pending || !editable}
                 label={enabled ? t('aliases.row.pause') : t('aliases.row.enable')}
                 onToggle={() => onToggleRule(rule)}
               />
@@ -198,16 +198,18 @@ export function AliasesCard(props: AliasesCardProps) {
                   <Pencil size={14} />
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => onDeleteRule(rule.id)}
-                disabled={pending}
-                title={t('aliases.row.delete')}
-                aria-label={t('aliases.row.deleteNamed', { alias: aliasName })}
-                className="flex-none text-cream/65 transition-colors duration-200 hover:text-accent-dark disabled:cursor-wait disabled:opacity-60 disabled:hover:text-cream/65 enabled:cursor-pointer"
-              >
-                <Trash2 size={14} />
-              </button>
+              {editable && (
+                <button
+                  type="button"
+                  onClick={() => onDeleteRule(rule.id)}
+                  disabled={pending}
+                  title={t('aliases.row.delete')}
+                  aria-label={t('aliases.row.deleteNamed', { alias: aliasName })}
+                  className="flex-none text-cream/65 transition-colors duration-200 hover:text-accent-dark disabled:cursor-wait disabled:opacity-60 disabled:hover:text-cream/65 enabled:cursor-pointer"
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
             </div>
             {editing && (
               <div className="fade-in">
@@ -221,7 +223,10 @@ export function AliasesCard(props: AliasesCardProps) {
                   name={rule.name ?? ''}
                   onCancel={() => setEditingId(null)}
                   onSave={(patch) => {
-                    void onEditRule(rule, patch).then(() => setEditingId(null));
+                    // Collapse only on success: updateRule resolves false when the save fails.
+                    void onEditRule(rule, patch).then((ok) => {
+                      if (ok) setEditingId(null);
+                    });
                   }}
                 />
               </div>

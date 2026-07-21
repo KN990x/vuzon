@@ -1,11 +1,24 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { test } from 'node:test';
 import {
+  configureSessionEpochPersistence,
   isSessionIssuanceValid,
   nextIssuedAt,
   resetSessionEpochForTests,
   revokeSessionsIssuedUntilNow,
 } from '../../features/auth/session-epoch.js';
+
+function tempDataDir(t) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vuzon-epoch-'));
+  t.after(() => {
+    resetSessionEpochForTests();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+  return dir;
+}
 
 test('session-epoch: at startup, any session with issuedAt is valid', () => {
   resetSessionEpochForTests();
@@ -44,4 +57,21 @@ test('session-epoch: logging in on the same millisecond as the logout still work
 test('session-epoch: with no recent revocation, nextIssuedAt is just the clock', () => {
   resetSessionEpochForTests();
   assert.equal(nextIssuedAt(1_700_000_000_000), 1_700_000_000_000);
+});
+
+test('session-epoch: persistence reloads the mark from the data directory', (t) => {
+  const dataDir = tempDataDir(t);
+  resetSessionEpochForTests();
+  configureSessionEpochPersistence({ dataDir });
+  revokeSessionsIssuedUntilNow(5_000);
+
+  assert.equal(
+    fs.readFileSync(path.join(dataDir, 'session-epoch'), 'utf8').trim(),
+    '5000',
+  );
+
+  // Re-configure as a fresh process would: memory is whatever configure reads from disk.
+  configureSessionEpochPersistence({ dataDir });
+  assert.equal(isSessionIssuanceValid(4_999), false);
+  assert.equal(isSessionIssuanceValid(5_001), true);
 });

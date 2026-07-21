@@ -238,7 +238,7 @@ vuzon only writes actions it fully understands — forward to one verified addre
 - Strict **CSP**, `nosniff`, `Referrer-Policy`, and `Cache-Control: no-store` on every API response.
 - The published **API token is never logged or returned**, and the container runs as a **non-root** user, read-only, with all capabilities dropped.
 
-Found a security issue? Please open an issue — or report it privately if it is sensitive.
+Found a security issue? **Do not open a public issue.** Report it privately via [GitHub Security Advisories](https://github.com/KN990x/vuzon/security/advisories/new) — see [SECURITY.md](SECURITY.md).
 
 ---
 
@@ -426,7 +426,7 @@ vuzon solo escribe acciones que entiende del todo: reenviar a una dirección ver
 - **CSP** estricta, `nosniff`, `Referrer-Policy` y `Cache-Control: no-store` en todas las respuestas de la API.
 - El **token de API nunca se registra ni se devuelve**, y el contenedor se ejecuta como usuario **no root**, en solo lectura y sin capabilities.
 
-¿Has encontrado un problema de seguridad? Abre una issue — o repórtalo en privado si es sensible.
+¿Has encontrado un problema de seguridad? **No abras una issue pública.** Repórtalo en privado vía [GitHub Security Advisories](https://github.com/KN990x/vuzon/security/advisories/new) — ver [SECURITY.md](SECURITY.md).
 
 ---
 

@@ -36,6 +36,45 @@ jobs:
       - name: Validate repository
         run: pnpm run check
 
+      # Prove the tagged image boots before pushing multi-arch to GHCR. Same hardening
+      # and checks as ci.yml (read_only, cap_drop, healthz, SPA, setup_required).
+      - name: Build smoke image (amd64)
+        run: docker build -t vuzon-release-smoke .
+
+      - name: Smoke test the image (boots, hardened, serves the SPA)
+        run: |
+          set -euo pipefail
+          docker run -d --name vuzon-release-smoke \
+            --read-only --tmpfs /tmp \
+            --cap-drop ALL --security-opt no-new-privileges:true \
+            -v vuzon-release-smoke-data:/app/data \
+            -e DOMAIN=ci-smoke-test.invalid \
+            -e CF_API_TOKEN=ci-smoke-test-token \
+            -e CF_ZONE_ID=ci_smoke_zone \
+            -e CF_ACCOUNT_ID=ci_smoke_account \
+            -p 8001:8001 vuzon-release-smoke
+
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8001/healthz > /dev/null 2>&1; then
+              echo "healthz OK after ${i}s"; break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "The container never answered /healthz:"; docker logs vuzon-release-smoke; exit 1
+            fi
+            sleep 1
+          done
+
+          curl -fsS http://127.0.0.1:8001/ | grep -q '<div id="root">'
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8001/api/me)" = "401"
+          curl -fsS http://127.0.0.1:8001/api/me | grep -q '"code":"auth.setup_required"'
+
+      - name: Tear down smoke test
+        if: always()
+        run: |
+          docker rm -f vuzon-release-smoke 2>/dev/null || true
+          docker volume rm vuzon-release-smoke-data 2>/dev/null || true
+          docker rmi vuzon-release-smoke 2>/dev/null || true
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
 

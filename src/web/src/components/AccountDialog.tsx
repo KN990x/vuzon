@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { apiRequest } from '../lib/api';
+import { apiRequest, UnauthorizedError } from '../lib/api';
 import { buildAuthErrorMessage } from '../lib/login-error';
 import { checkNewPassword } from '../lib/password-policy';
 import type { PasswordIssue } from '../lib/password-policy';
@@ -18,7 +18,10 @@ const FOCUSABLE_SELECTOR =
 export type AccountChangeKind = 'username' | 'password';
 
 interface AccountDialogProps {
+  currentUsername: string;
   onClose: () => void;
+  /** Session gone while the dialog was open — same path as any other 401 on the panel. */
+  onUnauthorized: () => void;
   /** Reported to the panel so the change lands in the shared status toast. */
   onChanged: (kind: AccountChangeKind) => void;
 }
@@ -36,11 +39,16 @@ function listFocusable(container: HTMLElement): HTMLElement[] {
  * The overlay is hand-rolled — the panel ships no dialog library and no animation library
  * (see AGENTS.md); `.fade-in` in index.css is the whole transition budget.
  */
-export function AccountDialog({ onClose, onChanged }: AccountDialogProps) {
+export function AccountDialog({
+  currentUsername,
+  onClose,
+  onUnauthorized,
+  onChanged,
+}: AccountDialogProps) {
   const i18n = useI18n();
   const { t, tRaw } = i18n;
 
-  const [newUsername, setNewUsername] = useState('');
+  const [newUsername, setNewUsername] = useState(currentUsername);
   const [usernamePassword, setUsernamePassword] = useState('');
   const [usernameError, setUsernameError] = useState<unknown>(null);
   const [usernameSubmitting, setUsernameSubmitting] = useState(false);
@@ -55,6 +63,8 @@ export function AccountDialog({ onClose, onChanged }: AccountDialogProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const firstFieldRef = useRef<HTMLInputElement>(null);
+  const onUnauthorizedRef = useRef(onUnauthorized);
+  onUnauthorizedRef.current = onUnauthorized;
 
   useEffect(() => {
     const previousActive = document.activeElement instanceof HTMLElement
@@ -117,6 +127,14 @@ export function AccountDialog({ onClose, onChanged }: AccountDialogProps) {
     }
   }
 
+  function handleAccountError(err: unknown, setError: (value: unknown) => void) {
+    if (err instanceof UnauthorizedError) {
+      onUnauthorizedRef.current();
+      return;
+    }
+    setError(err);
+  }
+
   async function handleUsernameSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (usernameSubmitting || passwordSubmitting) {
@@ -132,7 +150,7 @@ export function AccountDialog({ onClose, onChanged }: AccountDialogProps) {
       });
       onChanged('username');
     } catch (err) {
-      setUsernameError(err);
+      handleAccountError(err, setUsernameError);
     } finally {
       setUsernameSubmitting(false);
     }
@@ -160,7 +178,7 @@ export function AccountDialog({ onClose, onChanged }: AccountDialogProps) {
       });
       onChanged('password');
     } catch (err) {
-      setPasswordError(err);
+      handleAccountError(err, setPasswordError);
     } finally {
       setPasswordSubmitting(false);
     }
@@ -211,6 +229,9 @@ export function AccountDialog({ onClose, onChanged }: AccountDialogProps) {
           <h3 className="m-0 font-mono text-[10px] uppercase tracking-[0.18em] text-cream/65">
             {t('account.username.title')}
           </h3>
+          <p className="m-0 -mt-2 font-mono text-[11px] text-cream/45">
+            {t('account.username.current', { username: currentUsername })}
+          </p>
           <label className="flex flex-col gap-1.5">
             <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-cream/65">
               {t('account.username.new')}

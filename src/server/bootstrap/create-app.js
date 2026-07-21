@@ -3,6 +3,7 @@ import { getServerRuntime } from '../config/runtime.js';
 import { resolveSessionSecret } from '../config/session-secret.js';
 import { createCredentialStore } from '../features/auth/credential-store.js';
 import { createRequireAuth } from '../features/auth/require-auth.js';
+import { configureSessionEpochPersistence } from '../features/auth/session-epoch.js';
 import {
   createSessionMiddleware,
   getSessionCookieClearOptions,
@@ -89,6 +90,8 @@ export function createApp({
   apiLimiter = createApiRateLimiter(),
   pagesLimiter = createPagesRateLimiter(),
 } = {}) {
+  configureSessionEpochPersistence({ dataDir });
+
   const runtime = getServerRuntime(env);
   const app = express();
 
@@ -127,7 +130,7 @@ export function createApp({
     setupLimiter,
     passwordChangeLimiter,
   });
-  registerApiRoutes(app, { env, requireAuth, cloudflareClient, apiLimiter });
+  registerApiRoutes(app, { env, requireAuth, credentialStore, cloudflareClient, apiLimiter });
   // The /api JSON 404 must be registered BEFORE registerPageRoutes' SPA catch-all:
   // reversed, an unknown GET /api/... would return index.html.
   app.use('/api', (_req, res) => {

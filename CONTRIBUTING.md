@@ -175,12 +175,12 @@ pnpm install
 ### Deployment notes
 
 - **Panel credentials** are chosen in the browser on the first visit (`POST /api/setup`) and stored as a scrypt hash in **`<data dir>/auth.json`** (mode `0600`, atomic write). There are no `AUTH_USER` / `AUTH_PASS` variables. To start over in development, **`rm -rf data/`** and reload the panel.
-- **Sessions** use **`cookie-session`**: login payload is signed and stored in the **`vuzon_session`** cookie. There is no server-side session directory. The signing key is **not configurable**: it is generated into **`<data dir>/session-secret`** (mode `0600`) on first boot and reused, so sessions survive restarts with nothing to set up. Session cookies are **not** `Secure` by default (`COOKIE_SECURE` opt-in) so homelab HTTP keeps working.
-- **`VUZON_DATA_DIR`**: where both files above live. Default **`./data`** resolved from the package layout (not the CWD); the Docker image sets **`/app/data`** and `docker-compose.yml` mounts the `vuzon-data` volume there. Startup fails with an actionable message if the directory cannot be created or written to.
-- **Multiple replicas** behind a load balancer must share the **data directory** (same volume), since that is where the signing key and the credentials live. The browser sends the signed cookie on each request, so sticky sessions are not required for auth. Note that logout revocation is **per process** (in-memory): with several replicas, a logout only invalidates copied cookies on the replica that served it.
+- **Sessions** use **`cookie-session`**: login payload is signed and stored in the **`vuzon_session`** cookie. There is no server-side session directory. The signing key is **not configurable**: it is generated into **`<data dir>/session-secret`** (mode `0600`) on first boot and reused, so sessions survive restarts with nothing to set up. Session cookies are **not** `Secure` by default (`COOKIE_SECURE` opt-in) so homelab HTTP keeps working. Logout / credential-change revocation is persisted in **`<data dir>/session-epoch`** so stolen cookies stay invalid across restarts.
+- **`VUZON_DATA_DIR`**: where `auth.json`, `session-secret` and `session-epoch` live. Default **`./data`** resolved from the package layout (not the CWD); the Docker image sets **`/app/data`** and `docker-compose.yml` mounts the `vuzon-data` volume there. Startup fails with an actionable message if the directory cannot be created or written to.
+- **Single process.** The supported deployment is one replica. Several replicas sharing a volume still race on setup (`auth.json`) and on the epoch file; do not run more than one.
 - **Startup rejects `.env.example` placeholder values** (`CF_API_TOKEN`, `DOMAIN`): a template value in a public repo is a value everybody knows. The signing key used to be the dangerous one here — it is no longer read from the environment at all, which removes that failure mode instead of guarding it.
 - **Logs** in typical production-style `NODE_ENV` do not print the panel username; only whether credentials are configured. While they are not, every boot repeats a warning: the setup wizard is public until someone completes it.
-- **`TRUST_PROXY`**: value for Express `app.set('trust proxy', …)`. Accepts a hop count (`1`, `2`, …), `loopback` / `linklocal` / `uniquelocal`, or an IP/CIDR list. **Off** unless you set it (e.g. `TRUST_PROXY=1` behind nginx/Traefik); an unrecognised value stays off and logs a warning. Needed for correct client IPs when rate-limiting `/api/login`.
+- **`TRUST_PROXY`**: value for Express `app.set('trust proxy', …)`. Accepts a hop count (`1`, `2`, …), `loopback` / `linklocal` / `uniquelocal`, or an IP/CIDR list. **Off** unless you set it (e.g. `TRUST_PROXY=1` behind nginx/Traefik); an unrecognised value stays off and logs a warning. Needed for correct client IPs when rate-limiting `/api/login`. If the panel is reachable without a trusted proxy, leave it off — a spoofable `X-Forwarded-For` bypasses that limit. Pair with `COOKIE_SECURE=1` when terminating TLS in front.
 - **Graceful shutdown**: `SIGTERM` / `SIGINT` close the HTTP server and exit `0`, with a 10s forced-exit fallback. `docker-compose.yml` sets `init: true` so the signal actually reaches the process.
 - **JSON request bodies** for API routes are limited to **256kb**.
 - **`CF_ZONE_ID` / `CF_ACCOUNT_ID`**: after autodetection or manual configuration, both must be non-empty and match Cloudflare-style identifiers (startup fails otherwise).
@@ -195,24 +195,28 @@ pnpm install
 
 ### Backend routes
 
-The backend exposes login/session endpoints plus a REST proxy to Cloudflare. Cloudflare-facing routes and `GET /api/me` require an authenticated session.
+The backend exposes setup/login/session endpoints plus a REST proxy to Cloudflare. Cloudflare-facing routes and `GET /api/me` require an authenticated session (except while the panel has no credentials yet — then `requireAuth` answers `401 auth.setup_required`).
 
-Response envelope: reads return `{ result }`, mutations `{ ok: true }` (plus `result` when Cloudflare returns the resource), errors `{ error, code, params? }` — `error` is an English fallback and `code` is what the bilingual panel renders from. Exceptions with a flat envelope: `GET /api/me` → `{ rootDomain }`; `/api/login` and `/api/logout` keep `{ success: true }`. All `/api/*` responses are sent with `Cache-Control: no-store`.
+Response envelope: reads return `{ result }`, mutations `{ ok: true }` (plus `result` when Cloudflare returns the resource), errors `{ error, code, params? }` — `error` is an English fallback and `code` is what the bilingual panel renders from. Exceptions with a flat envelope: `GET /api/me` → `{ rootDomain, username }`; auth mutations (`/api/login`, `/api/logout`, `/api/setup`, `/api/account/*`) keep `{ success: true }`. All `/api/*` responses are sent with `Cache-Control: no-store`.
 
-- `GET  /healthz` - Public endpoint that returns `{ ok: true }`.
-- `POST /api/login` - Authenticates with `{ username, password }`. Wrong credentials return `401`.
-- `POST /api/logout` - Closes the current session.
-- `GET  /api/me` - Returns `{ rootDomain }` for the authenticated user (flat envelope, not `{ result }`).
-- `GET  /api/addresses` - Lists destination addresses.
-- `POST /api/addresses` - Creates destination address `{ email }`.
-- `DELETE /api/addresses/:id` - Deletes destination address.
-- `GET  /api/rules` - Lists rules/aliases.
-- `POST /api/rules` - Creates rule `{ localPart, destEmail }` where `localPart` must already be lowercase and match `^[a-z0-9]+(?:[._-][a-z0-9]+)*$` (1-64 chars; must start and end alphanumeric; no consecutive separators), and `destEmail` must be a valid email **and an already-verified destination on the account**.
-- `PUT  /api/rules/:id` - Changes an existing alias's destination `{ destEmail }`. Same catch-all guard and destination checks as above.
-- `DELETE /api/rules/:id` - Deletes rule.
-- `POST /api/rules/:id/enable` - Enables rule.
-- `POST /api/rules/:id/disable` - Disables rule.
+- `GET  /healthz` — Public endpoint that returns `{ ok: true }`.
+- `POST /api/setup` — First-install wizard `{ username, password, passwordConfirm }` (public once; then `409 setup.already_done`).
+- `POST /api/login` — Authenticates with `{ username, password }`. Wrong credentials return `401`.
+- `POST /api/logout` — Closes the current session (revokes other cookies only when the caller had a live session).
+- `POST /api/account/password` — `{ currentPassword, newPassword, newPasswordConfirm }` (requireAuth). Wrong current password → `400`.
+- `POST /api/account/username` — `{ newUsername, currentPassword }` (requireAuth). Wrong current password → `400`.
+- `GET  /api/me` — Returns `{ rootDomain, username }` for the authenticated user (flat envelope, not `{ result }`).
+- `GET  /api/addresses` — Lists destination addresses.
+- `POST /api/addresses` — Creates destination address `{ email }`.
+- `DELETE /api/addresses/:id` — Deletes destination address (refused with `dest.in_use` when still referenced by a rule or catch-all).
+- `GET  /api/rules` — Lists rules/aliases.
+- `POST /api/rules` — Creates rule `{ localPart, action }` where `action` is `forward` (exactly one verified destination) or `drop`.
+- `PUT  /api/rules/catch-all` — Updates the catch-all (`action` / `enabled`); the only door that mutates it.
+- `PUT  /api/rules/:id` — Patches an existing alias (`action` / `name` / `enabled`). Catch-all and undescribable actions are refused.
+- `DELETE /api/rules/:id` — Deletes rule (catch-all and undescribable actions refused).
+- `POST /api/rules/:id/enable` — Enables rule (same editability guard as PUT).
+- `POST /api/rules/:id/disable` — Disables rule (same editability guard as PUT).
 
-Unauthenticated requests to `/api/*` return `401 { error: "Unauthorized", code: "auth.unauthorized" }` and do not redirect to the login page.
+Unauthenticated requests to `/api/*` return `401` with `auth.unauthorized` (or `auth.setup_required` before the wizard is completed) and do not redirect to the login page.
 
 > Cloudflare API references for rules and addresses: official Cloudflare documentation.

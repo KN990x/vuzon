@@ -18,8 +18,8 @@ export function createRequireAuth({ credentialStore } = {}) {
       });
     }
 
-    // `issuedAt` is checked against the in-memory revocation mark: a cookie copied
-    // before a logout stops being valid even if it is still within its maxAge.
+    // `issuedAt` is checked against the revocation mark (persisted in session-epoch): a
+    // cookie copied before a logout stops being valid even if it is still within its maxAge.
     // Sessions predating this version carry no `issuedAt` and are discarded.
     if (req.session && req.session.authenticated && isSessionIssuanceValid(req.session.issuedAt)) {
       return next();

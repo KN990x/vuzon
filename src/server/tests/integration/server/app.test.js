@@ -218,7 +218,7 @@ test('HTTP integration: healthz, auth, API with a simulated Cloudflare', async (
       });
       assert.equal(res.status, 200);
       const data = await readJson(res);
-      assert.deepEqual(data, { rootDomain: 'example.com' });
+      assert.deepEqual(data, { rootDomain: 'example.com', username: 'testuser' });
     }
 
     {
@@ -348,7 +348,7 @@ test('HTTP integration: login trims the submitted credentials', async () => {
     });
     assert.equal(me.status, 200);
     const meData = await readJson(me);
-    assert.deepEqual(meData, { rootDomain: 'example.com' });
+    assert.deepEqual(meData, { rootDomain: 'example.com', username: 'trimuser' });
   } finally {
     await new Promise((resolve) => {
       server.close(resolve);
@@ -1105,6 +1105,146 @@ test('HTTP integration: a duplicate alias is rejected even when Cloudflare would
   }
 });
 
+test('HTTP integration: concurrent alias creates for the same localPart yield one success', async () => {
+  // In-process lock + pre-check: the second create must see the first rule and stop
+  // before another POST. Without the lock both would race past an empty list.
+  const stored = [];
+  const posts = [];
+  const base = createMockCloudflareClient();
+  const cloudflareClient = {
+    ...base,
+    async fetchCloudflare(requestPath, method = 'GET', body = null) {
+      if (requestPath.includes('/email/routing/rules') && method === 'POST') {
+        posts.push(body);
+        const rule = {
+          id: `created-${posts.length}`,
+          name: body?.name,
+          enabled: true,
+          matchers: body?.matchers ?? [],
+          actions: body?.actions ?? [],
+        };
+        stored.push(rule);
+        return rule;
+      }
+      return base.fetchCloudflare(requestPath, method, body);
+    },
+    async fetchAllCloudflare(requestPath) {
+      if (requestPath.includes('/email/routing/rules')) {
+        return stored.map((rule) => ({ ...rule }));
+      }
+      return base.fetchAllCloudflare(requestPath);
+    },
+  };
+
+  const { app } = createApp({
+    env: { ...DIAGNOSTICS_ENV },
+    cloudflareClient,
+    sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
+  });
+  const { server, baseUrl } = await listen(app);
+
+  try {
+    resetSessionEpochForTests();
+    const sessionCookie = await loginAndGetCookie(baseUrl);
+    const body = JSON.stringify({
+      localPart: 'race',
+      action: { type: 'forward', value: ['dest@example.com'] },
+    });
+    const headers = { 'Content-Type': 'application/json', Cookie: sessionCookie };
+
+    const [a, b] = await Promise.all([
+      fetch(`${baseUrl}/api/rules`, { method: 'POST', headers, body }),
+      fetch(`${baseUrl}/api/rules`, { method: 'POST', headers, body }),
+    ]);
+
+    const statuses = [a.status, b.status].sort();
+    assert.deepEqual(statuses, [200, 400]);
+    const loser = a.status === 400 ? a : b;
+    assert.equal((await readJson(loser)).code, ERROR_CODES.RULES_DUPLICATE_ALIAS);
+    assert.equal(posts.length, 1, 'only one create may reach Cloudflare');
+    assert.equal(stored.length, 1);
+  } finally {
+    resetSessionEpochForTests();
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+  }
+});
+
+test('HTTP integration: post-create recount rolls back a duplicate that slipped past pre-check', async () => {
+  // Simulates a twin that appears only after our POST (another process, or a rule
+  // Cloudflare already held outside the pre-flight snapshot): we must DELETE ours and
+  // answer rules.duplicate_alias instead of leaving a silent blackhole.
+  let posted = false;
+  const deletions = [];
+  const base = createMockCloudflareClient();
+  const cloudflareClient = {
+    ...base,
+    async fetchCloudflare(requestPath, method = 'GET', body = null) {
+      if (requestPath.includes('/email/routing/rules') && method === 'POST') {
+        posted = true;
+        return { id: 'new-rule', name: body?.name };
+      }
+      if (requestPath.endsWith('/email/routing/rules/new-rule') && method === 'DELETE') {
+        deletions.push('new-rule');
+        return { id: 'deleted' };
+      }
+      return base.fetchCloudflare(requestPath, method, body);
+    },
+    async fetchAllCloudflare(requestPath) {
+      if (requestPath.includes('/email/routing/rules')) {
+        if (!posted) {
+          return [];
+        }
+        return [
+          {
+            id: 'twin',
+            name: 'slip@example.com',
+            matchers: [{ type: 'literal', field: 'to', value: 'slip@example.com' }],
+            actions: [],
+          },
+          {
+            id: 'new-rule',
+            name: 'slip@example.com',
+            matchers: [{ type: 'literal', field: 'to', value: 'slip@example.com' }],
+            actions: [],
+          },
+        ];
+      }
+      return base.fetchAllCloudflare(requestPath);
+    },
+  };
+
+  const { app } = createApp({
+    env: { ...DIAGNOSTICS_ENV },
+    cloudflareClient,
+    sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
+  });
+  const { server, baseUrl } = await listen(app);
+
+  try {
+    resetSessionEpochForTests();
+    const sessionCookie = await loginAndGetCookie(baseUrl);
+
+    const res = await fetch(`${baseUrl}/api/rules`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: sessionCookie },
+      body: JSON.stringify({ localPart: 'slip', action: { type: 'forward', value: ['dest@example.com'] } }),
+    });
+
+    assert.equal(res.status, 400);
+    assert.equal((await readJson(res)).code, ERROR_CODES.RULES_DUPLICATE_ALIAS);
+    assert.deepEqual(deletions, ['new-rule']);
+  } finally {
+    resetSessionEpochForTests();
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+  }
+});
+
 test('HTTP integration: a duplicate alias is diagnosed after the Cloudflare failure', async () => {
   const base = createMockCloudflareClient();
   const cloudflareClient = {
@@ -1362,6 +1502,25 @@ test('HTTP integration: a rule with an unknown action type cannot be edited', as
     }
 
     assert.deepEqual(puts, [], 'no undescribable rule may be overwritten in Cloudflare');
+
+    // enable/disable and DELETE share the same guard as PUT.
+    for (const pathSuffix of ['/enable', '/disable']) {
+      const res = await fetch(`${baseUrl}/api/rules/alien_rule${pathSuffix}`, {
+        method: 'POST',
+        headers,
+      });
+      assert.equal(res.status, 400, pathSuffix);
+      assert.equal((await readJson(res)).code, NOT_EDITABLE_RULE_CODE);
+    }
+    {
+      const res = await fetch(`${baseUrl}/api/rules/alien_rule`, {
+        method: 'DELETE',
+        headers,
+      });
+      assert.equal(res.status, 400);
+      assert.equal((await readJson(res)).code, NOT_EDITABLE_RULE_CODE);
+    }
+    assert.deepEqual(puts, [], 'enable/disable must not rewrite an undescribable rule either');
   } finally {
     resetSessionEpochForTests();
     await new Promise((resolve) => {
@@ -1948,6 +2107,52 @@ test('HTTP integration: same-origin guard blocks a mismatched Origin on mutation
   }
 });
 
+test('HTTP integration: same-origin guard covers /api/login and /api/logout', async () => {
+  const { app } = createApp({
+    env: { ...DIAGNOSTICS_ENV },
+    cloudflareClient: createMockCloudflareClient(),
+    sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
+  });
+  const { server, baseUrl } = await listen(app);
+
+  try {
+    resetSessionEpochForTests();
+
+    const blockedLogin = await fetch(`${baseUrl}/api/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: 'http://evil.test',
+      },
+      body: JSON.stringify({ username: 'testuser', password: 'test-secret-pass' }),
+    });
+    assert.equal(blockedLogin.status, 403);
+    assert.equal((await readJson(blockedLogin)).code, ERROR_CODES.CSRF_BLOCKED);
+
+    const sessionCookie = await loginAndGetCookie(baseUrl);
+    const blockedLogout = await fetch(`${baseUrl}/api/logout`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: sessionCookie,
+        Origin: 'http://evil.test',
+      },
+    });
+    assert.equal(blockedLogout.status, 403);
+    assert.equal((await readJson(blockedLogout)).code, ERROR_CODES.CSRF_BLOCKED);
+
+    // Cookie still valid: the CSRF block must not have revoked anything.
+    const me = await fetch(`${baseUrl}/api/me`, { headers: { Cookie: sessionCookie } });
+    assert.equal(me.status, 200);
+  } finally {
+    resetSessionEpochForTests();
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+  }
+});
+
 test('HTTP integration: same-origin guard blocks same-site Sec-Fetch-Site with a mismatched Origin', async () => {
   const { app } = createApp({
     env: { ...DIAGNOSTICS_ENV },
@@ -2162,7 +2367,7 @@ test('HTTP integration: the setup wizard claims the panel exactly once', async (
     {
       const res = await fetch(`${baseUrl}/api/me`, { headers: { Cookie: sessionCookie } });
       assert.equal(res.status, 200);
-      assert.deepEqual(await readJson(res), { rootDomain: 'example.com' });
+      assert.deepEqual(await readJson(res), { rootDomain: 'example.com', username: 'kn' });
     }
 
     {
@@ -2341,7 +2546,7 @@ test('HTTP integration: changing the password revokes every other session', asyn
           newPasswordConfirm: 'another-long-password',
         }),
       });
-      assert.equal(res.status, 401);
+      assert.equal(res.status, 400);
       assert.equal((await readJson(res)).code, ERROR_CODES.AUTH_CURRENT_PASSWORD_INVALID);
     }
 
@@ -2393,6 +2598,66 @@ test('HTTP integration: changing the password revokes every other session', asyn
     resetSessionEpochForTests();
     await new Promise((resolve) => {
       server.close(resolve);
+    });
+  }
+});
+
+test('HTTP integration: password-change revocation survives a process restart', async (t) => {
+  // The epoch mark used to live only in memory: a restart set it back to 0 and every
+  // cookie issued before the change became valid again. It is now under the data dir.
+  const dataDir = tempDataDir(t);
+  const shared = {
+    env: { ...DIAGNOSTICS_ENV },
+    cloudflareClient: createMockCloudflareClient(),
+    sessionSecret: 'test-session-secret-32chars!!',
+    dataDir,
+  };
+
+  const { app: app1 } = createApp(shared);
+  const { server: server1, baseUrl: base1 } = await listen(app1);
+
+  let stolenCookie = '';
+  try {
+    const setupRes = await fetch(`${base1}/api/setup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: 'kn',
+        password: SETUP_PASSWORD,
+        passwordConfirm: SETUP_PASSWORD,
+      }),
+    });
+    assert.equal(setupRes.status, 200);
+    const ownCookie = sessionCookieHeaderFromResponse(setupRes);
+    stolenCookie = await loginAndGetCookie(base1, 'kn', SETUP_PASSWORD);
+
+    const changeRes = await fetch(`${base1}/api/account/password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: ownCookie },
+      body: JSON.stringify({
+        currentPassword: SETUP_PASSWORD,
+        newPassword: 'another-long-password',
+        newPasswordConfirm: 'another-long-password',
+      }),
+    });
+    assert.equal(changeRes.status, 200);
+    assert.ok(fs.existsSync(path.join(dataDir, 'session-epoch')));
+  } finally {
+    // Do NOT reset the epoch here: the second createApp must reload it from disk.
+    await new Promise((resolve) => {
+      server1.close(resolve);
+    });
+  }
+
+  const { app: app2 } = createApp(shared);
+  const { server: server2, baseUrl: base2 } = await listen(app2);
+  try {
+    const res = await fetch(`${base2}/api/me`, { headers: { Cookie: stolenCookie } });
+    assert.equal(res.status, 401, 'a stolen cookie must stay dead after the process restarts');
+  } finally {
+    resetSessionEpochForTests();
+    await new Promise((resolve) => {
+      server2.close(resolve);
     });
   }
 });
@@ -2449,7 +2714,7 @@ test('HTTP integration: changing the username revokes every other session', asyn
           currentPassword: 'not-the-current-one',
         }),
       });
-      assert.equal(res.status, 401);
+      assert.equal(res.status, 400);
       assert.equal((await readJson(res)).code, ERROR_CODES.AUTH_CURRENT_PASSWORD_INVALID);
     }
 

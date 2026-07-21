@@ -22,6 +22,7 @@ import {
   ruleAliasLabel,
 } from './destination-usage.js';
 import {
+  countRulesForAlias,
   duplicateAliasError,
   hasRuleForAlias,
   inspectDestination,
@@ -135,12 +136,13 @@ function rejectNotEditableRule(res) {
  *                 English fallback and `code` is what the bilingual SPA renders
  *                 (platform/http/error-codes.js)
  * Exceptions (flat envelopes, no `{ result }`):
- *   - `GET /api/me` → `{ rootDomain }`
+ *   - `GET /api/me` → `{ rootDomain, username }`
  *   - `/api/login` and `/api/logout` → `{ success: true }`
  */
 export function registerApiRoutes(app, {
   env = process.env,
   requireAuth,
+  credentialStore,
   cloudflareClient,
   apiLimiter = createApiRateLimiter(),
 } = {}) {
@@ -174,6 +176,11 @@ export function registerApiRoutes(app, {
     if (isCatchAllRule(rule)) {
       return rejectCatchAllMutation(res);
     }
+    // Same guard as PUT: an undescribable action must not be rewritten, even for a
+    // pure enable/disable — buildRuleUpdatePayload still sends the full object back.
+    if (!isPanelEditableRule(rule)) {
+      return rejectNotEditableRule(res);
+    }
 
     const payload = buildRuleUpdatePayload(parseCloudflareRule(rule), enabled);
     const apiRes = await fetchCloudflare(`/zones/${env.CF_ZONE_ID}/email/routing/rules/${ruleId}`, 'PUT', payload);
@@ -185,6 +192,7 @@ export function registerApiRoutes(app, {
   app.get('/api/me', ...gate, (_req, res) => {
     res.json({
       rootDomain: getPanelDomain(env),
+      username: credentialStore.getUsername(),
     });
   });
 
@@ -319,42 +327,73 @@ export function registerApiRoutes(app, {
     throw err;
   };
 
+  // Serialises creates in this process so two concurrent POSTs for the same alias cannot
+  // both pass the pre-flight check. The post-create recount below still covers races that
+  // slip past (another replica, or a matcher Cloudflare already held outside this window).
+  let createRuleTail = Promise.resolve();
+  const withCreateRuleLock = (run) => {
+    const next = createRuleTail.then(run, run);
+    createRuleTail = next.then(() => undefined, () => undefined);
+    return next;
+  };
+
   app.post('/api/rules', ...gate, asyncHandler(async (req, res) => {
-    const { localPart, action } = ruleSchema.parse(req.body);
-    const aliasEmail = `${localPart}@${getPanelDomain(env)}`;
+    await withCreateRuleLock(async () => {
+      const { localPart, action } = ruleSchema.parse(req.body);
+      const aliasEmail = `${localPart}@${getPanelDomain(env)}`;
 
-    // Pre-flight check: the SPA already offers verified destinations only, but the
-    // server cannot trust the client, and this way the error arrives clear right away.
-    //
-    // The rules list is fetched here too, not only in the error branch: Cloudflare
-    // ACCEPTS a duplicate matcher and answers 200, yet only the first rule processes the
-    // mail (see rule-diagnostics.js). Diagnosing after the failure never sees that case,
-    // so the user ended up with an alias that looks created and silently does nothing.
-    // Both lists in parallel: the happy path costs one round trip, not two.
-    const [addresses, rules] = await Promise.all([
-      action.type === 'forward' ? listAddresses() : [],
-      fetchAllCloudflare(`/zones/${env.CF_ZONE_ID}/email/routing/rules`),
-    ]);
+      // Pre-flight check: the SPA already offers verified destinations only, but the
+      // server cannot trust the client, and this way the error arrives clear right away.
+      //
+      // The rules list is fetched here too, not only in the error branch: Cloudflare
+      // ACCEPTS a duplicate matcher and answers 200, yet only the first rule processes the
+      // mail (see rule-diagnostics.js). Diagnosing after the failure never sees that case,
+      // so the user ended up with an alias that looks created and silently does nothing.
+      // Both lists in parallel: the happy path costs one round trip, not two.
+      const [addresses, rules] = await Promise.all([
+        action.type === 'forward' ? listAddresses() : [],
+        fetchAllCloudflare(`/zones/${env.CF_ZONE_ID}/email/routing/rules`),
+      ]);
 
-    if (hasRuleForAlias(rules, aliasEmail)) {
-      throw duplicateAliasError(aliasEmail);
-    }
+      if (hasRuleForAlias(rules, aliasEmail)) {
+        throw duplicateAliasError(aliasEmail);
+      }
 
-    const payload = {
-      name: aliasEmail,
-      enabled: true,
-      matchers: [{ type: 'literal', field: 'to', value: aliasEmail }],
-      actions: [resolvePanelAction(action, addresses)],
-    };
+      const payload = {
+        name: aliasEmail,
+        enabled: true,
+        matchers: [{ type: 'literal', field: 'to', value: aliasEmail }],
+        actions: [resolvePanelAction(action, addresses)],
+      };
 
-    let apiRes;
-    try {
-      apiRes = await fetchCloudflare(`/zones/${env.CF_ZONE_ID}/email/routing/rules`, 'POST', payload);
-    } catch (err) {
-      await diagnoseRuleCreationFailure({ err, aliasEmail, action });
-    }
+      let apiRes;
+      try {
+        apiRes = await fetchCloudflare(`/zones/${env.CF_ZONE_ID}/email/routing/rules`, 'POST', payload);
+      } catch (err) {
+        await diagnoseRuleCreationFailure({ err, aliasEmail, action });
+      }
 
-    res.json({ ok: true, result: apiRes });
+      // Post-create recount: if another rule for the same matcher appeared (race across
+      // processes, or Cloudflare already had a twin), roll back ours and surface the same
+      // duplicate error the pre-check would have — never leave a silent blackhole.
+      const rulesAfter = await fetchAllCloudflare(`/zones/${env.CF_ZONE_ID}/email/routing/rules`);
+      if (countRulesForAlias(rulesAfter, aliasEmail) > 1) {
+        const createdId = typeof apiRes?.id === 'string' ? apiRes.id : null;
+        if (createdId) {
+          try {
+            await fetchCloudflare(
+              `/zones/${env.CF_ZONE_ID}/email/routing/rules/${createdId}`,
+              'DELETE',
+            );
+          } catch {
+            // Best-effort rollback; the duplicate error below still tells the user.
+          }
+        }
+        throw duplicateAliasError(aliasEmail);
+      }
+
+      res.json({ ok: true, result: apiRes });
+    });
   }));
 
   /**
@@ -444,6 +483,11 @@ export function registerApiRoutes(app, {
     const rule = await fetchCloudflare(`/zones/${env.CF_ZONE_ID}/email/routing/rules/${ruleId}`);
     if (isCatchAllRule(rule)) {
       return rejectCatchAllMutation(res);
+    }
+    // Unknown actions are not deletable from the panel either: the user cannot see what
+    // they are removing. Worker/fan-out rules stay deletable (the SPA confirms first).
+    if (!isPanelEditableRule(rule)) {
+      return rejectNotEditableRule(res);
     }
 
     await fetchCloudflare(`/zones/${env.CF_ZONE_ID}/email/routing/rules/${ruleId}`, 'DELETE');

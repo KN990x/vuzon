@@ -217,6 +217,21 @@ test('fetchAllCloudflare: without result_info it stays on a single page', async 
   assert.equal(calls.length, 1);
 });
 
+test('fetchAllCloudflare: a full page without total_pages keeps paginating', async () => {
+  // Missing/malformed total_pages used to stop at page 1. A full page (per_page=50) is
+  // the signal that there may be more — keep walking until a short page.
+  const fullPage = Array.from({ length: 50 }, (_, i) => ({ id: `p1-${i}` }));
+  const calls = stubFetch([
+    jsonResponse({ success: true, result: fullPage }),
+    jsonResponse({ success: true, result: [{ id: 'p2-0' }] }),
+  ]);
+  const client = createCloudflareClient({ env: ENV });
+
+  const all = await client.fetchAllCloudflare('/zones/z/email/routing/rules');
+  assert.equal(all.length, 51);
+  assert.equal(calls.length, 2);
+});
+
 test('fetchAllCloudflare: stops when the page cap is exceeded', async () => {
   const calls = stubFetch(() =>
     jsonResponse({ success: true, result: [{ id: 'x' }], result_info: { total_pages: 999 } }),

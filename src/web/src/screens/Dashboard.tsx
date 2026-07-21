@@ -37,7 +37,7 @@ interface ListResponse<T> {
 export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
   const i18n = useI18n();
   const { t } = i18n;
-  const [profile, setProfile] = useState<Profile>({ rootDomain: '' });
+  const [profile, setProfile] = useState<Profile>({ rootDomain: '', username: '' });
   const [rules, setRules] = useState<Rule[]>([]);
   const [dests, setDests] = useState<Destination[]>([]);
   const [catchAll, setCatchAll] = useState<Rule | null>(null);
@@ -186,7 +186,7 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
 
     api<Profile>('/api/me')
       .then((value) => {
-        if (!cancelled) setProfile(value || { rootDomain: '' });
+        if (!cancelled) setProfile(value || { rootDomain: '', username: '' });
       })
       .catch((err: unknown) => {
         if (!cancelled) {
@@ -337,33 +337,38 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
    *
    * Replacing a Worker or fan-out action is confirmed first: the PUT overwrites `actions`
    * wholesale and vuzon cannot put back what it did not create.
+   *
+   * @returns true when the patch landed (so the editor can collapse); false on cancel/error.
    */
-  async function updateRule(rule: Rule, patch: RulePatch) {
+  async function updateRule(rule: Rule, patch: RulePatch): Promise<boolean> {
     if (Object.keys(patch).length === 0) {
-      return;
+      return false;
     }
 
     const { kind } = describeRuleActions(rule);
     const replacesForeignAction = patch.action !== undefined
       && (kind === 'worker' || kind === 'fanout');
     if (replacesForeignAction && !window.confirm(t('rules.editor.confirmReplace'))) {
-      return;
+      return false;
     }
 
+    let ok = false;
     await runExclusive(`rule:${rule.id}`, async () => {
       try {
         await api(`/api/rules/${rule.id}`, 'PUT', patch);
         await refreshAll();
         setStatus(t(patch.action ? 'dashboard.status.destUpdated' : 'dashboard.status.aliasUpdated'));
+        ok = true;
       } catch (err) {
         setErrorStatus(err);
       }
     });
+    return ok;
   }
 
-  async function updateCatchAll(patch: CatchAllPatch) {
+  async function updateCatchAll(patch: CatchAllPatch): Promise<boolean> {
     if (Object.keys(patch).length === 0) {
-      return;
+      return false;
     }
 
     const { kind } = describeRuleActions(catchAll);
@@ -372,23 +377,26 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
       && (kind === 'worker' || kind === 'fanout')
       && !window.confirm(t('rules.editor.confirmReplace'))
     ) {
-      return;
+      return false;
     }
     // Pausing it is not a small change: mail to an address with no alias stops being
     // accepted at all, and nothing on screen would say so afterwards.
     if (patch.enabled === false && !window.confirm(t('catchAll.confirmDisable'))) {
-      return;
+      return false;
     }
 
+    let ok = false;
     await runExclusive('catch-all', async () => {
       try {
         await api('/api/rules/catch-all', 'PUT', patch);
         await refreshAll();
         setStatus(t('dashboard.status.catchAllUpdated'));
+        ok = true;
       } catch (err) {
         setErrorStatus(err);
       }
     });
+    return ok;
   }
 
   async function deleteRule(id: string) {
@@ -481,10 +489,20 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
       />
       {accountOpen && (
         <AccountDialog
+          currentUsername={profile.username}
           onClose={() => setAccountOpen(false)}
+          onUnauthorized={() => {
+            setAccountOpen(false);
+            onUnauthorized();
+          }}
           onChanged={(kind) => {
             setAccountOpen(false);
             setStatus(kind === 'username' ? t('account.username.done') : t('account.password.done'));
+            if (kind === 'username') {
+              void api<Profile>('/api/me')
+                .then((value) => setProfile(value || { rootDomain: '', username: '' }))
+                .catch(() => undefined);
+            }
           }}
         />
       )}

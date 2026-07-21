@@ -12,7 +12,7 @@ interface CatchAllCardProps {
   verifiedDests: Destination[];
   busy: boolean;
   onToggle: () => void;
-  onEdit: (patch: RuleEditorPatch) => Promise<void>;
+  onEdit: (patch: RuleEditorPatch) => Promise<boolean>;
 }
 
 /**
@@ -94,7 +94,10 @@ export function CatchAllCard({ catchAll, verifiedDests, busy, onToggle, onEdit }
             busy={busy}
             onCancel={() => setEditing(false)}
             onSave={(patch) => {
-              void onEdit(patch).then(() => setEditing(false));
+              // Collapse only on success: updateCatchAll resolves false when the save fails.
+              void onEdit(patch).then((ok) => {
+                if (ok) setEditing(false);
+              });
             }}
           />
         </div>

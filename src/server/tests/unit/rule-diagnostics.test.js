@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  countRulesForAlias,
   hasRuleForAlias,
   inspectDestination,
   isVerifiedAddress,
@@ -88,4 +89,15 @@ test('hasRuleForAlias: the catch-all does not count as a duplicate', () => {
 test('hasRuleForAlias: tolerates rules without matchers', () => {
   assert.equal(hasRuleForAlias([{}, { matchers: null }, null], 'x@example.com'), false);
   assert.equal(hasRuleForAlias(undefined, 'x@example.com'), false);
+});
+
+test('countRulesForAlias: counts every literal twin', () => {
+  const rules = [
+    { matchers: [{ type: 'literal', field: 'to', value: 'hola@example.com' }] },
+    { matchers: [{ type: 'literal', field: 'to', value: 'HOLA@example.com' }] },
+    { matchers: [{ type: 'all' }] },
+  ];
+  assert.equal(countRulesForAlias(rules, 'hola@example.com'), 2);
+  assert.equal(countRulesForAlias(rules, 'otro@example.com'), 0);
+  assert.equal(countRulesForAlias(undefined, 'hola@example.com'), 0);
 });
