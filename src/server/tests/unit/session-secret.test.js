@@ -1,86 +1,64 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { test } from 'node:test';
 import { resolveSessionSecret } from '../../config/session-secret.js';
 
-test('resolveSessionSecret: SESSION_SECRET from env', () => {
-  const secret = resolveSessionSecret({
-    env: { SESSION_SECRET: 'from-env' },
-  });
-  assert.equal(secret, 'from-env');
-});
+function tempDataDir(t) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vuzon-secret-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  return dir;
+}
 
-test('resolveSessionSecret: trims SESSION_SECRET', () => {
-  const secret = resolveSessionSecret({
-    env: { SESSION_SECRET: '  trimmed-secret  \n' },
-  });
-  assert.equal(secret, 'trimmed-secret');
-});
-
-test('resolveSessionSecret: a whitespace-only SESSION_SECRET is treated as missing', async (t) => {
-  const warnings = [];
-  const origWarn = console.warn;
-  console.warn = (...args) => {
-    warnings.push(args.join(' '));
-  };
-  t.after(() => {
-    console.warn = origWarn;
-  });
-
-  const secret = resolveSessionSecret({
-    env: { SESSION_SECRET: '   \t  ', NODE_ENV: 'development' },
-  });
+test('resolveSessionSecret: generates 64 hex chars into the data directory', (t) => {
+  const dataDir = tempDataDir(t);
+  const secret = resolveSessionSecret({ dataDir });
 
   assert.match(secret, /^[a-f0-9]{64}$/);
-  assert.match(warnings.join('\n'), /SESSION_SECRET/i);
+  const filePath = path.join(dataDir, 'session-secret');
+  assert.equal(fs.readFileSync(filePath, 'utf8').trim(), secret);
+  // Whoever reads this file can forge a logged-in cookie.
+  assert.equal(fs.statSync(filePath).mode & 0o777, 0o600);
+  assert.equal(fs.existsSync(`${filePath}.tmp`), false);
 });
 
-test('resolveSessionSecret: without SESSION_SECRET it generates 64 hex chars and warns (development)', async (t) => {
-  const warnings = [];
-  const origWarn = console.warn;
-  console.warn = (...args) => {
-    warnings.push(args.join(' '));
-  };
-  t.after(() => {
-    console.warn = origWarn;
+test('resolveSessionSecret: the generated secret is reused on the next start', (t) => {
+  // This is the whole point of persisting it: `docker compose up -d` after an update must
+  // not log the user out, which is what the old ephemeral fallback did.
+  const dataDir = tempDataDir(t);
+  assert.equal(resolveSessionSecret({ dataDir }), resolveSessionSecret({ dataDir }));
+});
+
+test('resolveSessionSecret: SESSION_SECRET in the environment is ignored', (t) => {
+  // It stopped being a configuration knob: one fewer line to get wrong in a public
+  // template, and no way to end up signing cookies with a key somebody published.
+  const dataDir = tempDataDir(t);
+  const secret = resolveSessionSecret({
+    env: { SESSION_SECRET: 'from-env-and-not-used' },
+    dataDir,
   });
 
-  const secret = resolveSessionSecret({ env: { NODE_ENV: 'development' } });
-
+  assert.notEqual(secret, 'from-env-and-not-used');
   assert.match(secret, /^[a-f0-9]{64}$/);
-  assert.match(warnings.join('\n'), /SESSION_SECRET/i);
-  assert.match(warnings.join('\n'), /restart/i);
 });
 
-test('resolveSessionSecret: in production without SESSION_SECRET it throws', () => {
-  assert.throws(
-    () => resolveSessionSecret({ env: { NODE_ENV: 'production' } }),
-    /SESSION_SECRET.*required/i,
-  );
+test('resolveSessionSecret: an empty file is treated as missing and regenerated', (t) => {
+  // Shape of an interrupted first boot or a badly restored volume. Sessions signed with
+  // the lost key stop being valid, which is the correct outcome.
+  const dataDir = tempDataDir(t);
+  const filePath = path.join(dataDir, 'session-secret');
+  fs.writeFileSync(filePath, '   \n');
+
+  const secret = resolveSessionSecret({ dataDir });
+  assert.match(secret, /^[a-f0-9]{64}$/);
+  assert.equal(fs.readFileSync(filePath, 'utf8').trim(), secret);
 });
 
-test('resolveSessionSecret: in production with SESSION_SECRET it uses it', () => {
-  const prodSecret = 'a'.repeat(32);
-  const secret = resolveSessionSecret({
-    env: {
-      NODE_ENV: 'production',
-      SESSION_SECRET: prodSecret,
-    },
-  });
-  assert.equal(secret, prodSecret);
-});
+test('resolveSessionSecret: a directory it cannot read from surfaces the error', (t) => {
+  const dataDir = tempDataDir(t);
+  // A directory where the file should be: readFileSync fails with EISDIR, not ENOENT.
+  fs.mkdirSync(path.join(dataDir, 'session-secret'));
 
-test('resolveSessionSecret: in production it rejects an overly short secret', () => {
-  assert.throws(
-    () => resolveSessionSecret({
-      env: { NODE_ENV: 'production', SESSION_SECRET: 'too-short' },
-    }),
-    /at least 32/i,
-  );
-});
-
-test('resolveSessionSecret: in development it accepts a short secret', () => {
-  const secret = resolveSessionSecret({
-    env: { NODE_ENV: 'development', SESSION_SECRET: 'short' },
-  });
-  assert.equal(secret, 'short');
+  assert.throws(() => resolveSessionSecret({ dataDir }), /session secret file/i);
 });

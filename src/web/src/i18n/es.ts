@@ -10,6 +10,7 @@ export const es = {
   'app.retry': 'Reintentar',
 
   'header.refresh': 'Actualizar',
+  'header.changePassword': 'Cambiar contraseña',
   'header.logout': 'Cerrar sesión',
   'header.github': 'GitHub',
   'header.language': 'Idioma',
@@ -23,9 +24,36 @@ export const es = {
   'login.submit': 'Entrar',
   'login.submitting': 'Entrando…',
   'login.error.generic': 'No se pudo iniciar sesión',
-  'login.error.server': 'Error del servidor. Inténtalo de nuevo.',
-  'login.error.http': 'No se pudo iniciar sesión (HTTP {status})',
-  'login.error.network': 'No se pudo conectar con el servidor. Comprueba tu conexión.',
+
+  // Fallos de transporte, compartidos por todas las pantallas de autenticación.
+  'auth.error.server': 'Error del servidor. Inténtalo de nuevo.',
+  'auth.error.http': 'El servidor respondió con un error (HTTP {status})',
+  'auth.error.network': 'No se pudo conectar con el servidor. Comprueba tu conexión.',
+
+  'setup.title': 'Configura tu panel',
+  'setup.intro':
+    'Elige el usuario y la contraseña con los que entrarás. Se guardan en tu servidor, '
+    + 'cifrados con un hash, no en ningún fichero de configuración.',
+  'setup.username': 'Usuario',
+  'setup.password': 'Contraseña',
+  'setup.passwordHint': 'Al menos 12 caracteres.',
+  'setup.passwordConfirm': 'Repite la contraseña',
+  'setup.submit': 'Crear cuenta',
+  'setup.submitting': 'Creando…',
+  'setup.error.generic': 'No se pudo completar la configuración',
+  'setup.warning':
+    'No hay recuperación de contraseña: apúntala en un sitio seguro.',
+
+  'account.password.title': 'Cambiar contraseña',
+  'account.password.current': 'Contraseña actual',
+  'account.password.new': 'Contraseña nueva',
+  'account.password.confirm': 'Repite la contraseña nueva',
+  'account.password.submit': 'Cambiar contraseña',
+  'account.password.submitting': 'Cambiando…',
+  'account.password.error.generic': 'No se pudo cambiar la contraseña',
+  'account.password.cancel': 'Cancelar',
+  'account.password.notice': 'Cualquier otra sesión abierta se cerrará.',
+  'account.password.done': 'Contraseña cambiada',
 
   'dashboard.eyebrow': 'Panel de enrutamiento',
   'dashboard.activeAliases': 'alias activos',
@@ -136,10 +164,12 @@ export const es = {
   'rule.action.workerDefault': 'Email Worker',
 
   'error.unknown': 'Algo ha fallado',
-  'error.auth.credentials_missing':
-    'Credenciales de servidor no configuradas (AUTH_USER/AUTH_PASS)',
+  'error.auth.setup_required': 'El panel todavía no está configurado.',
   'error.auth.invalid_credentials': 'Credenciales incorrectas',
+  'error.auth.current_password_invalid': 'La contraseña actual no es correcta',
   'error.auth.unauthorized': 'Sesión expirada',
+  'error.setup.already_done':
+    'Este panel ya está configurado. Entra con las credenciales que elegiste.',
   'error.rate_limit.login': 'Demasiados intentos. Espera un momento e inténtalo de nuevo.',
   'error.rate_limit.api': 'Demasiadas peticiones. Espera un momento e inténtalo de nuevo.',
   'error.validation.invalid': 'Datos no válidos',
@@ -174,6 +204,10 @@ export const es = {
   'error.field.name': 'Nombre',
   'error.field.username': 'Usuario',
   'error.field.password': 'Contraseña',
+  'error.field.passwordConfirm': 'Confirmación de la contraseña',
+  'error.field.currentPassword': 'Contraseña actual',
+  'error.field.newPassword': 'Contraseña nueva',
+  'error.field.newPasswordConfirm': 'Confirmación de la contraseña nueva',
   'error.issue.email.invalid': 'formato de correo inválido',
   'error.issue.alias.empty': 'el alias no puede estar vacío',
   'error.issue.alias.too_long': 'el alias es demasiado largo',
@@ -191,6 +225,12 @@ export const es = {
   'error.issue.password.required': 'contraseña requerida',
   'error.issue.password.invalid': 'contraseña inválida',
   'error.issue.password.too_long': 'contraseña demasiado larga',
+  // El número va escrito, no interpolado: una incidencia de validación se renderiza sin
+  // params (ver i18n/api-errors.ts). tests/architecture/password-policy-guard lo mantiene
+  // en sintonía con MIN_PASSWORD_LENGTH.
+  'error.issue.password.too_short': 'la contraseña debe tener al menos 12 caracteres',
+  'error.issue.password.mismatch': 'las dos contraseñas no coinciden',
+  'error.issue.password.current_required': 'contraseña actual requerida',
   'error.issue.id.empty': 'identificador inválido',
   'error.issue.id.too_long': 'identificador demasiado largo',
   'error.issue.id.charset': 'el identificador contiene caracteres no permitidos',

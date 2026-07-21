@@ -15,6 +15,7 @@ export const en = {
   'app.retry': 'Retry',
 
   'header.refresh': 'Refresh',
+  'header.changePassword': 'Change password',
   'header.logout': 'Sign out',
   'header.github': 'GitHub',
   'header.language': 'Language',
@@ -28,9 +29,36 @@ export const en = {
   'login.submit': 'Sign in',
   'login.submitting': 'Signing in…',
   'login.error.generic': 'Could not sign in',
-  'login.error.server': 'Server error. Please try again.',
-  'login.error.http': 'Could not sign in (HTTP {status})',
-  'login.error.network': 'Could not reach the server. Check your connection.',
+
+  // Transport-level failures, shared by every auth screen (see lib/login-error.ts).
+  'auth.error.server': 'Server error. Please try again.',
+  'auth.error.http': 'The server answered with an error (HTTP {status})',
+  'auth.error.network': 'Could not reach the server. Check your connection.',
+
+  'setup.title': 'Set up your panel',
+  'setup.intro':
+    'Choose the username and password you will use to sign in. They are stored on your '
+    + 'server, hashed — not in any configuration file.',
+  'setup.username': 'Username',
+  'setup.password': 'Password',
+  'setup.passwordHint': 'At least 12 characters.',
+  'setup.passwordConfirm': 'Repeat the password',
+  'setup.submit': 'Create account',
+  'setup.submitting': 'Creating…',
+  'setup.error.generic': 'Could not complete the setup',
+  'setup.warning':
+    'There is no password recovery: write it down somewhere safe.',
+
+  'account.password.title': 'Change password',
+  'account.password.current': 'Current password',
+  'account.password.new': 'New password',
+  'account.password.confirm': 'Repeat the new password',
+  'account.password.submit': 'Change password',
+  'account.password.submitting': 'Changing…',
+  'account.password.error.generic': 'Could not change the password',
+  'account.password.cancel': 'Cancel',
+  'account.password.notice': 'Any other session that is open will be signed out.',
+  'account.password.done': 'Password changed',
 
   'dashboard.eyebrow': 'Routing panel',
   'dashboard.activeAliases': 'active aliases',
@@ -145,10 +173,12 @@ export const en = {
   // itself. Every code MUST have an entry: tests/architecture/error-codes-guard.test.js
   // fails CI otherwise.
   'error.unknown': 'Something went wrong',
-  'error.auth.credentials_missing':
-    'Server credentials are not configured (AUTH_USER/AUTH_PASS)',
+  'error.auth.setup_required': 'The panel has not been set up yet.',
   'error.auth.invalid_credentials': 'Invalid credentials',
+  'error.auth.current_password_invalid': 'The current password is not correct',
   'error.auth.unauthorized': 'Session expired',
+  'error.setup.already_done':
+    'This panel is already set up. Sign in with the credentials you chose.',
   'error.rate_limit.login': 'Too many attempts. Wait a moment and try again.',
   'error.rate_limit.api': 'Too many requests. Wait a moment and try again.',
   'error.validation.invalid': 'Invalid data',
@@ -184,6 +214,10 @@ export const en = {
   'error.field.name': 'Name',
   'error.field.username': 'Username',
   'error.field.password': 'Password',
+  'error.field.passwordConfirm': 'Password confirmation',
+  'error.field.currentPassword': 'Current password',
+  'error.field.newPassword': 'New password',
+  'error.field.newPasswordConfirm': 'New password confirmation',
   'error.issue.email.invalid': 'invalid email format',
   'error.issue.alias.empty': 'the alias cannot be empty',
   'error.issue.alias.too_long': 'the alias is too long',
@@ -201,6 +235,12 @@ export const en = {
   'error.issue.password.required': 'password required',
   'error.issue.password.invalid': 'invalid password',
   'error.issue.password.too_long': 'password too long',
+  // The number is written out instead of interpolated: a validation issue is rendered
+  // without params (see i18n/api-errors.ts). tests/architecture/password-policy-guard
+  // keeps it in step with MIN_PASSWORD_LENGTH.
+  'error.issue.password.too_short': 'the password must be at least 12 characters long',
+  'error.issue.password.mismatch': 'the two passwords do not match',
+  'error.issue.password.current_required': 'current password required',
   'error.issue.id.empty': 'invalid identifier',
   'error.issue.id.too_long': 'identifier too long',
   'error.issue.id.charset': 'identifier contains characters that are not allowed',

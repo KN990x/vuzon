@@ -66,7 +66,7 @@ test('placeholder-guard: every .env.example value is covered or exempt', () => {
  *   2. every value registered in PLACEHOLDER_VALUES_BY_KEY must still be rejected, so the list
  *      does not rot into dead code once it stops being exercised by `.env.example`.
  */
-const SECRET_BEARING_ENV_KEYS = ['SESSION_SECRET', 'AUTH_PASS', 'CF_API_TOKEN'];
+const SECRET_BEARING_ENV_KEYS = ['CF_API_TOKEN'];
 
 test('placeholder-guard: .env.example ships the secret-bearing keys empty', () => {
   const entries = readEnvExampleEntries();
@@ -97,41 +97,22 @@ test('placeholder-guard: every registered placeholder is still rejected', () => 
   }
 });
 
-test('placeholder-guard: the example SESSION_SECRET is over 32 characters yet is rejected', () => {
-  const example = 'replace-with-openssl-rand-hex-32-chars';
-  // Documents the original bug: the length check alone let this through.
-  assert.ok(example.length >= 32);
-  assert.match(getPlaceholderConfigurationIssue({ SESSION_SECRET: example }), /SESSION_SECRET/);
-});
-
-test('placeholder-guard: rejects a SESSION_SECRET without entropy', () => {
-  assert.match(
-    getPlaceholderConfigurationIssue({ SESSION_SECRET: 'a'.repeat(64) }),
-    /too predictable/,
+test('placeholder-guard: SESSION_SECRET is no longer a variable it looks at', () => {
+  // The cookie signing key is generated into the data directory (config/session-secret.js),
+  // so a leftover SESSION_SECRET in an old .env — template value and all — is simply inert.
+  assert.equal(
+    getPlaceholderConfigurationIssue({
+      SESSION_SECRET: 'replace-with-openssl-rand-hex-32-chars',
+    }),
+    null,
   );
-  assert.match(
-    getPlaceholderConfigurationIssue({ SESSION_SECRET: 'ab'.repeat(32) }),
-    /too predictable/,
-  );
-});
-
-test('placeholder-guard: accepts a real secret from openssl rand -hex 32', () => {
-  const realistic = '9f3c1a7d0e5b48620fa1c37d9e2b8054a6d13f7c2e908b45d61af03c7e5928bd';
-  assert.equal(getPlaceholderConfigurationIssue({ SESSION_SECRET: realistic }), null);
-});
-
-test('placeholder-guard: AUTH_USER=admin is a legitimate choice', () => {
-  assert.equal(getPlaceholderConfigurationIssue({ AUTH_USER: 'admin' }), null);
 });
 
 test('placeholder-guard: a normal environment produces no warning', () => {
   assert.equal(
     getPlaceholderConfigurationIssue({
       DOMAIN: 'mydomain.dev',
-      AUTH_USER: 'kn',
-      AUTH_PASS: 'a-password-of-my-own',
       CF_API_TOKEN: 'real-cloudflare-token-value',
-      SESSION_SECRET: '9f3c1a7d0e5b48620fa1c37d9e2b8054a6d13f7c2e908b45d61af03c7e5928bd',
     }),
     null,
   );

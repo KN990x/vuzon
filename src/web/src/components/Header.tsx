@@ -1,4 +1,4 @@
-import { LogOut, RefreshCw } from 'lucide-react';
+import { KeyRound, LogOut, RefreshCw } from 'lucide-react';
 import { useI18n } from '../i18n/context';
 import { GitHubIcon, iconButtonClass, VuzonMark } from './primitives';
 import { LanguageMenu } from './LanguageMenu';
@@ -7,10 +7,11 @@ interface HeaderProps {
   domain: string;
   loading: boolean;
   onRefresh: () => void;
+  onChangePassword: () => void;
   onLogout: () => void;
 }
 
-export function Header({ domain, loading, onRefresh, onLogout }: HeaderProps) {
+export function Header({ domain, loading, onRefresh, onChangePassword, onLogout }: HeaderProps) {
   const { t } = useI18n();
 
   return (
@@ -34,6 +35,15 @@ export function Header({ domain, loading, onRefresh, onLogout }: HeaderProps) {
         <RefreshCw size={17} className={loading ? 'animate-spin' : undefined} />
       </button>
       <LanguageMenu />
+      <button
+        type="button"
+        className={iconButtonClass}
+        onClick={onChangePassword}
+        title={t('header.changePassword')}
+        aria-label={t('header.changePassword')}
+      >
+        <KeyRound size={17} />
+      </button>
       <button
         type="button"
         className={iconButtonClass}

@@ -19,9 +19,11 @@
  * failure (see tests/architecture/error-codes-guard.test.js).
  */
 export const ERROR_CODES = Object.freeze({
-  AUTH_CREDENTIALS_MISSING: 'auth.credentials_missing',
+  AUTH_SETUP_REQUIRED: 'auth.setup_required',
   AUTH_INVALID_CREDENTIALS: 'auth.invalid_credentials',
+  AUTH_CURRENT_PASSWORD_INVALID: 'auth.current_password_invalid',
   AUTH_UNAUTHORIZED: 'auth.unauthorized',
+  SETUP_ALREADY_DONE: 'setup.already_done',
   RATE_LIMIT_LOGIN: 'rate_limit.login',
   RATE_LIMIT_API: 'rate_limit.api',
   VALIDATION_INVALID: 'validation.invalid',

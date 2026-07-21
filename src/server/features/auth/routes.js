@@ -1,10 +1,15 @@
-import { getPanelAuthCredentials } from '../../config/panel-auth-env.js';
+import { asyncHandler } from '../../bootstrap/async-handler.js';
 import { sendApiRouteError } from '../../platform/http/api-route-error.js';
 import { ERROR_CODES } from '../../platform/http/error-codes.js';
-import { createLoginRateLimiter, createLogoutRateLimiter } from '../../platform/http/rate-limiters.js';
+import {
+  createLoginRateLimiter,
+  createLogoutRateLimiter,
+  createPasswordChangeRateLimiter,
+  createSetupRateLimiter,
+} from '../../platform/http/rate-limiters.js';
 import { SESSION_COOKIE_NAME } from '../../platform/session/middleware.js';
 import { loginBodySchema } from './login-body.js';
-import { timingSafeStringEqual } from './safe-string-equal.js';
+import { passwordChangeBodySchema, setupBodySchema } from './setup-body.js';
 import {
   isSessionIssuanceValid,
   nextIssuedAt,
@@ -12,18 +17,53 @@ import {
 } from './session-epoch.js';
 
 export function registerAuthRoutes(app, {
-  env = process.env,
+  credentialStore,
+  requireAuth,
   sessionCookieName = SESSION_COOKIE_NAME,
   sessionCookieClearOptions = {},
   loginLimiter = createLoginRateLimiter(),
   logoutLimiter = createLogoutRateLimiter(),
+  setupLimiter = createSetupRateLimiter(),
+  passwordChangeLimiter = createPasswordChangeRateLimiter(),
 } = {}) {
-  app.post('/api/login', loginLimiter, (req, res) => {
-    const { authUser, authPass } = getPanelAuthCredentials(env);
-    if (!authUser || !authPass) {
-      return res.status(500).json({
-        error: 'Server credentials are not configured (AUTH_USER/AUTH_PASS)',
-        code: ERROR_CODES.AUTH_CREDENTIALS_MISSING,
+  /**
+   * First-install wizard. Public by necessity: there is no credential to authenticate
+   * against yet, so whoever reaches the panel first claims it (the same trust-on-first-use
+   * model as Uptime Kuma or Nextcloud). The 409 below is what closes that window for good,
+   * and it is checked BEFORE validating the body so a configured panel gives an attacker
+   * nothing to probe.
+   */
+  app.post('/api/setup', setupLimiter, asyncHandler(async (req, res) => {
+    if (credentialStore.isConfigured()) {
+      return res.status(409).json({
+        error: 'The panel is already set up',
+        code: ERROR_CODES.SETUP_ALREADY_DONE,
+      });
+    }
+
+    let body;
+    try {
+      body = setupBodySchema.parse(req.body);
+    } catch (err) {
+      return sendApiRouteError(res, err);
+    }
+
+    await credentialStore.save({ username: body.username, password: body.password });
+
+    // Signing in right away: asking the user to retype what they just chose adds nothing.
+    req.session = {
+      authenticated: true,
+      issuedAt: nextIssuedAt(),
+    };
+
+    return res.json({ success: true });
+  }));
+
+  app.post('/api/login', loginLimiter, asyncHandler(async (req, res) => {
+    if (!credentialStore.isConfigured()) {
+      return res.status(409).json({
+        error: 'The panel has no credentials yet: finish the setup first',
+        code: ERROR_CODES.AUTH_SETUP_REQUIRED,
       });
     }
 
@@ -35,10 +75,9 @@ export function registerAuthRoutes(app, {
       return sendApiRouteError(res, err);
     }
 
-    const userOk = timingSafeStringEqual(username, authUser);
-    const passOk = timingSafeStringEqual(password, authPass);
-
-    if (!userOk || !passOk) {
+    // One check for both fields: the store runs the KDF even when the username does not
+    // match, so the answer takes the same time either way.
+    if (!(await credentialStore.verify({ username, password }))) {
       return res.status(401).json({
         error: 'Invalid credentials',
         code: ERROR_CODES.AUTH_INVALID_CREDENTIALS,
@@ -52,7 +91,42 @@ export function registerAuthRoutes(app, {
     };
 
     return res.json({ success: true });
-  });
+  }));
+
+  /**
+   * `requireAuth` runs BEFORE the limiter, like every other guarded route: an anonymous
+   * caller must not be able to burn the quota of the legitimate user (see create-app.js).
+   */
+  app.post('/api/account/password', requireAuth, passwordChangeLimiter, asyncHandler(async (req, res) => {
+    let body;
+    try {
+      body = passwordChangeBodySchema.parse(req.body);
+    } catch (err) {
+      return sendApiRouteError(res, err);
+    }
+
+    const username = credentialStore.getUsername();
+    if (!(await credentialStore.verify({ username, password: body.currentPassword }))) {
+      return res.status(401).json({
+        error: 'The current password is not correct',
+        code: ERROR_CODES.AUTH_CURRENT_PASSWORD_INVALID,
+      });
+    }
+
+    await credentialStore.save({ username, password: body.newPassword });
+
+    // A password change must drop every other session, including a cookie copied earlier:
+    // that is the whole point of changing it. The caller's own session is re-stamped so the
+    // user is not logged out of the tab they are looking at (`nextIssuedAt` guarantees a
+    // mark strictly above the one just set).
+    revokeSessionsIssuedUntilNow();
+    req.session = {
+      authenticated: true,
+      issuedAt: nextIssuedAt(),
+    };
+
+    return res.json({ success: true });
+  }));
 
   // No requireAuth on purpose: logging out with an already expired cookie must be
   // idempotent and return 200. It uses its own limiter and NOT the login one: that one

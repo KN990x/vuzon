@@ -1,19 +1,20 @@
-import { getPanelAuthCredentials } from '../../config/panel-auth-env.js';
 import { ERROR_CODES } from '../../platform/http/error-codes.js';
 import { isSessionIssuanceValid } from './session-epoch.js';
 
 /**
  * Without a session it always answers 401 JSON. The React client decides which screen
  * to show after calling /api/me; the HTML is served without authentication (SPA).
+ *
+ * A panel with no credentials yet answers 401 too, with `auth.setup_required`. That code is
+ * what tells the SPA to render the setup wizard instead of the login form, and it is why
+ * the panel needs no extra "is it configured?" endpoint: `GET /api/me` already answers it.
  */
-export function createRequireAuth({ env = process.env } = {}) {
-  const { authUser, authPass } = getPanelAuthCredentials(env);
-
+export function createRequireAuth({ credentialStore } = {}) {
   return function requireAuth(req, res, next) {
-    if (!authUser || !authPass) {
-      return res.status(500).json({
-        error: 'Server credentials are not configured (AUTH_USER/AUTH_PASS)',
-        code: ERROR_CODES.AUTH_CREDENTIALS_MISSING,
+    if (!credentialStore.isConfigured()) {
+      return res.status(401).json({
+        error: 'The panel has no credentials yet: finish the setup first',
+        code: ERROR_CODES.AUTH_SETUP_REQUIRED,
       });
     }
 

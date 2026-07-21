@@ -6,25 +6,21 @@ import {
   getCloudflareIdsConfigurationIssueIfFullySpecified,
 } from '../config/cloudflare-env.js';
 import { getDomainConfigurationIssue } from '../config/domain-env.js';
-import { getPanelAuthConfigurationIssue, getPanelAuthCredentials } from '../config/panel-auth-env.js';
 import { getPlaceholderConfigurationIssue } from '../config/placeholder-guard.js';
 import { createApp } from './create-app.js';
 import { ensureCloudflareIdentifiers } from '../platform/cloudflare/auto-configure.js';
 import { createCloudflareClient } from '../platform/cloudflare/client.js';
+import { getDataDirConfigurationIssue, resolveDataDir } from '../platform/storage/data-dir.js';
 
 const RUNNING_IN_DOCKER = fs.existsSync('/.dockerenv');
 
 /**
- * @param {NodeJS.ProcessEnv} [env]
  * @returns {string}
  */
-function requiredEnvHelp(env = process.env) {
-  const base =
-    '   Required in .env (see the .env.example template): CF_API_TOKEN, DOMAIN, AUTH_USER, AUTH_PASS.';
-  if (env.NODE_ENV === 'production') {
-    return `${base} In production, SESSION_SECRET too (min. 32 characters).`;
-  }
-  return `${base} In production/Docker, SESSION_SECRET too.`;
+function requiredEnvHelp() {
+  return '   Required in .env (see the .env.example template): CF_API_TOKEN, DOMAIN.\n'
+    + '   The panel username and password are NOT environment variables: they are chosen '
+    + 'in the browser the first time you open the panel.';
 }
 
 function logDockerComposeHint() {
@@ -39,7 +35,9 @@ function logDockerComposeHint() {
  */
 function collectSynchronousStartupConfigurationIssues(env) {
   return [
-    getPanelAuthConfigurationIssue(env),
+    // Before anything else: the panel keeps its credentials there, so a volume that was
+    // never mounted must fail here and not when the user submits the setup form.
+    getDataDirConfigurationIssue(resolveDataDir(env)),
     getDomainConfigurationIssue(env),
     getCfApiTokenConfigurationIssue(env),
     getCloudflareIdsConfigurationIssueIfFullySpecified(env),
@@ -132,7 +130,7 @@ export async function startServer({
       for (const issue of syncIssues) {
         console.error(`   - ${issue}`);
       }
-      console.error(requiredEnvHelp(env));
+      console.error(requiredEnvHelp());
       logDockerComposeHint();
       exitProcess(1);
       return;
@@ -144,7 +142,7 @@ export async function startServer({
     await ensureCloudflareIdentifiers({ env, cloudflareClient });
     assertCloudflareEnvConfigured(env);
 
-    const { app, runtime } = createApp({ env, cloudflareClient });
+    const { app, runtime, credentialStore } = createApp({ env, cloudflareClient });
 
     const server = await listenWhenReady(app, runtime.port);
     const addr = server.address();
@@ -160,19 +158,29 @@ export async function startServer({
 
     registerGracefulShutdown(server, { exitProcess });
 
-    const { authUser } = getPanelAuthCredentials(env);
+    const authUser = credentialStore.getUsername();
     const panelUserLine = authUser
       ? runtime.isProduction
         ? 'Panel user: configured'
         : `Panel user: ${authUser}`
-      : 'Panel user: not configured';
+      : 'Panel user: NOT CONFIGURED';
     console.log(
       `Server on port ${boundPort} · production: ${runtime.isProduction ? 'yes' : 'no'} · ${panelUserLine}`,
     );
+
+    // The setup wizard is public until someone completes it: whoever opens the panel first
+    // claims it. Saying so on every boot is the mitigation we chose over a setup token —
+    // an unnoticed unconfigured panel is the only way that window stays open for long.
+    if (!authUser) {
+      console.warn(
+        'The panel has no credentials yet. Open it in a browser to choose your username and '
+          + 'password — until you do, anyone who can reach it could claim it.',
+      );
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`Fatal startup error: ${message}`);
-    console.error(requiredEnvHelp(env));
+    console.error(requiredEnvHelp());
     if (
       /CF_ZONE_ID|CF_ACCOUNT_ID|\bzones?\b|auto-?configur/i.test(message)
     ) {

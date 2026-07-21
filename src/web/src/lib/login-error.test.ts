@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { buildLoginErrorMessage } from './login-error';
+import { buildAuthErrorMessage, buildLoginErrorMessage } from './login-error';
 import { ApiError, UnauthorizedError } from './api';
 import { createTranslator } from '../i18n/locale';
 
@@ -32,8 +32,17 @@ test('a non-JSON 5xx response (proxy) → server error message', () => {
 
 test('a non-JSON, non-5xx response keeps the status', () => {
   const err = new ApiError('Unexpected response', 404, { code: 'client.non_json' });
-  expect(buildLoginErrorMessage(en, err)).toBe('Could not sign in (HTTP 404)');
-  expect(buildLoginErrorMessage(es, err)).toBe('No se pudo iniciar sesión (HTTP 404)');
+  expect(buildLoginErrorMessage(en, err)).toBe('The server answered with an error (HTTP 404)');
+  expect(buildLoginErrorMessage(es, err)).toBe('El servidor respondió con un error (HTTP 404)');
+});
+
+test('the generic fallback is per screen', () => {
+  // Same transport-level failure, different closing sentence: the setup wizard must not
+  // say "could not sign in".
+  expect(buildAuthErrorMessage(en, 'boom', 'setup.error.generic'))
+    .toBe('Could not complete the setup');
+  expect(buildAuthErrorMessage(es, new Error(''), 'account.password.error.generic'))
+    .toBe('No se pudo cambiar la contraseña');
 });
 
 test('network failure (fetch TypeError) → connection message', () => {

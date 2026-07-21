@@ -11,12 +11,17 @@ services:
     # PID 1 with zombie reaping and signal forwarding: the process receives the SIGTERM
     # from `docker stop` and shuts down cleanly instead of dying on SIGKILL.
     init: true
-    # The process writes nothing to disk (session in a cookie, no database).
+    # The image filesystem stays read-only; the only writable path is the data volume
+    # below, which holds the panel credentials (hashed) and the session signing key.
     # /tmp on tmpfs is the usual companion to read_only: it covers any temporary write
     # Node may need without granting write access to the image.
     read_only: true
     tmpfs:
       - /tmp
+    volumes:
+      # Losing this volume means losing the panel password: the setup wizard reopens and
+      # the first visitor claims the panel. Back it up like any other homelab state.
+      - vuzon-data:/app/data
     cap_drop:
       - ALL
     security_opt:
@@ -29,3 +34,6 @@ services:
       timeout: 5s
       start_period: 10s
       retries: 3
+
+volumes:
+  vuzon-data:

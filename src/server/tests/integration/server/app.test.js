@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import http from 'node:http';
+import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { createApp } from '../../../bootstrap/create-app.js';
@@ -126,10 +128,33 @@ function sessionCookieHeaderFromResponse(res) {
   return list.map((line) => line.split(';')[0].trim()).join('; ');
 }
 
+/**
+ * In-memory stand-in for `createCredentialStore`, with the same contract.
+ *
+ * The real store runs scrypt on purpose, which would add seconds across a file with 35
+ * apps and a login in most of them. What is exercised here is the HTTP contract; the
+ * hashing itself has its own unit tests (tests/unit/credential-store.test.js), and one
+ * case below wires the real store end to end.
+ */
+function createTestCredentialStore({ username = 'testuser', password = 'test-secret-pass' } = {}) {
+  let record = username ? { username: username.trim(), password: password.trim() } : null;
+
+  return {
+    isConfigured: () => record !== null,
+    getUsername: () => record?.username ?? '',
+    async save({ username: nextUser, password: nextPassword }) {
+      record = { username: nextUser.trim(), password: nextPassword };
+    },
+    async verify({ username: candidateUser, password: candidatePassword }) {
+      return record !== null
+        && candidateUser === record.username
+        && candidatePassword === record.password;
+    },
+  };
+}
+
 test('HTTP integration: healthz, auth, API with a simulated Cloudflare', async () => {
   const env = {
-    AUTH_USER: 'testuser',
-    AUTH_PASS: 'test-secret-pass',
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
     DOMAIN: 'example.com',
@@ -141,6 +166,7 @@ test('HTTP integration: healthz, auth, API with a simulated Cloudflare', async (
     env,
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
   });
 
   const { server, baseUrl } = await listen(app);
@@ -280,10 +306,8 @@ test('HTTP integration: healthz, auth, API with a simulated Cloudflare', async (
   }
 });
 
-test('HTTP integration: login with AUTH env vars carrying whitespace (trim)', async () => {
+test('HTTP integration: login trims the submitted credentials', async () => {
   const env = {
-    AUTH_USER: '  trimuser  ',
-    AUTH_PASS: '  trim-pass  ',
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
     DOMAIN: '  example.com  ',
@@ -294,6 +318,7 @@ test('HTTP integration: login with AUTH env vars carrying whitespace (trim)', as
     env,
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore({ username: 'trimuser', password: 'trim-pass' }),
   });
 
   const { server, baseUrl } = await listen(app);
@@ -302,7 +327,9 @@ test('HTTP integration: login with AUTH env vars carrying whitespace (trim)', as
     const res = await fetch(`${baseUrl}/api/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: 'trimuser', password: 'trim-pass' }),
+      // Padded on the wire: `loginBodySchema` trims before comparing, which is what
+      // makes a password pasted with a trailing space still work.
+      body: JSON.stringify({ username: '  trimuser  ', password: '  trim-pass  ' }),
     });
     assert.equal(res.status, 200);
     const data = await readJson(res);
@@ -323,7 +350,7 @@ test('HTTP integration: login with AUTH env vars carrying whitespace (trim)', as
   }
 });
 
-test('HTTP integration: without AUTH_USER/AUTH_PASS, POST /api/login answers 500', async () => {
+test('HTTP integration: before the setup, /api/me and /api/login say so', async () => {
   const env = {
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
@@ -335,19 +362,31 @@ test('HTTP integration: without AUTH_USER/AUTH_PASS, POST /api/login answers 500
     env,
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore({ username: '' }),
   });
 
   const { server, baseUrl } = await listen(app);
 
   try {
-    const res = await fetch(`${baseUrl}/api/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: 'cualquiera', password: 'cualquiera' }),
-    });
-    assert.equal(res.status, 500);
-    const data = await readJson(res);
-    assert.ok(data && typeof data.error === 'string');
+    {
+      // 401 and not 500: this code is what makes the SPA render the setup wizard instead
+      // of the login form, and it has to ride the status the client already handles.
+      const res = await fetch(`${baseUrl}/api/me`);
+      assert.equal(res.status, 401);
+      const data = await readJson(res);
+      assert.equal(data.code, ERROR_CODES.AUTH_SETUP_REQUIRED);
+    }
+
+    {
+      const res = await fetch(`${baseUrl}/api/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'anyone', password: 'anything-at-all' }),
+      });
+      assert.equal(res.status, 409);
+      const data = await readJson(res);
+      assert.equal(data.code, ERROR_CODES.AUTH_SETUP_REQUIRED);
+    }
   } finally {
     await new Promise((resolve) => {
       server.close(resolve);
@@ -357,8 +396,6 @@ test('HTTP integration: without AUTH_USER/AUTH_PASS, POST /api/login answers 500
 
 test('HTTP integration: security headers on /healthz', async () => {
   const env = {
-    AUTH_USER: 'u',
-    AUTH_PASS: 'p',
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
     DOMAIN: 'example.com',
@@ -369,6 +406,7 @@ test('HTTP integration: security headers on /healthz', async () => {
     env,
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
   });
 
   const { server, baseUrl } = await listen(app);
@@ -395,8 +433,6 @@ test('HTTP integration: security headers on /healthz', async () => {
 
 test('HTTP integration: logout invalidates a copy of the session cookie', async () => {
   const env = {
-    AUTH_USER: 'testuser',
-    AUTH_PASS: 'test-secret-pass',
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
     DOMAIN: 'example.com',
@@ -407,6 +443,7 @@ test('HTTP integration: logout invalidates a copy of the session cookie', async 
     env,
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
   });
 
   const { server, baseUrl } = await listen(app);
@@ -446,8 +483,6 @@ test('HTTP integration: logout invalidates a copy of the session cookie', async 
 
 test('HTTP integration: anonymous logout does not revoke other sessions', async () => {
   const env = {
-    AUTH_USER: 'testuser',
-    AUTH_PASS: 'test-secret-pass',
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
     DOMAIN: 'example.com',
@@ -458,6 +493,7 @@ test('HTTP integration: anonymous logout does not revoke other sessions', async 
     env,
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
   });
 
   const { server, baseUrl } = await listen(app);
@@ -488,8 +524,6 @@ test('HTTP integration: anonymous logout does not revoke other sessions', async 
 
 test('HTTP integration: anonymous logout is idempotent (200)', async () => {
   const env = {
-    AUTH_USER: 'testuser',
-    AUTH_PASS: 'test-secret-pass',
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
     DOMAIN: 'example.com',
@@ -500,6 +534,7 @@ test('HTTP integration: anonymous logout is idempotent (200)', async () => {
     env,
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
   });
 
   const { server, baseUrl } = await listen(app);
@@ -521,8 +556,6 @@ test('HTTP integration: anonymous logout is idempotent (200)', async () => {
 
 test('HTTP integration: /api responses are not cached', async () => {
   const env = {
-    AUTH_USER: 'testuser',
-    AUTH_PASS: 'test-secret-pass',
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
     DOMAIN: 'example.com',
@@ -533,6 +566,7 @@ test('HTTP integration: /api responses are not cached', async () => {
     env,
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
   });
 
   const { server, baseUrl } = await listen(app);
@@ -565,8 +599,6 @@ test('HTTP integration: /api responses are not cached', async () => {
 
 test('HTTP integration: login rate limit answers 429', async () => {
   const env = {
-    AUTH_USER: 'testuser',
-    AUTH_PASS: 'test-secret-pass',
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
     DOMAIN: 'example.com',
@@ -577,6 +609,7 @@ test('HTTP integration: login rate limit answers 429', async () => {
     env,
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
     loginLimiter: createLoginRateLimiter({ max: 3, windowMs: 60_000 }),
   });
 
@@ -610,8 +643,6 @@ test('HTTP integration: login rate limit answers 429', async () => {
 
 test('HTTP integration: an invalid login body answers 400', async () => {
   const env = {
-    AUTH_USER: 'testuser',
-    AUTH_PASS: 'test-secret-pass',
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
     DOMAIN: 'example.com',
@@ -622,6 +653,7 @@ test('HTTP integration: an invalid login body answers 400', async () => {
     env,
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
   });
 
   const { server, baseUrl } = await listen(app);
@@ -644,8 +676,6 @@ test('HTTP integration: an invalid login body answers 400', async () => {
 
 test('HTTP integration: authenticated API rate limit answers 429', async () => {
   const env = {
-    AUTH_USER: 'testuser',
-    AUTH_PASS: 'test-secret-pass',
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
     DOMAIN: 'example.com',
@@ -656,6 +686,7 @@ test('HTTP integration: authenticated API rate limit answers 429', async () => {
     env,
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
     apiLimiter: createApiRateLimiter({ max: 2, windowMs: 60_000 }),
   });
 
@@ -693,8 +724,6 @@ test('HTTP integration: authenticated API rate limit answers 429', async () => {
 
 test('HTTP integration: sessionless requests do not consume the API rate-limit quota', async () => {
   const env = {
-    AUTH_USER: 'testuser',
-    AUTH_PASS: 'test-secret-pass',
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
     DOMAIN: 'example.com',
@@ -705,6 +734,7 @@ test('HTTP integration: sessionless requests do not consume the API rate-limit q
     env,
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
     apiLimiter: createApiRateLimiter({ max: 2, windowMs: 60_000 }),
   });
 
@@ -746,8 +776,6 @@ test('HTTP integration: sessionless requests do not consume the API rate-limit q
 
 test('HTTP integration: HSTS is only sent with COOKIE_SECURE on', async () => {
   const baseEnv = {
-    AUTH_USER: 'u',
-    AUTH_PASS: 'p',
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
     DOMAIN: 'example.com',
@@ -767,6 +795,7 @@ test('HTTP integration: HSTS is only sent with COOKIE_SECURE on', async () => {
       env,
       cloudflareClient: createMockCloudflareClient(),
       sessionSecret: 'test-session-secret-32chars!!',
+      credentialStore: createTestCredentialStore(),
     });
 
     const { server, baseUrl } = await listen(app);
@@ -785,8 +814,6 @@ test('HTTP integration: HSTS is only sent with COOKIE_SECURE on', async () => {
 
 test('HTTP integration: without src/web/dist the SPA answers 503 with a clear message', async () => {
   const env = {
-    AUTH_USER: 'u',
-    AUTH_PASS: 'p',
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
     DOMAIN: 'example.com',
@@ -797,6 +824,7 @@ test('HTTP integration: without src/web/dist the SPA answers 503 with a clear me
     env,
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
     publicDir: path.join(import.meta.dirname, 'no-such-dist'),
   });
 
@@ -816,8 +844,6 @@ test('HTTP integration: without src/web/dist the SPA answers 503 with a clear me
 
 test('HTTP integration: the catch-all cannot be mutated or deleted', async () => {
   const env = {
-    AUTH_USER: 'testuser',
-    AUTH_PASS: 'test-secret-pass',
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
     DOMAIN: 'example.com',
@@ -828,6 +854,7 @@ test('HTTP integration: the catch-all cannot be mutated or deleted', async () =>
     env,
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
   });
 
   const { server, baseUrl } = await listen(app);
@@ -877,8 +904,6 @@ async function loginAndGetCookie(baseUrl, username = 'testuser', password = 'tes
 }
 
 const DIAGNOSTICS_ENV = {
-  AUTH_USER: 'testuser',
-  AUTH_PASS: 'test-secret-pass',
   CF_ZONE_ID: 'zone_test_1',
   CF_ACCOUNT_ID: 'acct_test_1',
   DOMAIN: 'example.com',
@@ -906,6 +931,7 @@ test('HTTP integration: POST/PUT /api/rules write the canonical destination emai
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
   });
   const { server, baseUrl } = await listen(app);
 
@@ -955,6 +981,7 @@ test('HTTP integration: creating an alias with an unverified destination gives a
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
   });
   const { server, baseUrl } = await listen(app);
 
@@ -988,6 +1015,7 @@ test('HTTP integration: creating an alias with an unknown destination says so ex
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
   });
   const { server, baseUrl } = await listen(app);
 
@@ -1044,6 +1072,7 @@ test('HTTP integration: a duplicate alias is rejected even when Cloudflare would
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
   });
   const { server, baseUrl } = await listen(app);
 
@@ -1097,6 +1126,7 @@ test('HTTP integration: a duplicate alias is diagnosed after the Cloudflare fail
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
   });
   const { server, baseUrl } = await listen(app);
 
@@ -1140,6 +1170,7 @@ test('HTTP integration: a Cloudflare failure with no identifiable cause stays ge
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
   });
   const { server, baseUrl } = await listen(app);
 
@@ -1182,6 +1213,7 @@ test('HTTP integration: PUT /api/rules/:id changes the destination and respects 
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
   });
   const { server, baseUrl } = await listen(app);
 
@@ -1296,6 +1328,7 @@ test('HTTP integration: a rule with an unknown action type cannot be edited', as
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient: createSpecialRulesClient(puts),
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
   });
   const { server, baseUrl } = await listen(app);
 
@@ -1337,6 +1370,7 @@ test('HTTP integration: renaming a Worker rule preserves its action untouched', 
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient: createSpecialRulesClient(puts),
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
   });
   const { server, baseUrl } = await listen(app);
 
@@ -1410,6 +1444,7 @@ test('HTTP integration: POST /api/rules can create a rule that drops the mail', 
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
   });
   const { server, baseUrl } = await listen(app);
 
@@ -1458,6 +1493,7 @@ test('HTTP integration: enable/disable actually flip the rule state', async () =
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
   });
   const { server, baseUrl } = await listen(app);
 
@@ -1503,6 +1539,7 @@ test('HTTP integration: PUT /api/rules/catch-all edits the fallback rule safely'
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
   });
   const { server, baseUrl } = await listen(app);
 
@@ -1591,6 +1628,7 @@ test('HTTP integration: a malformed or oversized JSON body answers 4xx, not 500'
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
   });
   const { server, baseUrl } = await listen(app);
 
@@ -1638,8 +1676,6 @@ test('HTTP integration: an async rejection without try/catch reaches the API err
   };
 
   const env = {
-    AUTH_USER: 'testuser',
-    AUTH_PASS: 'test-secret-pass',
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
     DOMAIN: 'example.com',
@@ -1650,6 +1686,7 @@ test('HTTP integration: an async rejection without try/catch reaches the API err
     env,
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
   });
 
   const { server, baseUrl } = await listen(app);
@@ -1690,8 +1727,6 @@ test('HTTP integration: a CloudflareApiError 401 is not exposed as 401 to the cl
   };
 
   const env = {
-    AUTH_USER: 'testuser',
-    AUTH_PASS: 'test-secret-pass',
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
     DOMAIN: 'example.com',
@@ -1702,6 +1737,7 @@ test('HTTP integration: a CloudflareApiError 401 is not exposed as 401 to the cl
     env,
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
   });
 
   const { server, baseUrl } = await listen(app);
@@ -1766,8 +1802,6 @@ test('HTTP integration: DELETE /api/addresses/:id refuses a destination still us
   };
 
   const env = {
-    AUTH_USER: 'testuser',
-    AUTH_PASS: 'test-secret-pass',
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
     DOMAIN: 'example.com',
@@ -1778,6 +1812,7 @@ test('HTTP integration: DELETE /api/addresses/:id refuses a destination still us
     env,
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
   });
 
   const { server, baseUrl } = await listen(app);
@@ -1839,6 +1874,7 @@ test('HTTP integration: DELETE /api/addresses/:id fails explicitly when catch-al
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
   });
   const { server, baseUrl } = await listen(app);
 
@@ -1867,6 +1903,7 @@ test('HTTP integration: same-origin guard blocks a mismatched Origin on mutation
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
   });
   const { server, baseUrl } = await listen(app);
 
@@ -1910,6 +1947,7 @@ test('HTTP integration: same-origin guard blocks same-site Sec-Fetch-Site with a
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
   });
   const { server, baseUrl } = await listen(app);
 
@@ -2010,6 +2048,7 @@ test('HTTP integration: DELETE /api/addresses/:id fails closed when the address 
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
   });
   const { server, baseUrl } = await listen(app);
 
@@ -2025,6 +2064,278 @@ test('HTTP integration: DELETE /api/addresses/:id fails closed when the address 
     const data = await readJson(res);
     assert.equal(data.code, ERROR_CODES.DEST_USAGE_CHECK_FAILED);
     assert.equal(addressDeleteCalls, 0, 'must not DELETE when the destination email cannot be resolved');
+  } finally {
+    resetSessionEpochForTests();
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+  }
+});
+
+/**
+ * Setup wizard and password change, end to end and against the REAL credential store:
+ * this is the one place where the on-disk record and scrypt are exercised through HTTP.
+ */
+function tempDataDir(t) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vuzon-app-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  return dir;
+}
+
+const SETUP_PASSWORD = 'a-long-enough-password';
+
+test('HTTP integration: the setup wizard claims the panel exactly once', async (t) => {
+  const dataDir = tempDataDir(t);
+  const { app } = createApp({
+    env: { ...DIAGNOSTICS_ENV },
+    cloudflareClient: createMockCloudflareClient(),
+    sessionSecret: 'test-session-secret-32chars!!',
+    dataDir,
+  });
+
+  const { server, baseUrl } = await listen(app);
+
+  try {
+    resetSessionEpochForTests();
+
+    {
+      const res = await fetch(`${baseUrl}/api/me`);
+      assert.equal(res.status, 401);
+      assert.equal((await readJson(res)).code, ERROR_CODES.AUTH_SETUP_REQUIRED);
+    }
+
+    {
+      // Confirmation that does not match: rejected before anything is written.
+      const res = await fetch(`${baseUrl}/api/setup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: 'kn',
+          password: SETUP_PASSWORD,
+          passwordConfirm: `${SETUP_PASSWORD}!`,
+        }),
+      });
+      assert.equal(res.status, 400);
+      const data = await readJson(res);
+      assert.equal(data.code, ERROR_CODES.VALIDATION_INVALID);
+      assert.deepEqual(data.params.issues, [
+        { field: 'passwordConfirm', code: 'password.mismatch' },
+      ]);
+      assert.equal(fs.existsSync(path.join(dataDir, 'auth.json')), false);
+    }
+
+    {
+      const res = await fetch(`${baseUrl}/api/setup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'kn', password: 'short', passwordConfirm: 'short' }),
+      });
+      assert.equal(res.status, 400);
+      assert.deepEqual((await readJson(res)).params.issues, [
+        { field: 'password', code: 'password.too_short' },
+      ]);
+    }
+
+    let sessionCookie = '';
+    {
+      const res = await fetch(`${baseUrl}/api/setup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: 'kn',
+          password: SETUP_PASSWORD,
+          passwordConfirm: SETUP_PASSWORD,
+        }),
+      });
+      assert.equal(res.status, 200);
+      assert.deepEqual(await readJson(res), { success: true });
+      // Signed in straight away: no trip through the login screen.
+      sessionCookie = sessionCookieHeaderFromResponse(res);
+    }
+
+    {
+      const res = await fetch(`${baseUrl}/api/me`, { headers: { Cookie: sessionCookie } });
+      assert.equal(res.status, 200);
+      assert.deepEqual(await readJson(res), { rootDomain: 'example.com' });
+    }
+
+    {
+      // The window closes for good: a second wizard cannot take the panel over.
+      const res = await fetch(`${baseUrl}/api/setup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: 'attacker',
+          password: SETUP_PASSWORD,
+          passwordConfirm: SETUP_PASSWORD,
+        }),
+      });
+      assert.equal(res.status, 409);
+      assert.equal((await readJson(res)).code, ERROR_CODES.SETUP_ALREADY_DONE);
+    }
+
+    {
+      const res = await fetch(`${baseUrl}/api/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'kn', password: SETUP_PASSWORD }),
+      });
+      assert.equal(res.status, 200);
+    }
+
+    {
+      const res = await fetch(`${baseUrl}/api/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'kn', password: 'not-the-password' }),
+      });
+      assert.equal(res.status, 401);
+      assert.equal((await readJson(res)).code, ERROR_CODES.AUTH_INVALID_CREDENTIALS);
+    }
+  } finally {
+    resetSessionEpochForTests();
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+  }
+});
+
+test('HTTP integration: changing the password revokes every other session', async (t) => {
+  const dataDir = tempDataDir(t);
+  const { app } = createApp({
+    env: { ...DIAGNOSTICS_ENV },
+    cloudflareClient: createMockCloudflareClient(),
+    sessionSecret: 'test-session-secret-32chars!!',
+    dataDir,
+  });
+
+  const { server, baseUrl } = await listen(app);
+
+  try {
+    resetSessionEpochForTests();
+
+    {
+      const res = await fetch(`${baseUrl}/api/account/password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPassword: SETUP_PASSWORD,
+          newPassword: 'another-long-password',
+          newPasswordConfirm: 'another-long-password',
+        }),
+      });
+      assert.equal(res.status, 401, 'the route is guarded before the panel even exists');
+    }
+
+    const setupRes = await fetch(`${baseUrl}/api/setup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: 'kn',
+        password: SETUP_PASSWORD,
+        passwordConfirm: SETUP_PASSWORD,
+      }),
+    });
+    assert.equal(setupRes.status, 200);
+    const ownCookie = sessionCookieHeaderFromResponse(setupRes);
+    // A second browser (or a copied cookie): it must not survive the change.
+    const otherCookie = await loginAndGetCookie(baseUrl, 'kn', SETUP_PASSWORD);
+
+    {
+      const res = await fetch(`${baseUrl}/api/account/password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Cookie: ownCookie },
+        body: JSON.stringify({
+          currentPassword: 'not-the-current-one',
+          newPassword: 'another-long-password',
+          newPasswordConfirm: 'another-long-password',
+        }),
+      });
+      assert.equal(res.status, 401);
+      assert.equal((await readJson(res)).code, ERROR_CODES.AUTH_CURRENT_PASSWORD_INVALID);
+    }
+
+    let rotatedCookie = '';
+    {
+      const res = await fetch(`${baseUrl}/api/account/password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Cookie: ownCookie },
+        body: JSON.stringify({
+          currentPassword: SETUP_PASSWORD,
+          newPassword: 'another-long-password',
+          newPasswordConfirm: 'another-long-password',
+        }),
+      });
+      assert.equal(res.status, 200);
+      assert.deepEqual(await readJson(res), { success: true });
+      rotatedCookie = sessionCookieHeaderFromResponse(res);
+    }
+
+    {
+      // The caller stays signed in: the response re-stamps their session.
+      const res = await fetch(`${baseUrl}/api/me`, { headers: { Cookie: rotatedCookie } });
+      assert.equal(res.status, 200);
+    }
+
+    {
+      const res = await fetch(`${baseUrl}/api/me`, { headers: { Cookie: otherCookie } });
+      assert.equal(res.status, 401, 'every other session must be dropped by a password change');
+    }
+
+    {
+      const res = await fetch(`${baseUrl}/api/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'kn', password: SETUP_PASSWORD }),
+      });
+      assert.equal(res.status, 401, 'the old password must stop working');
+    }
+
+    {
+      const res = await fetch(`${baseUrl}/api/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'kn', password: 'another-long-password' }),
+      });
+      assert.equal(res.status, 200);
+    }
+  } finally {
+    resetSessionEpochForTests();
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+  }
+});
+
+test('HTTP integration: the setup and password routes are covered by the same-origin guard', async (t) => {
+  const { app } = createApp({
+    env: { ...DIAGNOSTICS_ENV },
+    cloudflareClient: createMockCloudflareClient(),
+    sessionSecret: 'test-session-secret-32chars!!',
+    dataDir: tempDataDir(t),
+  });
+
+  const { server, baseUrl } = await listen(app);
+
+  try {
+    resetSessionEpochForTests();
+
+    const res = await fetch(`${baseUrl}/api/setup`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: 'https://evil.example',
+        'Sec-Fetch-Site': 'cross-site',
+      },
+      body: JSON.stringify({
+        username: 'kn',
+        password: SETUP_PASSWORD,
+        passwordConfirm: SETUP_PASSWORD,
+      }),
+    });
+    assert.equal(res.status, 403);
+    assert.equal((await readJson(res)).code, ERROR_CODES.CSRF_BLOCKED);
+    assert.equal(res.headers.get('cache-control'), 'no-store');
   } finally {
     resetSessionEpochForTests();
     await new Promise((resolve) => {

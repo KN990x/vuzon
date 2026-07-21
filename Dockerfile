@@ -44,7 +44,10 @@ RUN apt-get update && \
 COPY --from=build /prod ./
 COPY --from=build /app/src/web/dist ./public
 
-RUN chown -R node:node /app
+# State the panel writes itself: the credentials chosen in the setup wizard and the session
+# signing key. Mount a volume here (docker-compose.yml does) or they are lost on every
+# `docker compose up` and the setup wizard reopens.
+RUN mkdir -p /app/data && chown -R node:node /app && chmod 700 /app/data
 
 USER node
 
@@ -52,6 +55,8 @@ ENV NODE_ENV=production
 ENV PORT=8001
 # The SPA is served from a fixed path; this decouples the runtime from the source layout.
 ENV VUZON_PUBLIC_DIR=/app/public
+ENV VUZON_DATA_DIR=/app/data
+VOLUME ["/app/data"]
 EXPOSE 8001
 
 # node:24-slim ships no curl/wget; we probe /healthz with Node's global fetch.

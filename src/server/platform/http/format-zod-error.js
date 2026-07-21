@@ -14,6 +14,10 @@ const FIELD_LABELS = {
   name: 'Name',
   username: 'Username',
   password: 'Password',
+  passwordConfirm: 'Password confirmation',
+  currentPassword: 'Current password',
+  newPassword: 'New password',
+  newPasswordConfirm: 'New password confirmation',
 };
 
 /**
@@ -38,6 +42,9 @@ const ISSUE_MESSAGES = {
   'password.required': 'password required',
   'password.invalid': 'invalid password',
   'password.too_long': 'password too long',
+  'password.too_short': 'the password is too short',
+  'password.mismatch': 'the two passwords do not match',
+  'password.current_required': 'current password required',
   'id.empty': 'invalid identifier',
   'id.too_long': 'identifier too long',
   'id.charset': 'identifier contains characters that are not allowed',

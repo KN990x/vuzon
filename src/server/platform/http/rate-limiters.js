@@ -40,6 +40,39 @@ export function createLoginRateLimiter(options = {}) {
 }
 
 /**
+ * Limit for the first-install wizard (`POST /api/setup`), which is public until the panel
+ * has credentials. Deliberately WITHOUT `skipSuccessfulRequests`: the route succeeds at
+ * most once, so the quota exists to bound the hammering that happens BEFORE that — each
+ * attempt runs a deliberately slow KDF.
+ * @param {import('express-rate-limit').Options} [options]
+ */
+export function createSetupRateLimiter(options = {}) {
+  return rateLimit({
+    ...sharedRateLimitOptions,
+    windowMs: FIFTEEN_MINUTES_MS,
+    max: 10,
+    message: TOO_MANY_ATTEMPTS,
+    ...options,
+  });
+}
+
+/**
+ * Limit for the password change. It verifies the current password, so it gets the same
+ * anti-brute-force treatment as login (and, like it, does not charge successful calls).
+ * @param {import('express-rate-limit').Options} [options]
+ */
+export function createPasswordChangeRateLimiter(options = {}) {
+  return rateLimit({
+    ...sharedRateLimitOptions,
+    windowMs: FIFTEEN_MINUTES_MS,
+    max: 10,
+    skipSuccessfulRequests: true,
+    message: TOO_MANY_ATTEMPTS,
+    ...options,
+  });
+}
+
+/**
  * Limit for logout. Deliberately WITHOUT `skipSuccessfulRequests`: logout always answers
  * 200, so reusing the login limiter would leave it unbounded.
  * The quota is generous because logging out is a legitimate and cheap action.

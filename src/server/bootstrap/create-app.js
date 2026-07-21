@@ -1,6 +1,7 @@
 import express from 'express';
 import { getServerRuntime } from '../config/runtime.js';
 import { resolveSessionSecret } from '../config/session-secret.js';
+import { createCredentialStore } from '../features/auth/credential-store.js';
 import { createRequireAuth } from '../features/auth/require-auth.js';
 import {
   createSessionMiddleware,
@@ -18,8 +19,11 @@ import {
   createLoginRateLimiter,
   createLogoutRateLimiter,
   createPagesRateLimiter,
+  createPasswordChangeRateLimiter,
+  createSetupRateLimiter,
 } from '../platform/http/rate-limiters.js';
 import { createSameOriginGuard } from '../platform/http/same-origin-guard.js';
+import { resolveDataDir } from '../platform/storage/data-dir.js';
 import { resolvePublicDir } from './resolve-public-dir.js';
 
 const JSON_BODY_LIMIT = '256kb';
@@ -74,10 +78,14 @@ function createApiCacheControlMiddleware() {
 export function createApp({
   env = process.env,
   cloudflareClient = createCloudflareClient({ env }),
-  sessionSecret = resolveSessionSecret({ env }),
+  dataDir = resolveDataDir(env),
+  credentialStore = createCredentialStore({ dataDir }),
+  sessionSecret = resolveSessionSecret({ dataDir }),
   publicDir = resolvePublicDir(env),
   loginLimiter = createLoginRateLimiter(),
   logoutLimiter = createLogoutRateLimiter(),
+  setupLimiter = createSetupRateLimiter(),
+  passwordChangeLimiter = createPasswordChangeRateLimiter(),
   apiLimiter = createApiRateLimiter(),
   pagesLimiter = createPagesRateLimiter(),
 } = {}) {
@@ -107,14 +115,17 @@ export function createApp({
     cookieSecure: runtime.cookieSecure,
   }));
 
-  const requireAuth = createRequireAuth({ env });
+  const requireAuth = createRequireAuth({ credentialStore });
 
   registerAuthRoutes(app, {
-    env,
+    credentialStore,
+    requireAuth,
     sessionCookieName: SESSION_COOKIE_NAME,
     sessionCookieClearOptions: getSessionCookieClearOptions({ cookieSecure: runtime.cookieSecure }),
     loginLimiter,
     logoutLimiter,
+    setupLimiter,
+    passwordChangeLimiter,
   });
   registerApiRoutes(app, { env, requireAuth, cloudflareClient, apiLimiter });
   // The /api JSON 404 must be registered BEFORE registerPageRoutes' SPA catch-all:
@@ -128,5 +139,6 @@ export function createApp({
   return {
     app,
     runtime,
+    credentialStore,
   };
 }
