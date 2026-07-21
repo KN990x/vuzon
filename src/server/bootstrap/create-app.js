@@ -97,7 +97,8 @@ export function createApp({
   //      cannot send application/json without a CORS preflight).
   //   3. No CORS: no external origin can fetch with credentials.
   //   4. Same-origin guard on /api mutations (platform/http/same-origin-guard.js):
-  //      rejects mismatched Origin; allows curl (no Origin / no Sec-Fetch-Site).
+  //      allows same-origin / none; rejects same-site and mismatched Origin;
+  //      allows curl (no Origin / no Sec-Fetch-Site).
   // Changing any of these means revisiting this decision.
   app.use(express.json({ limit: JSON_BODY_LIMIT }));
   app.use(createSameOriginGuard());

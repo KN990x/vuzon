@@ -16,10 +16,33 @@ yarn-error.log*
 .session_secret
 sessions
 
+# Homelab / deploy secrets that tend to appear at the repo root
+.npmrc
+.envrc
+.direnv/
+docker-compose.override.yml
+compose.override.y*ml
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+id_rsa*
+
+# Build / pack artefacts
+*.tgz
+coverage/
+*.tsbuildinfo
+
 # Editor and operating system
 .DS_Store
 Thumbs.db
 *.swp
+*~
+*.bak
+*.orig
+*.rej
+._*
 *.local
 .idea
 .vscode

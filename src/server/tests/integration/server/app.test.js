@@ -1904,3 +1904,131 @@ test('HTTP integration: same-origin guard blocks a mismatched Origin on mutation
     });
   }
 });
+
+test('HTTP integration: same-origin guard blocks same-site Sec-Fetch-Site with a mismatched Origin', async () => {
+  const { app } = createApp({
+    env: { ...DIAGNOSTICS_ENV },
+    cloudflareClient: createMockCloudflareClient(),
+    sessionSecret: 'test-session-secret-32chars!!',
+  });
+  const { server, baseUrl } = await listen(app);
+
+  try {
+    resetSessionEpochForTests();
+    const sessionCookie = await loginAndGetCookie(baseUrl);
+    const host = new URL(baseUrl).host;
+
+    const blockedPost = await fetch(`${baseUrl}/api/rules`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: sessionCookie,
+        'Sec-Fetch-Site': 'same-site',
+        Origin: 'http://evil.test',
+      },
+      body: JSON.stringify({ localPart: 'x', action: { type: 'forward', value: ['dest@example.com'] } }),
+    });
+    assert.equal(blockedPost.status, 403);
+    assert.equal((await readJson(blockedPost)).code, ERROR_CODES.CSRF_BLOCKED);
+
+    const blockedDelete = await fetch(`${baseUrl}/api/rules/rule1`, {
+      method: 'DELETE',
+      headers: {
+        Cookie: sessionCookie,
+        'Sec-Fetch-Site': 'same-site',
+        Origin: 'http://evil.test',
+      },
+    });
+    assert.equal(blockedDelete.status, 403);
+    assert.equal((await readJson(blockedDelete)).code, ERROR_CODES.CSRF_BLOCKED);
+
+    // same-site without Origin must also fail closed (cannot skip the Origin check).
+    const blockedNoOrigin = await fetch(`${baseUrl}/api/rules/rule1`, {
+      method: 'DELETE',
+      headers: {
+        Cookie: sessionCookie,
+        'Sec-Fetch-Site': 'same-site',
+      },
+    });
+    assert.equal(blockedNoOrigin.status, 403);
+    assert.equal((await readJson(blockedNoOrigin)).code, ERROR_CODES.CSRF_BLOCKED);
+
+    // Legitimate SPA traffic still passes.
+    const sameOrigin = await fetch(`${baseUrl}/api/addresses`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: sessionCookie,
+        'Sec-Fetch-Site': 'same-origin',
+        Origin: `http://${host}`,
+      },
+      body: JSON.stringify({ email: 'spa@example.com' }),
+    });
+    assert.equal(sameOrigin.status, 200);
+
+    // curl-style: no Origin and no Sec-Fetch-Site still works.
+    const curlStyle = await fetch(`${baseUrl}/api/addresses`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: sessionCookie,
+      },
+      body: JSON.stringify({ email: 'curl@example.com' }),
+    });
+    assert.equal(curlStyle.status, 200);
+  } finally {
+    resetSessionEpochForTests();
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+  }
+});
+
+test('HTTP integration: DELETE /api/addresses/:id fails closed when the address cannot be resolved', async () => {
+  let addressDeleteCalls = 0;
+  const base = createMockCloudflareClient();
+  const cloudflareClient = {
+    async fetchCloudflare(requestPath, method = 'GET', body = null) {
+      if (requestPath.includes('/email/routing/addresses') && method === 'DELETE') {
+        addressDeleteCalls += 1;
+        return { id: 'deleted' };
+      }
+      return base.fetchCloudflare(requestPath, method, body);
+    },
+    async fetchAllCloudflare(requestPath) {
+      if (requestPath.includes('/email/routing/addresses')) {
+        return [{ id: 'addr-known', email: 'known@example.com', verified: true }];
+      }
+      if (requestPath.includes('/email/routing/rules')) {
+        return [];
+      }
+      return [];
+    },
+  };
+
+  const { app } = createApp({
+    env: { ...DIAGNOSTICS_ENV },
+    cloudflareClient,
+    sessionSecret: 'test-session-secret-32chars!!',
+  });
+  const { server, baseUrl } = await listen(app);
+
+  try {
+    resetSessionEpochForTests();
+    const sessionCookie = await loginAndGetCookie(baseUrl);
+
+    const res = await fetch(`${baseUrl}/api/addresses/addr-missing`, {
+      method: 'DELETE',
+      headers: { Cookie: sessionCookie },
+    });
+    assert.equal(res.status, 502);
+    const data = await readJson(res);
+    assert.equal(data.code, ERROR_CODES.DEST_USAGE_CHECK_FAILED);
+    assert.equal(addressDeleteCalls, 0, 'must not DELETE when the destination email cannot be resolved');
+  } finally {
+    resetSessionEpochForTests();
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+  }
+});

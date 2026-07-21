@@ -218,20 +218,28 @@ export function registerApiRoutes(app, {
     const address = (Array.isArray(addresses) ? addresses : []).find(
       (entry) => entry && typeof entry === 'object' && entry.id === addressId,
     );
-    if (address && typeof address.email === 'string' && address.email.trim() !== '') {
-      const allRules = Array.isArray(rules) ? [...rules] : [];
-      if (
-        catchAll
-        && typeof catchAll === 'object'
-        && !allRules.some((rule) => rule && typeof rule === 'object' && rule.id === catchAll.id)
-      ) {
-        allRules.push(catchAll);
-      }
-      const using = findRulesUsingDestination(allRules, address.email);
-      if (using.length > 0) {
-        const aliases = [...new Set(using.map((rule) => ruleAliasLabel(rule)))];
-        throw destinationInUseError(address.email, aliases);
-      }
+    // Fail closed: never DELETE when the destination email cannot be resolved —
+    // skipping the usage scan would let aliases keep looking "active" while mail
+    // silently stops delivering (same trust model as the catch-all check above).
+    if (!address || typeof address.email !== 'string' || address.email.trim() === '') {
+      throw new PanelRequestError(
+        'Could not verify whether this destination is still in use. Try again later.',
+        { status: 502, code: ERROR_CODES.DEST_USAGE_CHECK_FAILED },
+      );
+    }
+
+    const allRules = Array.isArray(rules) ? [...rules] : [];
+    if (
+      catchAll
+      && typeof catchAll === 'object'
+      && !allRules.some((rule) => rule && typeof rule === 'object' && rule.id === catchAll.id)
+    ) {
+      allRules.push(catchAll);
+    }
+    const using = findRulesUsingDestination(allRules, address.email);
+    if (using.length > 0) {
+      const aliases = [...new Set(using.map((rule) => ruleAliasLabel(rule)))];
+      throw destinationInUseError(address.email, aliases);
     }
 
     await fetchCloudflare(`/accounts/${env.CF_ACCOUNT_ID}/email/routing/addresses/${addressId}`, 'DELETE');

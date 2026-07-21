@@ -1,14 +1,18 @@
 import { ERROR_CODES } from './error-codes.js';
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
-const ALLOWED_FETCH_SITES = new Set(['same-origin', 'same-site', 'none']);
+// `same-site` is intentionally excluded: the cookie travels across subdomains and
+// ports of the same registrable site, so allowing it would skip the Origin check
+// and open a CSRF path from a neighbour service on the same host/domain.
+const ALLOWED_FETCH_SITES = new Set(['same-origin', 'none']);
 
 /**
  * Defense-in-depth CSRF guard for `/api/*` mutations.
  *
  * Complements the existing three pillars (sameSite lax cookie, JSON-only body, no CORS)
- * without requiring a CSRF token. Scriptable clients (curl) that send neither
- * `Sec-Fetch-Site` nor `Origin` continue to work.
+ * without requiring a CSRF token. `same-origin` and user-initiated `none` short-circuit;
+ * anything else (including `same-site`) must pass an exact Origin↔Host match.
+ * Scriptable clients (curl) that send neither `Sec-Fetch-Site` nor `Origin` continue to work.
  *
  * @returns {import('express').RequestHandler}
  */
