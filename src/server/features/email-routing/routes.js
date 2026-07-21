@@ -72,7 +72,17 @@ function parseCloudflareRule(rule) {
  */
 export function buildRuleUpdatePayload(rule, enabled, overrides = {}) {
   // Read-only / echo-only fields Cloudflare returns on GET but rejects or ignores on PUT.
-  const readOnlyKeys = new Set(['id', 'tag', 'created', 'modified', 'created_on', 'modified_on']);
+  const readOnlyKeys = new Set([
+    'id',
+    'tag',
+    'created',
+    'modified',
+    'created_on',
+    'modified_on',
+    'zone',
+    'zone_id',
+    'zone_name',
+  ]);
   const payload = {};
   for (const [key, value] of Object.entries(rule)) {
     if (!readOnlyKeys.has(key)) {

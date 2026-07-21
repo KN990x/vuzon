@@ -53,6 +53,32 @@ test('buildRuleUpdatePayload: preserves source and owner_worker_tag from wrangle
   assert.equal(payload.enabled, true);
 });
 
+test('buildRuleUpdatePayload: strips zone echo fields Cloudflare returns on GET', () => {
+  // List responses include a zone object (and sometimes zone_id / zone_name). PUT
+  // .../rules/{id} rejects those — same class as id/tag/created_on.
+  const payload = buildRuleUpdatePayload(
+    {
+      id: 'rule_abc',
+      name: 'a@example.com',
+      matchers: [{ type: 'literal', field: 'to', value: 'a@example.com' }],
+      actions: [{ type: 'forward', value: ['d@x.com'] }],
+      zone: { id: 'zone_xyz', name: 'example.com' },
+      zone_id: 'zone_xyz',
+      zone_name: 'example.com',
+      source: 'api',
+      owner_worker_tag: 'keep-me',
+    },
+    true,
+  );
+
+  assert.equal('zone' in payload, false);
+  assert.equal('zone_id' in payload, false);
+  assert.equal('zone_name' in payload, false);
+  assert.equal(payload.source, 'api');
+  assert.equal(payload.owner_worker_tag, 'keep-me');
+  assert.equal(payload.enabled, true);
+});
+
 test('buildRuleUpdatePayload: preserves unknown passthrough fields on enable/disable', () => {
   const payload = buildRuleUpdatePayload(
     {

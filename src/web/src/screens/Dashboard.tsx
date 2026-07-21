@@ -4,11 +4,11 @@ import { copyTextToClipboard } from '../lib/clipboard';
 import { getDestSelectionState } from '../lib/dest-selection';
 import {
   describeRuleActions,
+  filterAliasRules,
   findAliasesUsingDestination,
   generateRandomLocalPart,
   getSingleForwardDestination,
   interpretAddDestError,
-  ruleMatchesCatchAllSlot,
 } from '../lib/rules';
 import { isVerifiedStatus } from '../lib/verification';
 import type { CatchAllPatch, Destination, FormErrors, Profile, Rule, RulePatch } from '../lib/types';
@@ -202,11 +202,8 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
   // Derived values (same criteria as the documented Alpine client).
   const verifiedDests = dests.filter((dest) => isVerifiedStatus(dest.verified));
 
-  const validRules = rules.filter((rule) => rule.name && rule.name.trim() !== '');
-  const withoutCatchAllDup = validRules.filter((rule) => !ruleMatchesCatchAllSlot(rule, catchAll));
-  const filteredRules = search
-    ? withoutCatchAllDup.filter((rule) => rule.name!.toLowerCase().includes(search.toLowerCase()))
-    : withoutCatchAllDup;
+  const aliasRules = filterAliasRules(rules, catchAll);
+  const filteredRules = filterAliasRules(rules, catchAll, search);
 
   let aliasListEmptyMessage = '';
   if (filteredRules.length === 0) {
@@ -230,7 +227,7 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
       (droppingNewAlias || verifiedDests.some((dest) => dest.email === newAlias.dest)),
   );
 
-  const activeCount = withoutCatchAllDup.filter((rule) => rule.enabled).length;
+  const activeCount = aliasRules.filter((rule) => rule.enabled).length;
   const catchAllLabel = catchAll === null ? '—' : catchAll.enabled ? 'ON' : 'OFF';
 
   function clearErrors() {
@@ -507,7 +504,7 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
             <AliasesCard
               domain={profile.rootDomain}
               rules={filteredRules}
-              totalCount={withoutCatchAllDup.length}
+              totalCount={aliasRules.length}
               emptyMessage={aliasListEmptyMessage}
               search={search}
               onSearchChange={setSearch}

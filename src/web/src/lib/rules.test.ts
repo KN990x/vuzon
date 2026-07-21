@@ -2,8 +2,10 @@ import { expect, test, vi } from 'vitest';
 import { ApiError } from './api';
 import {
   describeRuleActions,
+  filterAliasRules,
   findAliasesUsingDestination,
   generateRandomLocalPart,
+  getRuleAlias,
   getRuleDest,
   getSingleForwardDestination,
   interpretAddDestError,
@@ -83,6 +85,78 @@ test('findAliasesUsingDestination: lists alias labels and catch-all', () => {
     'catch-all',
   ]);
   expect(findAliasesUsingDestination(rules, 'nobody@example.com', catchAll)).toEqual([]);
+});
+
+test('findAliasesUsingDestination: falls back to unknown when nothing identifies the rule', () => {
+  expect(
+    findAliasesUsingDestination(
+      [{ id: '', actions: [{ type: 'forward', value: ['d@example.com'] }] }],
+      'd@example.com',
+    ),
+  ).toEqual(['unknown']);
+});
+
+test('getRuleAlias: matcher wins over name', () => {
+  expect(
+    getRuleAlias({
+      id: 'r',
+      name: 'Support',
+      matchers: [{ type: 'literal', field: 'to', value: 'x@example.com' }],
+    }),
+  ).toBe('x@example.com');
+});
+
+test('getRuleAlias: name then id as fallbacks; empty when nothing usable', () => {
+  expect(getRuleAlias({ id: 'r', name: 'My rule', matchers: [] })).toBe('My rule');
+  expect(getRuleAlias({ id: 'rule-42' })).toBe('rule-42');
+  expect(getRuleAlias({ id: '' })).toBe('');
+  expect(getRuleAlias(null)).toBe('');
+});
+
+test('getRuleAlias: catch-all matcher', () => {
+  expect(getRuleAlias({ id: 'ca', matchers: [{ type: 'all' }] })).toBe('catch-all');
+});
+
+test('filterAliasRules: nameless worker rule is listed and searchable (regression)', () => {
+  // Cloudflare's create-rule form does not ask for a name, so rules created there arrive
+  // with name absent or "". Filtering on name hid every external rule from the SPA.
+  const nameless: Rule = {
+    id: 'worker_rule',
+    matchers: [{ type: 'literal', field: 'to', value: 'x@example.com' }],
+    actions: [{ type: 'worker', value: ['email-worker'] }],
+  };
+  const named: Rule = {
+    id: 'fwd_rule',
+    name: 'y@example.com',
+    matchers: [{ type: 'literal', field: 'to', value: 'y@example.com' }],
+    actions: [{ type: 'forward', value: ['d@example.com'] }],
+  };
+  const catchAll: Rule = {
+    id: 'ca',
+    matchers: [{ type: 'all' }],
+    actions: [{ type: 'drop' }],
+  };
+  const listed = [nameless, named, catchAll];
+
+  expect(filterAliasRules(listed, catchAll).map((r) => r.id)).toEqual([
+    'worker_rule',
+    'fwd_rule',
+  ]);
+  expect(filterAliasRules(listed, catchAll, 'x@').map((r) => r.id)).toEqual(['worker_rule']);
+  expect(filterAliasRules(listed, catchAll, 'Support')).toEqual([]);
+});
+
+test('filterAliasRules: search also matches free-form name', () => {
+  const rule: Rule = {
+    id: 'r',
+    name: 'Support inbox',
+    matchers: [{ type: 'literal', field: 'to', value: 'help@example.com' }],
+  };
+  expect(filterAliasRules([rule], null, 'support').map((r) => r.id)).toEqual(['r']);
+});
+
+test('filterAliasRules: drops rules without a usable id', () => {
+  expect(filterAliasRules([{ id: '', name: 'a@example.com' }], null)).toEqual([]);
 });
 
 test('getRuleDest: forward joins addresses', () => {

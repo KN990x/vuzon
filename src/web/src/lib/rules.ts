@@ -119,6 +119,72 @@ export function getSingleForwardDestination(rule: Rule | null | undefined): stri
 }
 
 /**
+ * Identity of a rule for the UI: the alias lives in matchers, not in `name`.
+ * Mirror of `ruleAliasLabel` in destination-usage.js — returns '' instead of 'unknown'
+ * so the component can translate the fallback.
+ */
+export function getRuleAlias(rule: Rule | null | undefined): string {
+  if (!rule) {
+    return '';
+  }
+
+  const { matchers, name, id } = rule;
+  if (Array.isArray(matchers)) {
+    for (const matcher of matchers) {
+      if (!matcher) {
+        continue;
+      }
+      if (matcher.type === 'all') {
+        return 'catch-all';
+      }
+      if (
+        matcher.type === 'literal'
+        && matcher.field === 'to'
+        && typeof matcher.value === 'string'
+        && matcher.value.trim() !== ''
+      ) {
+        return matcher.value.trim();
+      }
+    }
+  }
+
+  if (typeof name === 'string' && name.trim() !== '') {
+    return name.trim();
+  }
+  if (typeof id === 'string' && id.trim() !== '') {
+    return id.trim();
+  }
+  return '';
+}
+
+/**
+ * Alias rows for the dashboard list: usable id, no catch-all slot, optional search
+ * against alias and free-form name. Does not require `name` — Cloudflare leaves it empty
+ * on rules created from its own panel.
+ */
+export function filterAliasRules(
+  rules: Rule[],
+  catchAll: Rule | null,
+  search = '',
+): Rule[] {
+  const needle = search.trim().toLowerCase();
+  return rules.filter((rule) => {
+    if (typeof rule.id !== 'string' || rule.id.trim() === '') {
+      return false;
+    }
+    if (ruleMatchesCatchAllSlot(rule, catchAll)) {
+      return false;
+    }
+    if (!needle) {
+      return true;
+    }
+    const alias = getRuleAlias(rule).toLowerCase();
+    const name = typeof rule.name === 'string' ? rule.name.trim().toLowerCase() : '';
+    return alias.includes(needle) || (name !== '' && name.includes(needle));
+  });
+}
+
+/**
  * Alias labels (or "catch-all") for rules that forward to this destination.
  * Used by the delete-destination confirm dialog so the user sees the block before the API.
  */
@@ -151,28 +217,7 @@ export function findAliasesUsingDestination(
       continue;
     }
 
-    const matchers = rule.matchers;
-    let label = '';
-    if (Array.isArray(matchers)) {
-      for (const matcher of matchers) {
-        if (matcher?.type === 'all') {
-          label = 'catch-all';
-          break;
-        }
-        if (
-          matcher?.type === 'literal'
-          && matcher.field === 'to'
-          && typeof matcher.value === 'string'
-          && matcher.value.trim() !== ''
-        ) {
-          label = matcher.value.trim();
-          break;
-        }
-      }
-    }
-    if (!label) {
-      label = (typeof rule.name === 'string' && rule.name.trim()) || rule.id || 'unknown';
-    }
+    const label = getRuleAlias(rule) || 'unknown';
     if (!labels.includes(label)) {
       labels.push(label);
     }

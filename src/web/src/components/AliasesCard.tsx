@@ -3,7 +3,7 @@ import {
   ArrowRight, Check, ChevronDown, Copy, Mail, Pencil, Plus, Search, Shuffle, Trash2,
 } from 'lucide-react';
 import type { Destination, Rule, RuleEditorPatch } from '../lib/types';
-import { describeRuleActions, getRuleDest } from '../lib/rules';
+import { describeRuleActions, getRuleAlias, getRuleDest } from '../lib/rules';
 import { useI18n } from '../i18n/context';
 import { Switch } from './Switch';
 import { RuleEditor } from './RuleEditor';
@@ -93,7 +93,23 @@ export function AliasesCard(props: AliasesCardProps) {
         const currentDest = summary.destinations[0];
         const editable = summary.kind !== 'unknown';
         const editing = editingId === rule.id;
-        const aliasName = rule.name ?? t('aliases.row.fallbackName');
+        const alias = getRuleAlias(rule);
+        const aliasName = alias || t('aliases.row.fallbackName');
+        const freeName = typeof rule.name === 'string' ? rule.name.trim() : '';
+        const showFreeName = freeName !== '' && freeName !== alias;
+        const kindBadge =
+          summary.kind === 'worker'
+            ? { key: 'aliases.row.badge.worker' as const, title: undefined }
+            : summary.kind === 'drop'
+              ? { key: 'aliases.row.badge.drop' as const, title: undefined }
+              : summary.kind === 'fanout'
+                ? { key: 'aliases.row.badge.fanout' as const, title: undefined }
+                : summary.kind === 'unknown'
+                  ? {
+                      key: 'aliases.row.badge.readOnly' as const,
+                      title: t('rules.editor.unknownNotice'),
+                    }
+                  : null;
         return (
           <div key={rule.id} className={ROW_DIVIDER}>
             <div
@@ -101,8 +117,15 @@ export function AliasesCard(props: AliasesCardProps) {
                 enabled ? '' : 'opacity-45'
               }`}
             >
-              <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-accent-soft">
-                {rule.name}
+              <span className="min-w-0 flex-1 truncate">
+                <span className="block truncate font-mono text-[13px] text-accent-soft">
+                  {aliasName}
+                </span>
+                {showFreeName && (
+                  <span className="block truncate font-mono text-[10px] text-cream/45">
+                    {t('aliases.row.nameLabel', { name: freeName })}
+                  </span>
+                )}
               </span>
               <ArrowRight size={14} className="flex-none text-cream/65" aria-hidden />
               {quickSwap ? (
@@ -132,8 +155,18 @@ export function AliasesCard(props: AliasesCardProps) {
                   />
                 </div>
               ) : (
-                <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-cream/70">
-                  {getRuleDest(i18n, rule, summary) || '—'}
+                <span className="flex min-w-0 flex-1 items-center gap-2 truncate">
+                  {kindBadge && (
+                    <span
+                      title={kindBadge.title}
+                      className="flex-none font-mono text-[10px] uppercase tracking-[0.08em] text-cream/55"
+                    >
+                      {t(kindBadge.key)}
+                    </span>
+                  )}
+                  <span className="min-w-0 truncate font-mono text-[13px] text-cream/70">
+                    {getRuleDest(i18n, rule, summary) || '—'}
+                  </span>
                 </span>
               )}
               {/* Hidden on narrow screens: the switch beside it already says the same
