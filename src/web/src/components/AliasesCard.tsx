@@ -7,7 +7,7 @@ import { describeRuleActions, getRuleAlias, getRuleDest } from '../lib/rules';
 import { useI18n } from '../i18n/context';
 import { Switch } from './Switch';
 import { RuleEditor } from './RuleEditor';
-import { CardIcon, pillButtonClass } from './primitives';
+import { CardIcon, pillButtonClass, textFieldClass } from './primitives';
 
 const ROW_DIVIDER = 'shadow-[inset_0_-1px_0_rgba(255,255,255,0.04)]';
 
@@ -72,7 +72,7 @@ export function AliasesCard(props: AliasesCardProps) {
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder={t('aliases.search.placeholder')}
               aria-label={t('aliases.search.label')}
-              className="w-28 min-w-0 font-mono text-xs text-cream placeholder:text-cream/45"
+              className={`${textFieldClass} w-28 min-w-0 text-xs`}
             />
           </label>
           <span className="flex-none font-mono text-[11px] text-cream/60">
@@ -100,16 +100,14 @@ export function AliasesCard(props: AliasesCardProps) {
         const kindBadge =
           summary.kind === 'worker'
             ? { key: 'aliases.row.badge.worker' as const, title: undefined }
-            : summary.kind === 'drop'
-              ? { key: 'aliases.row.badge.drop' as const, title: undefined }
-              : summary.kind === 'fanout'
-                ? { key: 'aliases.row.badge.fanout' as const, title: undefined }
-                : summary.kind === 'unknown'
-                  ? {
-                      key: 'aliases.row.badge.readOnly' as const,
-                      title: t('rules.editor.unknownNotice'),
-                    }
-                  : null;
+            : summary.kind === 'fanout'
+              ? { key: 'aliases.row.badge.fanout' as const, title: undefined }
+              : summary.kind === 'unknown'
+                ? {
+                    key: 'aliases.row.badge.readOnly' as const,
+                    title: t('rules.editor.unknownNotice'),
+                  }
+                : null;
         return (
           <div key={rule.id} className={ROW_DIVIDER}>
             <div
@@ -253,7 +251,7 @@ export function AliasesCard(props: AliasesCardProps) {
           onChange={(e) => onLocalChange(e.target.value)}
           placeholder={t('aliases.new.placeholder')}
           aria-label={t('aliases.new.label')}
-          className="w-[130px] font-mono text-[13px] text-cream placeholder:text-cream/45"
+          className={`${textFieldClass} w-[130px] text-[13px]`}
         />
         <span className="font-mono text-[13px] text-cream/60">@{domain || '...'}</span>
         <button

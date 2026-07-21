@@ -14,7 +14,6 @@ export const en = {
   'app.sessionCheckFailed': 'Could not check the session. Check the connection to the server.',
   'app.retry': 'Retry',
 
-  'header.badge': 'Panel',
   'header.refresh': 'Refresh',
   'header.logout': 'Sign out',
   'header.github': 'GitHub',
@@ -24,7 +23,6 @@ export const en = {
   'language.en': 'English',
   'language.es': 'Español',
 
-  'login.subtitle': 'Routing panel',
   'login.username': 'Username',
   'login.password': 'Password',
   'login.submit': 'Sign in',
@@ -69,7 +67,6 @@ export const en = {
   'aliases.row.fallbackName': 'alias',
   'aliases.row.nameLabel': '{name}',
   'aliases.row.badge.worker': 'Worker',
-  'aliases.row.badge.drop': 'Discard',
   'aliases.row.badge.fanout': 'Several destinations',
   'aliases.row.badge.readOnly': 'Read-only',
   'aliases.row.destLabel': 'Destination of {alias}',

@@ -46,13 +46,10 @@ export function Login({ onSuccess }: { onSuccess: () => void }) {
   return (
     <main className="fade-in flex min-h-screen items-center justify-center bg-ink px-6 font-sans text-cream">
       <div className="glass relative w-full max-w-sm rounded-panel p-8">
-        <div className="mb-1.5 flex items-center gap-3">
+        <div className="mb-7 flex items-center gap-3">
           <span className="flex items-center gap-2.5">
             <VuzonMark size={28} />
             <span className="text-xl font-bold tracking-[-0.045em]">vuzon</span>
-          </span>
-          <span className="rounded-md bg-accent/10 px-[9px] py-[3px] font-mono text-[10px] uppercase tracking-[0.18em] text-accent">
-            {t('header.badge')}
           </span>
           {/* The switcher is on the login screen too: the language must be reachable
               before signing in, not only from the panel header. */}
@@ -60,9 +57,6 @@ export function Login({ onSuccess }: { onSuccess: () => void }) {
             <LanguageMenu />
           </span>
         </div>
-        <p className="m-0 mb-7 font-mono text-[11px] uppercase tracking-[0.22em] text-cream/65">
-          {t('login.subtitle')}
-        </p>
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
           <label className="flex flex-col gap-1.5">
             <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-cream/65">

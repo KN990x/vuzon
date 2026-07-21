@@ -27,23 +27,26 @@ This is a single **pnpm workspace** with two packages: the backend `@vuzon/serve
 
 ```bash
 pnpm run build    # builds the SPA (@vuzon/web) → src/web/dist
-pnpm start        # build + start the server
+pnpm start        # production-like preview: build + Express on :8001
+pnpm dev          # local development: API + Vite (hot reload) on :5173
 ```
 
-`pnpm start` runs `pnpm run build` first (`pnpm --filter @vuzon/web run build`, which produces `src/web/dist`), then starts the backend (`pnpm --filter @vuzon/server run start`).
+Copy `.env.example` to `.env` at the **repo root** and fill in the required values. The server always loads that file (resolved from `server.js`, not from the process cwd), so `pnpm start` / `pnpm dev` work without symlinks.
 
-For frontend development with hot reload, run the backend (`pnpm --filter @vuzon/server run start`) and, in another terminal, `pnpm --filter @vuzon/web run dev` — the Vite dev server proxies `/api` to `http://127.0.0.1:8001` (see `src/web/vite.config.ts`).
+`pnpm start` runs `pnpm run build` first (`pnpm --filter @vuzon/web run build`, which produces `src/web/dist`), then starts the backend (`pnpm --filter @vuzon/server run start`). Use it to smoke-test with real credentials the same way Docker serves the built SPA.
 
-Both dev servers listen on **every interface**, so the panel can be opened from another device on the LAN or over a Tailscale tailnet:
+`pnpm dev` starts the API and the Vite SPA in parallel (`pnpm --parallel --filter @vuzon/server --filter @vuzon/web run dev`). Vite proxies `/api` to `http://127.0.0.1:8001` (see `src/web/vite.config.ts`). Ctrl+C stops both.
+
+Both listeners bind **every interface**, so the panel can be opened from another device on the LAN or over a Tailscale tailnet:
 
 | Server | Command | Port | Binds to |
 |---|---|---|---|
-| Vite (SPA, hot reload) | `pnpm --filter @vuzon/web run dev` | `5173` (Vite default, not pinned in the config) | `0.0.0.0` / `::` via `server.host: true` |
-| Express (backend / built SPA) | `pnpm start` | `8001` (`PORT`, else `VUZON_PORT`) | `0.0.0.0` / `::` — `app.listen(port)` takes no host |
+| Vite (SPA, hot reload) | `pnpm dev` (or `pnpm --filter @vuzon/web run dev`) | `5173` (Vite default, not pinned in the config) | `0.0.0.0` / `::` via `server.host: true` |
+| Express (backend / built SPA) | `pnpm start` / API half of `pnpm dev` | `8001` (`PORT`, else `VUZON_PORT`) | `0.0.0.0` / `::` — `app.listen(port)` takes no host |
 
 Vite rejects requests whose `Host` header is neither `localhost` nor an IP address, so `server.allowedHosts` lists `.ts.net` for Tailscale MagicDNS names; raw tailnet IPs (`100.x.y.z`) are accepted without it. Reaching the panel through the Vite proxy keeps the CSRF guard happy: the browser sends `Sec-Fetch-Site: same-origin`, and the proxy forwards the original `Host`, so `Origin` and `Host` still match.
 
-Only expose these ports on a trusted network — the dev server has no authentication of its own.
+Only expose these ports on a trusted network — the Vite dev server has no authentication of its own.
 
 ## Where to make changes
 
@@ -124,10 +127,11 @@ The bundled [`docker-compose.yml`](docker-compose.yml) pulls **`ghcr.io/kn990x/v
 
 ```bash
 pnpm install
-pnpm start
-# App at http://localhost:8001 (unless overridden via env)
+pnpm start   # production-like preview → http://localhost:8001
+pnpm dev     # hot-reload development → http://localhost:5173
 ```
 
+Put credentials in a repo-root `.env` (see `.env.example`). The server loads that file automatically.
 ### Validation details
 
 - `pnpm run check` executes the frontend build (TypeScript + Vite), syntax checks, ESLint + oxlint, `node --test`, and Vitest.

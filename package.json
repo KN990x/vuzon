@@ -12,6 +12,7 @@
     "build": "pnpm --filter @vuzon/web run build",
     "check": "pnpm run build && pnpm run check:syntax && pnpm run lint && pnpm run test && pnpm --filter @vuzon/web run test",
     "check:syntax": "find src/server -name '*.js' -not -path '*/node_modules/*' -print0 | xargs -0 -n1 node --check",
+    "dev": "pnpm --parallel --filter @vuzon/server --filter @vuzon/web run dev",
     "lint": "eslint . && pnpm --filter @vuzon/web run lint",
     "start": "pnpm run build && pnpm --filter @vuzon/server run start",
     "test": "pnpm --filter @vuzon/server run test"

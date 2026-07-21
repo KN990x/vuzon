@@ -7,6 +7,11 @@ export const pillButtonClass =
   'transition-transform duration-200 hover:scale-105 ' +
   'disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100';
 
+/** Text field: translucent fill so the control reads as an input, not bare text. */
+export const textFieldClass =
+  'rounded-[8px] bg-white/[0.04] px-2.5 py-[7px] font-mono text-cream ' +
+  'placeholder:text-cream/45 transition-colors duration-200 focus:bg-white/[0.07]';
+
 /** Header icon button (36×36, hover scale). */
 export const iconButtonClass =
   'flex size-9 cursor-pointer items-center justify-center text-cream/80 ' +

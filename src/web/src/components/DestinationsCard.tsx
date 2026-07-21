@@ -2,7 +2,7 @@ import { Check, Clock, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import type { Destination } from '../lib/types';
 import { isVerifiedStatus } from '../lib/verification';
 import { useI18n } from '../i18n/context';
-import { CardIcon, pillButtonClass } from './primitives';
+import { CardIcon, pillButtonClass, textFieldClass } from './primitives';
 
 const ROW_DIVIDER = 'shadow-[inset_0_-1px_0_rgba(255,255,255,0.04)]';
 
@@ -87,7 +87,7 @@ export function DestinationsCard({
             onChange={(e) => onInputChange(e.target.value)}
             placeholder={t('dests.new.placeholder')}
             aria-label={t('dests.new.label')}
-            className="min-w-0 flex-1 font-mono text-[13px] text-cream placeholder:text-cream/45"
+            className={`${textFieldClass} min-w-0 flex-1 text-[13px]`}
           />
           <button type="submit" className={pillButtonClass} disabled={!newDestInput || loading}>
             {t('dests.new.submit')}

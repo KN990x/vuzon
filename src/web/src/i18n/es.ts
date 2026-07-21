@@ -9,7 +9,6 @@ export const es = {
   'app.sessionCheckFailed': 'No se pudo comprobar la sesión. Revisa la conexión con el servidor.',
   'app.retry': 'Reintentar',
 
-  'header.badge': 'Panel',
   'header.refresh': 'Actualizar',
   'header.logout': 'Cerrar sesión',
   'header.github': 'GitHub',
@@ -19,7 +18,6 @@ export const es = {
   'language.en': 'English',
   'language.es': 'Español',
 
-  'login.subtitle': 'Panel de enrutamiento',
   'login.username': 'Usuario',
   'login.password': 'Contraseña',
   'login.submit': 'Entrar',
@@ -64,7 +62,6 @@ export const es = {
   'aliases.row.fallbackName': 'alias',
   'aliases.row.nameLabel': '{name}',
   'aliases.row.badge.worker': 'Worker',
-  'aliases.row.badge.drop': 'Descarta',
   'aliases.row.badge.fanout': 'Varios destinos',
   'aliases.row.badge.readOnly': 'Solo lectura',
   'aliases.row.destLabel': 'Destino de {alias}',
