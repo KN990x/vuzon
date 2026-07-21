@@ -7,7 +7,7 @@ import { describeRuleActions, getRuleAlias, getRuleDest } from '../lib/rules';
 import { useI18n } from '../i18n/context';
 import { Switch } from './Switch';
 import { RuleEditor } from './RuleEditor';
-import { CardIcon, pillButtonClass, textFieldClass } from './primitives';
+import { CardIcon, pillButtonClass, selectFieldClass, textFieldClass } from './primitives';
 
 const ROW_DIVIDER = 'shadow-[inset_0_-1px_0_rgba(255,255,255,0.04)]';
 
@@ -133,7 +133,7 @@ export function AliasesCard(props: AliasesCardProps) {
                     disabled={pending}
                     onChange={(e) => onChangeRuleDest(rule, e.target.value)}
                     aria-label={t('aliases.row.destLabel', { alias: aliasName })}
-                    className="w-full cursor-pointer appearance-none truncate rounded-[8px] bg-white/[0.04] py-1 pl-2 pr-6 font-mono text-[13px] text-cream/70 disabled:cursor-wait disabled:opacity-60"
+                    className={`${selectFieldClass} w-full truncate py-1 pl-2 pr-6 text-[13px] text-cream/70 disabled:cursor-wait disabled:opacity-60`}
                   >
                     {/* The current destination may have become unverified: it is kept as an
                         option so we do not misrepresent what is configured in Cloudflare. */}
@@ -242,76 +242,84 @@ export function AliasesCard(props: AliasesCardProps) {
       )}
 
       <form
-        className="flex flex-wrap items-center gap-3 px-[18px] py-[13px]"
+        className="flex flex-col gap-3 px-[18px] py-[13px]"
         onSubmit={(e) => {
           e.preventDefault();
           onCreate();
         }}
       >
-        <span className="flex text-cream/65" aria-hidden>
-          <Plus size={15} />
-        </span>
-        <input
-          value={newLocal}
-          onChange={(e) => onLocalChange(e.target.value)}
-          placeholder={t('aliases.new.placeholder')}
-          aria-label={t('aliases.new.label')}
-          className={`${textFieldClass} w-[130px] text-[13px]`}
-        />
-        <span className="font-mono text-[13px] text-cream/60">@{domain || '...'}</span>
-        <button
-          type="button"
-          onClick={onGenerate}
-          title={t('aliases.new.generate')}
-          aria-label={t('aliases.new.generate')}
-          className="cursor-pointer text-cream/65 transition-colors duration-200 hover:text-accent"
-        >
-          <Shuffle size={14} />
-        </button>
-        <button
-          type="button"
-          onClick={onCopyPreview}
-          title={t('aliases.new.copy', { address: previewText })}
-          aria-label={t('aliases.new.copy', { address: previewText })}
-          className={`cursor-pointer transition-colors duration-200 ${
-            copied ? 'text-positive' : 'text-cream/65 hover:text-accent'
-          }`}
-        >
-          {copied ? <Check size={14} /> : <Copy size={14} />}
-        </button>
-        <div className="relative ml-auto">
-          <select
-            value={dest}
-            onChange={(e) => onDestChange(e.target.value)}
-            aria-label={t('aliases.new.destLabel')}
-            className="cursor-pointer appearance-none rounded-[10px] bg-white/[0.04] py-[7px] pl-3 pr-8 font-mono text-xs text-cream/75 disabled:cursor-not-allowed disabled:text-cream/65"
-          >
-            {verifiedDests.length === 0 && (
-              <option value="">{t('aliases.new.noVerifiedDests')}</option>
-            )}
-            {verifiedDests.map((d) => (
-              <option key={d.id} value={d.email} className="bg-surface text-cream">
-                {d.email}
-              </option>
-            ))}
-            {/* An alias that discards the mail: useful to make an address look valid
-                without receiving anything. It rides in the same select rather than adding
-                a control to a row that is already crowded. */}
-            <option value={DROP_DEST_VALUE} className="bg-surface text-cream">
-              {t('aliases.new.discard')}
-            </option>
-          </select>
-          <ChevronDown
-            size={13}
-            className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-cream/60"
-            aria-hidden
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="flex text-cream/65" aria-hidden>
+            <Plus size={15} />
+          </span>
+          <input
+            value={newLocal}
+            onChange={(e) => onLocalChange(e.target.value)}
+            placeholder={t('aliases.new.placeholder')}
+            aria-label={t('aliases.new.label')}
+            className={`${textFieldClass} min-w-0 flex-1 text-[13px] sm:w-[130px] sm:flex-none`}
           />
+          <span className="font-mono text-[13px] text-cream/60">@{domain || '...'}</span>
+          <button
+            type="button"
+            onClick={onGenerate}
+            title={t('aliases.new.generate')}
+            aria-label={t('aliases.new.generate')}
+            className="cursor-pointer text-cream/65 transition-colors duration-200 hover:text-accent"
+          >
+            <Shuffle size={14} />
+          </button>
+          <button
+            type="button"
+            onClick={onCopyPreview}
+            title={t('aliases.new.copy', { address: previewText })}
+            aria-label={t('aliases.new.copy', { address: previewText })}
+            className={`cursor-pointer transition-colors duration-200 ${
+              copied ? 'text-positive' : 'text-cream/65 hover:text-accent'
+            }`}
+          >
+            {copied ? <Check size={14} /> : <Copy size={14} />}
+          </button>
         </div>
-        <button type="submit" className={pillButtonClass} disabled={!canCreate || loading}>
-          {t('aliases.new.submit')}
-        </button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="relative min-w-0 w-full sm:flex-1">
+            <select
+              value={dest}
+              onChange={(e) => onDestChange(e.target.value)}
+              aria-label={t('aliases.new.destLabel')}
+              className={`${selectFieldClass} w-full rounded-[10px] py-[7px] pl-3 pr-8 text-xs`}
+            >
+              {verifiedDests.length === 0 && (
+                <option value="">{t('aliases.new.noVerifiedDests')}</option>
+              )}
+              {verifiedDests.map((d) => (
+                <option key={d.id} value={d.email} className="bg-surface text-cream">
+                  {d.email}
+                </option>
+              ))}
+              {/* An alias that discards the mail: useful to make an address look valid
+                  without receiving anything. It rides in the same select rather than adding
+                  a control to a row that is already crowded. */}
+              <option value={DROP_DEST_VALUE} className="bg-surface text-cream">
+                {t('aliases.new.discard')}
+              </option>
+            </select>
+            <ChevronDown
+              size={13}
+              className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-cream/60"
+              aria-hidden
+            />
+          </div>
+          <button
+            type="submit"
+            className={`${pillButtonClass} w-full sm:w-auto`}
+            disabled={!canCreate || loading}
+          >
+            {t('aliases.new.submit')}
+          </button>
+        </div>
         {aliasError && (
-          <span className="w-full font-mono text-xs text-accent-dark">{aliasError}</span>
+          <span className="font-mono text-xs text-accent-dark">{aliasError}</span>
         )}
       </form>
     </section>

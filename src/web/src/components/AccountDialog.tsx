@@ -5,11 +5,7 @@ import { buildAuthErrorMessage } from '../lib/login-error';
 import { checkNewPassword } from '../lib/password-policy';
 import type { PasswordIssue } from '../lib/password-policy';
 import { useI18n } from '../i18n/context';
-import { pillButtonClass } from './primitives';
-
-const fieldClass =
-  'rounded-[10px] bg-white/[0.04] px-3 py-2.5 font-mono text-[13px] text-cream ' +
-  'placeholder:text-cream/45 transition-colors duration-200 focus:bg-white/[0.07]';
+import { pillButtonClass, authFieldClass } from './primitives';
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), '
@@ -215,7 +211,7 @@ export function AccountDialog({
         role="dialog"
         aria-modal="true"
         aria-label={t('account.title')}
-        className="fade-in glass w-full max-w-sm rounded-panel p-7"
+        className="fade-in glass glass-dialog relative w-full max-w-sm rounded-panel p-7"
         onKeyDown={trapTab}
       >
         <h2 className="m-0 mb-1.5 text-[15px] font-semibold tracking-[-0.02em] text-cream">
@@ -243,7 +239,7 @@ export function AccountDialog({
               onChange={(e) => setNewUsername(e.target.value)}
               autoComplete="username"
               required
-              className={fieldClass}
+              className={authFieldClass}
             />
           </label>
           <label className="flex flex-col gap-1.5">
@@ -256,7 +252,7 @@ export function AccountDialog({
               onChange={(e) => setUsernamePassword(e.target.value)}
               autoComplete="current-password"
               required
-              className={fieldClass}
+              className={authFieldClass}
             />
           </label>
 
@@ -287,7 +283,7 @@ export function AccountDialog({
               onChange={(e) => setCurrentPassword(e.target.value)}
               autoComplete="current-password"
               required
-              className={fieldClass}
+              className={authFieldClass}
             />
           </label>
           <label className="flex flex-col gap-1.5">
@@ -300,7 +296,7 @@ export function AccountDialog({
               onChange={(e) => setNewPassword(e.target.value)}
               autoComplete="new-password"
               required
-              className={fieldClass}
+              className={authFieldClass}
             />
             <span className="font-mono text-[11px] text-cream/45">{t('setup.passwordHint')}</span>
           </label>
@@ -314,7 +310,7 @@ export function AccountDialog({
               onChange={(e) => setNewPasswordConfirm(e.target.value)}
               autoComplete="new-password"
               required
-              className={fieldClass}
+              className={authFieldClass}
             />
           </label>
 

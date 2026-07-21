@@ -7,10 +7,24 @@ export const pillButtonClass =
   'transition-transform duration-200 hover:scale-105 ' +
   'disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100';
 
-/** Text field: translucent fill so the control reads as an input, not bare text. */
+/** Text field: translucent fill + visible border so the control reads as an input. */
 export const textFieldClass =
-  'rounded-[8px] bg-white/[0.04] px-2.5 py-[7px] font-mono text-cream ' +
-  'placeholder:text-cream/45 transition-colors duration-200 focus:bg-white/[0.07]';
+  'rounded-[8px] border border-cream/20 bg-white/[0.04] px-2.5 py-[7px] font-mono text-cream ' +
+  'placeholder:text-cream/45 transition-colors duration-200 ' +
+  'focus:border-cream/40 focus:bg-white/[0.07]';
+
+/** Auth / dialog fields: same border language, slightly larger padding and radius. */
+export const authFieldClass =
+  'rounded-[10px] border border-cream/20 bg-white/[0.04] px-3 py-2.5 font-mono text-[13px] ' +
+  'text-cream placeholder:text-cream/45 transition-colors duration-200 ' +
+  'focus:border-cream/40 focus:bg-white/[0.07]';
+
+/** Native select sharing the text-field border so destinations look editable too. */
+export const selectFieldClass =
+  'cursor-pointer appearance-none rounded-[8px] border border-cream/20 bg-white/[0.04] ' +
+  'font-mono text-cream/75 transition-colors duration-200 ' +
+  'focus:border-cream/40 focus:bg-white/[0.07] ' +
+  'disabled:cursor-not-allowed disabled:text-cream/65';
 
 /** Header icon button (36×36, hover scale). */
 export const iconButtonClass =

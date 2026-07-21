@@ -52,7 +52,6 @@ body {
 
 input {
   outline: none;
-  border: none;
   background: transparent;
 }
 
@@ -139,4 +138,11 @@ input {
     transparent 55%,
     rgba(255, 180, 110, 0.1)
   );
+}
+
+/* Modal panels (AccountDialog): near-opaque surface so dashboard content does not
+   show through and wash out the form. Composes with .glass for the gradient rim. */
+.glass-dialog {
+  background: rgba(17, 17, 17, 0.94);
+  backdrop-filter: blur(16px);
 }

@@ -5,7 +5,7 @@ import type { Destination, RuleEditorPatch } from '../lib/types';
 import type { RuleActionSummary } from '../lib/rules';
 import { getDestSelectionState } from '../lib/dest-selection';
 import { useI18n } from '../i18n/context';
-import { pillButtonClass } from './primitives';
+import { pillButtonClass, selectFieldClass, textFieldClass } from './primitives';
 
 /**
  * Inline editor for what a rule does with the mail. Shared by an alias row
@@ -149,7 +149,7 @@ export function RuleEditor({ summary, verifiedDests, busy, name, onSave, onCance
               value={dest}
               onChange={(e) => setDest(e.target.value)}
               aria-label={t('rules.editor.destLabel')}
-              className="w-full cursor-pointer appearance-none truncate rounded-[8px] bg-white/[0.04] py-[7px] pl-3 pr-8 font-mono text-[13px] text-cream/75"
+              className={`${selectFieldClass} w-full truncate py-[7px] pl-3 pr-8 text-[13px]`}
             >
               {/* The configured destination may have lost its verification: it stays in
                   the list so the editor does not misrepresent what Cloudflare holds. */}
@@ -177,7 +177,7 @@ export function RuleEditor({ summary, verifiedDests, busy, name, onSave, onCance
           onChange={(e) => setNameDraft(e.target.value)}
           placeholder={t('rules.editor.namePlaceholder')}
           aria-label={t('rules.editor.nameLabel')}
-          className="w-full rounded-[8px] bg-white/[0.04] px-3 py-[7px] font-mono text-[13px] text-cream placeholder:text-cream/45"
+          className={`${textFieldClass} w-full px-3`}
         />
       )}
 

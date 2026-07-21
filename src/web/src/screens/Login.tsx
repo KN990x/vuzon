@@ -3,12 +3,8 @@ import type { FormEvent } from 'react';
 import { apiRequest } from '../lib/api';
 import { buildLoginErrorMessage } from '../lib/login-error';
 import { useI18n } from '../i18n/context';
-import { pillButtonClass, VuzonMark } from '../components/primitives';
+import { pillButtonClass, authFieldClass, VuzonMark } from '../components/primitives';
 import { LanguageMenu } from '../components/LanguageMenu';
-
-const fieldClass =
-  'rounded-[10px] bg-white/[0.04] px-3 py-2.5 font-mono text-[13px] text-cream ' +
-  'placeholder:text-cream/45 transition-colors duration-200 focus:bg-white/[0.07]';
 
 export function Login({ onSuccess }: { onSuccess: () => void }) {
   const i18n = useI18n();
@@ -68,7 +64,7 @@ export function Login({ onSuccess }: { onSuccess: () => void }) {
               autoComplete="username"
               autoFocus
               required
-              className={fieldClass}
+              className={authFieldClass}
             />
           </label>
           <label className="flex flex-col gap-1.5">
@@ -81,7 +77,7 @@ export function Login({ onSuccess }: { onSuccess: () => void }) {
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
               required
-              className={fieldClass}
+              className={authFieldClass}
             />
           </label>
           {errorMessage && (

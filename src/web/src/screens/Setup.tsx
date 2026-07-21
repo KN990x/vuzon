@@ -5,12 +5,8 @@ import { buildAuthErrorMessage } from '../lib/login-error';
 import { checkNewPassword } from '../lib/password-policy';
 import type { PasswordIssue } from '../lib/password-policy';
 import { useI18n } from '../i18n/context';
-import { pillButtonClass, VuzonMark } from '../components/primitives';
+import { pillButtonClass, authFieldClass, VuzonMark } from '../components/primitives';
 import { LanguageMenu } from '../components/LanguageMenu';
-
-const fieldClass =
-  'rounded-[10px] bg-white/[0.04] px-3 py-2.5 font-mono text-[13px] text-cream ' +
-  'placeholder:text-cream/45 transition-colors duration-200 focus:bg-white/[0.07]';
 
 /**
  * First-install wizard. It is what the SPA shows when `GET /api/me` answers 401 with
@@ -112,7 +108,7 @@ export function Setup({ onSuccess, onAlreadyConfigured }: SetupProps) {
               autoComplete="username"
               autoFocus
               required
-              className={fieldClass}
+              className={authFieldClass}
             />
           </label>
           <label className="flex flex-col gap-1.5">
@@ -125,7 +121,7 @@ export function Setup({ onSuccess, onAlreadyConfigured }: SetupProps) {
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="new-password"
               required
-              className={fieldClass}
+              className={authFieldClass}
             />
             <span className="font-mono text-[11px] text-cream/45">{t('setup.passwordHint')}</span>
           </label>
@@ -139,7 +135,7 @@ export function Setup({ onSuccess, onAlreadyConfigured }: SetupProps) {
               onChange={(e) => setPasswordConfirm(e.target.value)}
               autoComplete="new-password"
               required
-              className={fieldClass}
+              className={authFieldClass}
             />
           </label>
 

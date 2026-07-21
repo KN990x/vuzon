@@ -517,12 +517,14 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
               {profile.rootDomain || '…'}
             </h1>
           </div>
-          <div className="flex gap-6 font-mono text-xs text-cream/65">
-            <div className="flex flex-col items-end gap-1">
+          {/* w-full on narrow viewports: intentional stack under the domain, not an
+              accidental wrap fighting the H1. sm+ sits beside the title again. */}
+          <div className="flex w-full gap-4 font-mono text-xs text-cream/65 sm:w-auto sm:gap-6">
+            <div className="flex flex-col items-start gap-1 sm:items-end">
               <span className="font-sans text-[22px] font-bold text-cream">{activeCount}</span>
               {t('dashboard.activeAliases')}
             </div>
-            <div className="flex flex-col items-end gap-1">
+            <div className="flex flex-col items-start gap-1 sm:items-end">
               <span className="font-sans text-[22px] font-bold text-accent">{catchAllLabel}</span>
               {t('dashboard.catchAll')}
             </div>
