@@ -7,6 +7,7 @@ import {
 } from '../config/cloudflare-env.js';
 import { getDomainConfigurationIssue } from '../config/domain-env.js';
 import { getPlaceholderConfigurationIssue } from '../config/placeholder-guard.js';
+import { warnIfLegacyAuthEnvVarsSet } from '../config/legacy-auth-env.js';
 import { createApp } from './create-app.js';
 import { ensureCloudflareIdentifiers } from '../platform/cloudflare/auto-configure.js';
 import { createCloudflareClient } from '../platform/cloudflare/client.js';
@@ -167,6 +168,10 @@ export async function startServer({
     console.log(
       `Server on port ${boundPort} · production: ${runtime.isProduction ? 'yes' : 'no'} · ${panelUserLine}`,
     );
+
+    // Leftovers from 1.x: still accepted by dotenv but no longer read. Say so once per boot
+    // so an upgrade does not look like the password in .env is still in force.
+    warnIfLegacyAuthEnvVarsSet(env);
 
     // The setup wizard is public until someone completes it: whoever opens the panel first
     // claims it. Saying so on every boot is the mitigation we chose over a setup token —

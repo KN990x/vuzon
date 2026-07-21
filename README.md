@@ -130,6 +130,10 @@ docker compose pull && docker compose up -d
 
 Then **open the panel in a browser**: the first visit asks you to choose a username and a password (twice). They are stored on your server as a **scrypt hash** in the `vuzon-data` volume — there is no `AUTH_PASS` variable, and the password never exists in plain text anywhere.
 
+<p align="center">
+  <img src="./docs/assets/setup.png" alt="vuzon setup wizard: choose username and password on first visit" width="100%">
+</p>
+
 > **Finish the setup right away.** Until you do, the panel has no owner, so anyone who can reach it could claim it — the same trust-on-first-use model as Uptime Kuma or Nextcloud. The server repeats that warning in its log on every boot while it is unconfigured.
 
 **`.env` ships with empty values on purpose** — vuzon **will not start** until you fill in `DOMAIN` and `CF_API_TOKEN`. Those two are the whole file; there is no session secret to generate by hand any more (the panel makes its own, in the data volume) and no password to write down in plain text.
@@ -140,7 +144,7 @@ Open **http://localhost:8001** (or `http://<server-ip>:<port>` on your LAN). Ano
 
 Problems: **`docker compose logs -f vuzon`** — startup errors name the exact variable to fix.
 
-Login uses a signed **`vuzon_session`** cookie; the panel's own state (credential hash + signing key) lives in the **`vuzon-data`** volume. **Back that volume up** — losing it means losing the password, and the setup wizard reopens. To change your password later, use the key icon in the header. For local image builds, pinning, and HTTP details, see **[CONTRIBUTING.md](CONTRIBUTING.md)**.
+Login uses a signed **`vuzon_session`** cookie; the panel's own state (credential hash + signing key) lives in the **`vuzon-data`** volume. **Back that volume up** — losing it means losing the password, and the setup wizard reopens. To change your username or password later, use the key icon in the header. For local image builds, pinning, and HTTP details, see **[CONTRIBUTING.md](CONTRIBUTING.md)**.
 
 ### Updating
 
@@ -314,6 +318,10 @@ docker compose pull && docker compose up -d
 
 Después, **abre el panel en el navegador**: la primera visita te pide elegir usuario y contraseña (repetida). Se guardan en tu servidor como **hash scrypt** en el volumen `vuzon-data` — no hay variable `AUTH_PASS`, y la contraseña no existe en texto plano en ningún sitio.
 
+<p align="center">
+  <img src="./docs/assets/setup.png" alt="Asistente de instalación de vuzon: elegir usuario y contraseña en la primera visita" width="100%">
+</p>
+
 > **Termina la instalación cuanto antes.** Hasta que lo hagas el panel no tiene dueño, así que cualquiera que llegue a él podría reclamarlo — el mismo modelo de confianza en el primer uso que Uptime Kuma o Nextcloud. El servidor repite ese aviso en su log en cada arranque mientras siga sin configurar.
 
 **`.env` viene con los valores vacíos a propósito** — vuzon **no arranca** hasta que rellenes `DOMAIN` y `CF_API_TOKEN`. Esos dos son todo el fichero: ya no hay ningún secreto de sesión que generar a mano (el panel se crea el suyo, en el volumen de datos) ni contraseña que apuntar en texto plano.
@@ -324,7 +332,7 @@ Abre **http://localhost:8001** (o `http://<server-ip>:<port>` en tu LAN). Otro p
 
 Problemas: **`docker compose logs -f vuzon`** — los errores de arranque nombran la variable exacta que hay que corregir.
 
-El inicio de sesión usa una cookie firmada **`vuzon_session`**; el estado propio del panel (hash de la credencial + clave de firma) vive en el volumen **`vuzon-data`**. **Haz copia de ese volumen**: perderlo es perder la contraseña, y el asistente de instalación se vuelve a abrir. Para cambiar la contraseña más adelante, usa el icono de llave de la cabecera. Para build local de imagen, pinning y detalles HTTP, ver **[CONTRIBUTING.md](CONTRIBUTING.md)**.
+El inicio de sesión usa una cookie firmada **`vuzon_session`**; el estado propio del panel (hash de la credencial + clave de firma) vive en el volumen **`vuzon-data`**. **Haz copia de ese volumen**: perderlo es perder la contraseña, y el asistente de instalación se vuelve a abrir. Para cambiar el usuario o la contraseña más adelante, usa el icono de llave de la cabecera. Para build local de imagen, pinning y detalles HTTP, ver **[CONTRIBUTING.md](CONTRIBUTING.md)**.
 
 ### Actualizar
 

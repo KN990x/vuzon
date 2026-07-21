@@ -15,7 +15,7 @@ import type { CatchAllPatch, Destination, FormErrors, Profile, Rule, RulePatch }
 import { useI18n } from '../i18n/context';
 import { translateApiError } from '../i18n/api-errors';
 import { Header } from '../components/Header';
-import { ChangePasswordDialog } from '../components/ChangePasswordDialog';
+import { AccountDialog } from '../components/AccountDialog';
 import { Footer } from '../components/Footer';
 import { Toast } from '../components/Toast';
 import { AliasesCard, DROP_DEST_VALUE } from '../components/AliasesCard';
@@ -55,7 +55,7 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
   const [statusMsg, setStatusMsg] = useState('');
   const [errors, setErrors] = useState<FormErrors>({ alias: null, dest: null });
   const [copied, setCopied] = useState(false);
-  const [changingPassword, setChangingPassword] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
 
   const statusTimerRef = useRef<number | null>(null);
   const copiedTimerRef = useRef<number | null>(null);
@@ -476,15 +476,15 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
         domain={profile.rootDomain}
         loading={busy.has('refresh')}
         onRefresh={() => void refreshAll()}
-        onChangePassword={() => setChangingPassword(true)}
+        onOpenAccount={() => setAccountOpen(true)}
         onLogout={() => void logout()}
       />
-      {changingPassword && (
-        <ChangePasswordDialog
-          onClose={() => setChangingPassword(false)}
-          onChanged={() => {
-            setChangingPassword(false);
-            setStatus(t('account.password.done'));
+      {accountOpen && (
+        <AccountDialog
+          onClose={() => setAccountOpen(false)}
+          onChanged={(kind) => {
+            setAccountOpen(false);
+            setStatus(kind === 'username' ? t('account.username.done') : t('account.password.done'));
           }}
         />
       )}

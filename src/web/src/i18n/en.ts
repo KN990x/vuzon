@@ -15,7 +15,7 @@ export const en = {
   'app.retry': 'Retry',
 
   'header.refresh': 'Refresh',
-  'header.changePassword': 'Change password',
+  'header.account': 'Account',
   'header.logout': 'Sign out',
   'header.github': 'GitHub',
   'header.language': 'Language',
@@ -49,6 +49,16 @@ export const en = {
   'setup.warning':
     'There is no password recovery: write it down somewhere safe.',
 
+  'account.title': 'Account',
+  'account.notice': 'Any other session that is open will be signed out.',
+  'account.cancel': 'Cancel',
+  'account.username.title': 'Change username',
+  'account.username.new': 'New username',
+  'account.username.currentPassword': 'Current password',
+  'account.username.submit': 'Change username',
+  'account.username.submitting': 'Changing…',
+  'account.username.error.generic': 'Could not change the username',
+  'account.username.done': 'Username changed',
   'account.password.title': 'Change password',
   'account.password.current': 'Current password',
   'account.password.new': 'New password',
@@ -56,8 +66,6 @@ export const en = {
   'account.password.submit': 'Change password',
   'account.password.submitting': 'Changing…',
   'account.password.error.generic': 'Could not change the password',
-  'account.password.cancel': 'Cancel',
-  'account.password.notice': 'Any other session that is open will be signed out.',
   'account.password.done': 'Password changed',
 
   'dashboard.eyebrow': 'Routing panel',
@@ -216,6 +224,7 @@ export const en = {
   'error.field.password': 'Password',
   'error.field.passwordConfirm': 'Password confirmation',
   'error.field.currentPassword': 'Current password',
+  'error.field.newUsername': 'New username',
   'error.field.newPassword': 'New password',
   'error.field.newPasswordConfirm': 'New password confirmation',
   'error.issue.email.invalid': 'invalid email format',

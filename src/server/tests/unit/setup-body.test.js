@@ -4,6 +4,7 @@ import {
   MIN_PASSWORD_LENGTH,
   passwordChangeBodySchema,
   setupBodySchema,
+  usernameChangeBodySchema,
 } from '../../features/auth/setup-body.js';
 import { collectZodIssues } from '../../platform/http/format-zod-error.js';
 
@@ -100,4 +101,29 @@ test('password change: the new password has to meet the policy and be confirmed'
     newPasswordConfirm: 'something-else-entirely',
   });
   assert.deepEqual(issues, [{ field: 'newPasswordConfirm', code: 'password.mismatch' }]);
+});
+
+test('username change: a valid body passes and trims the new username', () => {
+  const parsed = usernameChangeBodySchema.parse({
+    newUsername: '  owner  ',
+    currentPassword: PASSWORD,
+  });
+  assert.equal(parsed.newUsername, 'owner');
+  assert.equal(parsed.currentPassword, PASSWORD);
+});
+
+test('username change: the current password is required', () => {
+  const issues = issuesOf(usernameChangeBodySchema, {
+    newUsername: 'owner',
+    currentPassword: '',
+  });
+  assert.deepEqual(issues, [{ field: 'currentPassword', code: 'password.current_required' }]);
+});
+
+test('username change: an empty new username is a slug', () => {
+  const issues = issuesOf(usernameChangeBodySchema, {
+    newUsername: '   ',
+    currentPassword: PASSWORD,
+  });
+  assert.deepEqual(issues, [{ field: 'newUsername', code: 'username.required' }]);
 });

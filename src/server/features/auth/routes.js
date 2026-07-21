@@ -9,7 +9,7 @@ import {
 } from '../../platform/http/rate-limiters.js';
 import { SESSION_COOKIE_NAME } from '../../platform/session/middleware.js';
 import { loginBodySchema } from './login-body.js';
-import { passwordChangeBodySchema, setupBodySchema } from './setup-body.js';
+import { passwordChangeBodySchema, setupBodySchema, usernameChangeBodySchema } from './setup-body.js';
 import {
   isSessionIssuanceValid,
   nextIssuedAt,
@@ -26,37 +26,48 @@ export function registerAuthRoutes(app, {
   setupLimiter = createSetupRateLimiter(),
   passwordChangeLimiter = createPasswordChangeRateLimiter(),
 } = {}) {
+  // Synchronous claim lock for the setup window. Node is single-threaded, so checking and
+  // setting this flag in the same tick is atomic across handlers: the second concurrent
+  // POST /api/setup cannot slip past isConfigured() while the first is still awaiting scrypt.
+  // Cleared in finally so a failed validation does not permanently block the wizard.
+  let setupInProgress = false;
+
   /**
    * First-install wizard. Public by necessity: there is no credential to authenticate
    * against yet, so whoever reaches the panel first claims it (the same trust-on-first-use
-   * model as Uptime Kuma or Nextcloud). The 409 below is what closes that window for good,
-   * and it is checked BEFORE validating the body so a configured panel gives an attacker
-   * nothing to probe.
+   * model as Uptime Kuma or Nextcloud). The 409 below is what closes that window for good
+   * (including while the first claim is still hashing), and it is checked BEFORE validating
+   * the body so a configured panel gives an attacker nothing to probe.
    */
   app.post('/api/setup', setupLimiter, asyncHandler(async (req, res) => {
-    if (credentialStore.isConfigured()) {
+    if (credentialStore.isConfigured() || setupInProgress) {
       return res.status(409).json({
         error: 'The panel is already set up',
         code: ERROR_CODES.SETUP_ALREADY_DONE,
       });
     }
 
-    let body;
+    setupInProgress = true;
     try {
-      body = setupBodySchema.parse(req.body);
-    } catch (err) {
-      return sendApiRouteError(res, err);
+      let body;
+      try {
+        body = setupBodySchema.parse(req.body);
+      } catch (err) {
+        return sendApiRouteError(res, err);
+      }
+
+      await credentialStore.save({ username: body.username, password: body.password });
+
+      // Signing in right away: asking the user to retype what they just chose adds nothing.
+      req.session = {
+        authenticated: true,
+        issuedAt: nextIssuedAt(),
+      };
+
+      return res.json({ success: true });
+    } finally {
+      setupInProgress = false;
     }
-
-    await credentialStore.save({ username: body.username, password: body.password });
-
-    // Signing in right away: asking the user to retype what they just chose adds nothing.
-    req.session = {
-      authenticated: true,
-      issuedAt: nextIssuedAt(),
-    };
-
-    return res.json({ success: true });
   }));
 
   app.post('/api/login', loginLimiter, asyncHandler(async (req, res) => {
@@ -119,6 +130,42 @@ export function registerAuthRoutes(app, {
     // that is the whole point of changing it. The caller's own session is re-stamped so the
     // user is not logged out of the tab they are looking at (`nextIssuedAt` guarantees a
     // mark strictly above the one just set).
+    revokeSessionsIssuedUntilNow();
+    req.session = {
+      authenticated: true,
+      issuedAt: nextIssuedAt(),
+    };
+
+    return res.json({ success: true });
+  }));
+
+  /**
+   * Username change: same guard order and session revocation as the password route. The
+   * password hash is left untouched (`updateUsername`); only the login name changes.
+   */
+  app.post('/api/account/username', requireAuth, passwordChangeLimiter, asyncHandler(async (req, res) => {
+    let body;
+    try {
+      body = usernameChangeBodySchema.parse(req.body);
+    } catch (err) {
+      return sendApiRouteError(res, err);
+    }
+
+    const currentUsername = credentialStore.getUsername();
+    // Same name after trim: nothing to write and no reason to kick other sessions.
+    if (body.newUsername === currentUsername) {
+      return res.json({ success: true });
+    }
+
+    if (!(await credentialStore.verify({ username: currentUsername, password: body.currentPassword }))) {
+      return res.status(401).json({
+        error: 'The current password is not correct',
+        code: ERROR_CODES.AUTH_CURRENT_PASSWORD_INVALID,
+      });
+    }
+
+    credentialStore.updateUsername(body.newUsername);
+
     revokeSessionsIssuedUntilNow();
     req.session = {
       authenticated: true,

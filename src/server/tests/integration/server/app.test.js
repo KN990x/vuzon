@@ -145,6 +145,12 @@ function createTestCredentialStore({ username = 'testuser', password = 'test-sec
     async save({ username: nextUser, password: nextPassword }) {
       record = { username: nextUser.trim(), password: nextPassword };
     },
+    updateUsername(nextUser) {
+      if (record === null) {
+        throw new Error('Cannot update the username before the panel has credentials');
+      }
+      record = { ...record, username: nextUser.trim() };
+    },
     async verify({ username: candidateUser, password: candidatePassword }) {
       return record !== null
         && candidateUser === record.username
@@ -2200,6 +2206,90 @@ test('HTTP integration: the setup wizard claims the panel exactly once', async (
   }
 });
 
+test('HTTP integration: concurrent setup claims yield exactly one 200', async (t) => {
+  const dataDir = tempDataDir(t);
+  const { app } = createApp({
+    env: { ...DIAGNOSTICS_ENV },
+    cloudflareClient: createMockCloudflareClient(),
+    sessionSecret: 'test-session-secret-32chars!!',
+    dataDir,
+  });
+
+  const { server, baseUrl } = await listen(app);
+
+  try {
+    resetSessionEpochForTests();
+
+    const [ownerRes, attackerRes] = await Promise.all([
+      fetch(`${baseUrl}/api/setup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: 'owner',
+          password: SETUP_PASSWORD,
+          passwordConfirm: SETUP_PASSWORD,
+        }),
+      }),
+      fetch(`${baseUrl}/api/setup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: 'attacker',
+          password: SETUP_PASSWORD,
+          passwordConfirm: SETUP_PASSWORD,
+        }),
+      }),
+    ]);
+
+    const statuses = [ownerRes.status, attackerRes.status].sort();
+    assert.deepEqual(statuses, [200, 409]);
+
+    const winnerRes = ownerRes.status === 200 ? ownerRes : attackerRes;
+    const loserRes = ownerRes.status === 409 ? ownerRes : attackerRes;
+    assert.equal((await readJson(loserRes)).code, ERROR_CODES.SETUP_ALREADY_DONE);
+    assert.deepEqual(await readJson(winnerRes), { success: true });
+
+    const winnerCookie = sessionCookieHeaderFromResponse(winnerRes);
+    {
+      const res = await fetch(`${baseUrl}/api/me`, { headers: { Cookie: winnerCookie } });
+      assert.equal(res.status, 200);
+    }
+
+    // Whichever username landed on disk is the only one that can log in.
+    const ownerLogin = await fetch(`${baseUrl}/api/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'owner', password: SETUP_PASSWORD }),
+    });
+    const attackerLogin = await fetch(`${baseUrl}/api/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'attacker', password: SETUP_PASSWORD }),
+    });
+    const loginStatuses = [ownerLogin.status, attackerLogin.status].sort();
+    assert.deepEqual(loginStatuses, [200, 401]);
+
+    {
+      const res = await fetch(`${baseUrl}/api/setup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: 'latecomer',
+          password: SETUP_PASSWORD,
+          passwordConfirm: SETUP_PASSWORD,
+        }),
+      });
+      assert.equal(res.status, 409);
+      assert.equal((await readJson(res)).code, ERROR_CODES.SETUP_ALREADY_DONE);
+    }
+  } finally {
+    resetSessionEpochForTests();
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+  }
+});
+
 test('HTTP integration: changing the password revokes every other session', async (t) => {
   const dataDir = tempDataDir(t);
   const { app } = createApp({
@@ -2307,12 +2397,13 @@ test('HTTP integration: changing the password revokes every other session', asyn
   }
 });
 
-test('HTTP integration: the setup and password routes are covered by the same-origin guard', async (t) => {
+test('HTTP integration: changing the username revokes every other session', async (t) => {
+  const dataDir = tempDataDir(t);
   const { app } = createApp({
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
-    dataDir: tempDataDir(t),
+    dataDir,
   });
 
   const { server, baseUrl } = await listen(app);
@@ -2320,22 +2411,190 @@ test('HTTP integration: the setup and password routes are covered by the same-or
   try {
     resetSessionEpochForTests();
 
-    const res = await fetch(`${baseUrl}/api/setup`, {
+    {
+      const res = await fetch(`${baseUrl}/api/account/username`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          newUsername: 'owner',
+          currentPassword: SETUP_PASSWORD,
+        }),
+      });
+      assert.equal(res.status, 401, 'the route is guarded before the panel even exists');
+    }
+
+    const setupRes = await fetch(`${baseUrl}/api/setup`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Origin: 'https://evil.example',
-        'Sec-Fetch-Site': 'cross-site',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         username: 'kn',
         password: SETUP_PASSWORD,
         passwordConfirm: SETUP_PASSWORD,
       }),
     });
-    assert.equal(res.status, 403);
-    assert.equal((await readJson(res)).code, ERROR_CODES.CSRF_BLOCKED);
-    assert.equal(res.headers.get('cache-control'), 'no-store');
+    assert.equal(setupRes.status, 200);
+    const ownCookie = sessionCookieHeaderFromResponse(setupRes);
+    const otherCookie = await loginAndGetCookie(baseUrl, 'kn', SETUP_PASSWORD);
+
+    const passwordBefore = JSON.parse(
+      fs.readFileSync(path.join(dataDir, 'auth.json'), 'utf8'),
+    ).password;
+
+    {
+      const res = await fetch(`${baseUrl}/api/account/username`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Cookie: ownCookie },
+        body: JSON.stringify({
+          newUsername: 'owner',
+          currentPassword: 'not-the-current-one',
+        }),
+      });
+      assert.equal(res.status, 401);
+      assert.equal((await readJson(res)).code, ERROR_CODES.AUTH_CURRENT_PASSWORD_INVALID);
+    }
+
+    let rotatedCookie = '';
+    {
+      const res = await fetch(`${baseUrl}/api/account/username`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Cookie: ownCookie },
+        body: JSON.stringify({
+          newUsername: 'owner',
+          currentPassword: SETUP_PASSWORD,
+        }),
+      });
+      assert.equal(res.status, 200);
+      assert.deepEqual(await readJson(res), { success: true });
+      rotatedCookie = sessionCookieHeaderFromResponse(res);
+    }
+
+    const passwordAfter = JSON.parse(
+      fs.readFileSync(path.join(dataDir, 'auth.json'), 'utf8'),
+    ).password;
+    assert.equal(passwordAfter.salt, passwordBefore.salt);
+    assert.equal(passwordAfter.hash, passwordBefore.hash);
+
+    {
+      const res = await fetch(`${baseUrl}/api/me`, { headers: { Cookie: rotatedCookie } });
+      assert.equal(res.status, 200);
+    }
+
+    {
+      const res = await fetch(`${baseUrl}/api/me`, { headers: { Cookie: otherCookie } });
+      assert.equal(res.status, 401, 'every other session must be dropped by a username change');
+    }
+
+    {
+      const res = await fetch(`${baseUrl}/api/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'kn', password: SETUP_PASSWORD }),
+      });
+      assert.equal(res.status, 401, 'the old username must stop working');
+    }
+
+    {
+      const res = await fetch(`${baseUrl}/api/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'owner', password: SETUP_PASSWORD }),
+      });
+      assert.equal(res.status, 200);
+    }
+
+    {
+      // Same name after trim: idempotent, and must not rotate the caller's cookie away.
+      const res = await fetch(`${baseUrl}/api/account/username`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Cookie: rotatedCookie },
+        body: JSON.stringify({
+          newUsername: 'owner',
+          currentPassword: SETUP_PASSWORD,
+        }),
+      });
+      assert.equal(res.status, 200);
+      assert.deepEqual(await readJson(res), { success: true });
+      const resMe = await fetch(`${baseUrl}/api/me`, { headers: { Cookie: rotatedCookie } });
+      assert.equal(resMe.status, 200);
+    }
+  } finally {
+    resetSessionEpochForTests();
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+  }
+});
+
+test('HTTP integration: the setup and account routes are covered by the same-origin guard', async (t) => {
+  const dataDir = tempDataDir(t);
+  const { app } = createApp({
+    env: { ...DIAGNOSTICS_ENV },
+    cloudflareClient: createMockCloudflareClient(),
+    sessionSecret: 'test-session-secret-32chars!!',
+    dataDir,
+  });
+
+  const { server, baseUrl } = await listen(app);
+
+  try {
+    resetSessionEpochForTests();
+
+    {
+      const res = await fetch(`${baseUrl}/api/setup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Origin: 'https://evil.example',
+          'Sec-Fetch-Site': 'cross-site',
+        },
+        body: JSON.stringify({
+          username: 'kn',
+          password: SETUP_PASSWORD,
+          passwordConfirm: SETUP_PASSWORD,
+        }),
+      });
+      assert.equal(res.status, 403);
+      assert.equal((await readJson(res)).code, ERROR_CODES.CSRF_BLOCKED);
+      assert.equal(res.headers.get('cache-control'), 'no-store');
+    }
+
+    const setupRes = await fetch(`${baseUrl}/api/setup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: 'kn',
+        password: SETUP_PASSWORD,
+        passwordConfirm: SETUP_PASSWORD,
+      }),
+    });
+    assert.equal(setupRes.status, 200);
+    const cookie = sessionCookieHeaderFromResponse(setupRes);
+
+    for (const routePath of ['/api/account/password', '/api/account/username']) {
+      const res = await fetch(`${baseUrl}${routePath}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: cookie,
+          Origin: 'https://evil.example',
+          'Sec-Fetch-Site': 'cross-site',
+        },
+        body: JSON.stringify(
+          routePath.endsWith('password')
+            ? {
+              currentPassword: SETUP_PASSWORD,
+              newPassword: 'another-long-password',
+              newPasswordConfirm: 'another-long-password',
+            }
+            : {
+              newUsername: 'owner',
+              currentPassword: SETUP_PASSWORD,
+            },
+        ),
+      });
+      assert.equal(res.status, 403, routePath);
+      assert.equal((await readJson(res)).code, ERROR_CODES.CSRF_BLOCKED);
+    }
   } finally {
     resetSessionEpochForTests();
     await new Promise((resolve) => {

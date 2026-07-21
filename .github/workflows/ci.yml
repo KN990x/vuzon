@@ -37,8 +37,9 @@ jobs:
         run: docker build -t vuzon-ci .
 
       # `docker build` does not prove the image boots. This smoke test runs it with the
-      # same hardening as the compose file (read_only, cap_drop, no-new-privileges) and
-      # checks /healthz and the SPA HTML. Setting CF_ZONE_ID and CF_ACCOUNT_ID skips
+      # same hardening as the compose file (read_only, cap_drop, no-new-privileges, data
+      # volume on /app/data) and checks /healthz, the SPA HTML, and that an unconfigured
+      # panel answers auth.setup_required. Setting CF_ZONE_ID and CF_ACCOUNT_ID skips
       # auto-detection, so no real Cloudflare credential is needed.
       - name: Smoke test the image (boots, hardened, serves the SPA)
         run: |
@@ -46,13 +47,11 @@ jobs:
           docker run -d --name vuzon-smoke \
             --read-only --tmpfs /tmp \
             --cap-drop ALL --security-opt no-new-privileges:true \
+            -v vuzon-smoke-data:/app/data \
             -e DOMAIN=ci-smoke-test.invalid \
-            -e AUTH_USER=ci \
-            -e AUTH_PASS=ci-smoke-test-password \
             -e CF_API_TOKEN=ci-smoke-test-token \
             -e CF_ZONE_ID=ci_smoke_zone \
             -e CF_ACCOUNT_ID=ci_smoke_account \
-            -e SESSION_SECRET="$(openssl rand -hex 32)" \
             -p 8001:8001 vuzon-ci
 
           for i in $(seq 1 30); do
@@ -66,9 +65,12 @@ jobs:
           done
 
           curl -fsS http://127.0.0.1:8001/ | grep -q '<div id="root">'
-          # Without a session the API must answer 401 JSON, not the SPA's index.html.
+          # Without credentials the API must answer 401 JSON with setup_required, not the SPA.
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8001/api/me)" = "401"
+          curl -fsS http://127.0.0.1:8001/api/me | grep -q '"code":"auth.setup_required"'
 
       - name: Tear down smoke test
         if: always()
-        run: docker rm -f vuzon-smoke 2>/dev/null || true
+        run: |
+          docker rm -f vuzon-smoke 2>/dev/null || true
+          docker volume rm vuzon-smoke-data 2>/dev/null || true

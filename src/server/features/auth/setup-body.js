@@ -36,15 +36,23 @@ export const setupBodySchema = z.object({
   path: ['passwordConfirm'],
 });
 
+const currentPasswordSchema = z.string({
+  required_error: 'password.current_required',
+  invalid_type_error: 'password.invalid',
+}).trim().min(1, 'password.current_required').max(AUTH_FIELD_MAX, 'password.too_long');
+
 /** Password change from the panel: `POST /api/account/password`. */
 export const passwordChangeBodySchema = z.object({
-  currentPassword: z.string({
-    required_error: 'password.current_required',
-    invalid_type_error: 'password.invalid',
-  }).trim().min(1, 'password.current_required').max(AUTH_FIELD_MAX, 'password.too_long'),
+  currentPassword: currentPasswordSchema,
   newPassword: newPasswordSchema,
   newPasswordConfirm: confirmationSchema,
 }).refine((body) => body.newPassword === body.newPasswordConfirm, {
   message: 'password.mismatch',
   path: ['newPasswordConfirm'],
+});
+
+/** Username change from the panel: `POST /api/account/username`. */
+export const usernameChangeBodySchema = z.object({
+  newUsername: usernameSchema,
+  currentPassword: currentPasswordSchema,
 });

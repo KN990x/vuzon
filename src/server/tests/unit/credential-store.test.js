@@ -124,3 +124,25 @@ test('credential-store: the username is trimmed on save, like the schema does', 
   assert.equal(store.getUsername(), 'kn');
   assert.equal(await store.verify({ username: 'kn', password: PASSWORD }), true);
 });
+
+test('credential-store: updateUsername() renames without re-hashing the password', async (t) => {
+  const dataDir = tempDataDir(t);
+  const store = createCredentialStore({ dataDir });
+  await store.save({ username: 'kn', password: PASSWORD });
+
+  const before = JSON.parse(fs.readFileSync(path.join(dataDir, 'auth.json'), 'utf8'));
+  store.updateUsername('  owner  ');
+  const after = JSON.parse(fs.readFileSync(path.join(dataDir, 'auth.json'), 'utf8'));
+
+  assert.equal(store.getUsername(), 'owner');
+  assert.equal(after.username, 'owner');
+  assert.equal(after.password.salt, before.password.salt);
+  assert.equal(after.password.hash, before.password.hash);
+  assert.equal(await store.verify({ username: 'owner', password: PASSWORD }), true);
+  assert.equal(await store.verify({ username: 'kn', password: PASSWORD }), false);
+});
+
+test('credential-store: updateUsername() on an empty store throws', (t) => {
+  const store = createCredentialStore({ dataDir: tempDataDir(t) });
+  assert.throws(() => store.updateUsername('owner'), /before the panel has credentials/i);
+});

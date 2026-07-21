@@ -214,6 +214,24 @@ export function createCredentialStore({ dataDir }) {
     },
 
     /**
+     * Renames the panel user without re-hashing the password. The password record is
+     * independent of the username; rewriting it would only churn the salt for no gain.
+     * @param {string} username
+     */
+    updateUsername(username) {
+      if (record === null) {
+        throw new Error('Cannot update the username before the panel has credentials');
+      }
+      const next = {
+        ...record,
+        username: username.trim(),
+        updatedAt: new Date().toISOString(),
+      };
+      writeRecordAtomically(filePath, next);
+      record = next;
+    },
+
+    /**
      * Constant-ish time credential check: the KDF runs even with no credentials stored or a
      * username that does not match, so timing does not leak which of the two failed.
      * @param {{ username: string, password: string }} credentials

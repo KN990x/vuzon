@@ -10,7 +10,7 @@ export const es = {
   'app.retry': 'Reintentar',
 
   'header.refresh': 'Actualizar',
-  'header.changePassword': 'Cambiar contraseña',
+  'header.account': 'Cuenta',
   'header.logout': 'Cerrar sesión',
   'header.github': 'GitHub',
   'header.language': 'Idioma',
@@ -44,6 +44,16 @@ export const es = {
   'setup.warning':
     'No hay recuperación de contraseña: apúntala en un sitio seguro.',
 
+  'account.title': 'Cuenta',
+  'account.notice': 'Cualquier otra sesión abierta se cerrará.',
+  'account.cancel': 'Cancelar',
+  'account.username.title': 'Cambiar usuario',
+  'account.username.new': 'Usuario nuevo',
+  'account.username.currentPassword': 'Contraseña actual',
+  'account.username.submit': 'Cambiar usuario',
+  'account.username.submitting': 'Cambiando…',
+  'account.username.error.generic': 'No se pudo cambiar el usuario',
+  'account.username.done': 'Usuario cambiado',
   'account.password.title': 'Cambiar contraseña',
   'account.password.current': 'Contraseña actual',
   'account.password.new': 'Contraseña nueva',
@@ -51,8 +61,6 @@ export const es = {
   'account.password.submit': 'Cambiar contraseña',
   'account.password.submitting': 'Cambiando…',
   'account.password.error.generic': 'No se pudo cambiar la contraseña',
-  'account.password.cancel': 'Cancelar',
-  'account.password.notice': 'Cualquier otra sesión abierta se cerrará.',
   'account.password.done': 'Contraseña cambiada',
 
   'dashboard.eyebrow': 'Panel de enrutamiento',
@@ -206,6 +214,7 @@ export const es = {
   'error.field.password': 'Contraseña',
   'error.field.passwordConfirm': 'Confirmación de la contraseña',
   'error.field.currentPassword': 'Contraseña actual',
+  'error.field.newUsername': 'Usuario nuevo',
   'error.field.newPassword': 'Contraseña nueva',
   'error.field.newPasswordConfirm': 'Confirmación de la contraseña nueva',
   'error.issue.email.invalid': 'formato de correo inválido',

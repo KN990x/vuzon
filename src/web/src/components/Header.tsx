@@ -7,11 +7,11 @@ interface HeaderProps {
   domain: string;
   loading: boolean;
   onRefresh: () => void;
-  onChangePassword: () => void;
+  onOpenAccount: () => void;
   onLogout: () => void;
 }
 
-export function Header({ domain, loading, onRefresh, onChangePassword, onLogout }: HeaderProps) {
+export function Header({ domain, loading, onRefresh, onOpenAccount, onLogout }: HeaderProps) {
   const { t } = useI18n();
 
   return (
@@ -38,9 +38,9 @@ export function Header({ domain, loading, onRefresh, onChangePassword, onLogout 
       <button
         type="button"
         className={iconButtonClass}
-        onClick={onChangePassword}
-        title={t('header.changePassword')}
-        aria-label={t('header.changePassword')}
+        onClick={onOpenAccount}
+        title={t('header.account')}
+        aria-label={t('header.account')}
       >
         <KeyRound size={17} />
       </button>
