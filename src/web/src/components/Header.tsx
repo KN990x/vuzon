@@ -4,14 +4,13 @@ import { GitHubIcon, iconButtonClass, VuzonMark } from './primitives';
 import { LanguageMenu } from './LanguageMenu';
 
 interface HeaderProps {
-  domain: string;
   loading: boolean;
   onRefresh: () => void;
   onOpenAccount: () => void;
   onLogout: () => void;
 }
 
-export function Header({ domain, loading, onRefresh, onOpenAccount, onLogout }: HeaderProps) {
+export function Header({ loading, onRefresh, onOpenAccount, onLogout }: HeaderProps) {
   const { t } = useI18n();
 
   return (
@@ -20,49 +19,47 @@ export function Header({ domain, loading, onRefresh, onOpenAccount, onLogout }: 
         <VuzonMark size={26} />
         <span className="text-xl font-bold tracking-[-0.045em] text-cream">vuzon</span>
       </span>
-      <div className="ml-auto flex items-center gap-2 font-mono text-xs text-cream/65">
-        <span className="size-[7px] rounded-full bg-positive" aria-hidden />
-        {domain || '…'}
+      <div className="ml-auto flex items-center gap-2">
+        <button
+          type="button"
+          className={iconButtonClass}
+          onClick={onRefresh}
+          disabled={loading}
+          title={t('header.refresh')}
+          aria-label={t('header.refresh')}
+        >
+          <RefreshCw size={17} className={loading ? 'animate-spin' : undefined} />
+        </button>
+        <LanguageMenu />
+        <button
+          type="button"
+          className={iconButtonClass}
+          onClick={onOpenAccount}
+          title={t('header.account')}
+          aria-label={t('header.account')}
+        >
+          <KeyRound size={17} />
+        </button>
+        <button
+          type="button"
+          className={iconButtonClass}
+          onClick={onLogout}
+          title={t('header.logout')}
+          aria-label={t('header.logout')}
+        >
+          <LogOut size={17} />
+        </button>
+        <a
+          href="https://github.com/KN990x/vuzon"
+          target="_blank"
+          rel="noreferrer"
+          className={iconButtonClass}
+          title={t('header.github')}
+          aria-label={t('header.github')}
+        >
+          <GitHubIcon />
+        </a>
       </div>
-      <button
-        type="button"
-        className={iconButtonClass}
-        onClick={onRefresh}
-        disabled={loading}
-        title={t('header.refresh')}
-        aria-label={t('header.refresh')}
-      >
-        <RefreshCw size={17} className={loading ? 'animate-spin' : undefined} />
-      </button>
-      <LanguageMenu />
-      <button
-        type="button"
-        className={iconButtonClass}
-        onClick={onOpenAccount}
-        title={t('header.account')}
-        aria-label={t('header.account')}
-      >
-        <KeyRound size={17} />
-      </button>
-      <button
-        type="button"
-        className={iconButtonClass}
-        onClick={onLogout}
-        title={t('header.logout')}
-        aria-label={t('header.logout')}
-      >
-        <LogOut size={17} />
-      </button>
-      <a
-        href="https://github.com/KN990x/vuzon"
-        target="_blank"
-        rel="noreferrer"
-        className={iconButtonClass}
-        title={t('header.github')}
-        aria-label={t('header.github')}
-      >
-        <GitHubIcon />
-      </a>
     </header>
   );
 }

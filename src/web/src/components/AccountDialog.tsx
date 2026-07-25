@@ -197,23 +197,27 @@ export function AccountDialog({
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/70 px-6"
-      onMouseDown={(event) => {
-        // Only a click that both starts and ends on the backdrop closes: dragging a
-        // selection out of a field should not throw the form away.
-        if (event.target === event.currentTarget) {
-          onClose();
-        }
-      }}
+      className="fixed inset-0 z-[60] overflow-y-auto overscroll-contain bg-ink/70"
     >
+      {/* Outer scrolls; inner centres. Same-node flex+scroll clips the top on short viewports. */}
       <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label={t('account.title')}
-        className="fade-in glass glass-dialog relative w-full max-w-sm rounded-panel p-7"
-        onKeyDown={trapTab}
+        className="flex min-h-full items-center justify-center px-6 py-10"
+        onMouseDown={(event) => {
+          // Only a click that both starts and ends on the backdrop closes: dragging a
+          // selection out of a field should not throw the form away.
+          if (event.target === event.currentTarget) {
+            onClose();
+          }
+        }}
       >
+        <div
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label={t('account.title')}
+          className="fade-in glass glass-dialog relative w-full max-w-sm rounded-panel p-7"
+          onKeyDown={trapTab}
+        >
         <h2 className="m-0 mb-1.5 text-[15px] font-semibold tracking-[-0.02em] text-cream">
           {t('account.title')}
         </h2>
@@ -333,6 +337,7 @@ export function AccountDialog({
             </button>
           </div>
         </form>
+        </div>
       </div>
     </div>
   );

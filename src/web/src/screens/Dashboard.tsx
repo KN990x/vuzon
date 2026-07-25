@@ -481,7 +481,6 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
   return (
     <div className="min-h-screen bg-ink font-sans text-cream">
       <Header
-        domain={profile.rootDomain}
         loading={busy.has('refresh')}
         onRefresh={() => void refreshAll()}
         onOpenAccount={() => setAccountOpen(true)}
