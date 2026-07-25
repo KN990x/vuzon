@@ -80,7 +80,7 @@ export function LanguageMenu() {
           id={menuId}
           role="menu"
           aria-label={t('header.language')}
-          className="glass fade-in absolute right-0 top-11 z-50 min-w-36 overflow-hidden rounded-panel py-1"
+          className="glass glass-menu fade-in absolute right-0 top-11 z-50 min-w-36 overflow-hidden rounded-panel py-1"
         >
           {LOCALES.map((option) => {
             const active = option === locale;
@@ -93,7 +93,7 @@ export function LanguageMenu() {
                 lang={option}
                 onClick={() => choose(option)}
                 className={`flex w-full cursor-pointer items-center gap-2 px-3.5 py-2 text-left text-[13px] transition-colors duration-200 hover:bg-white/[0.06] ${
-                  active ? 'text-accent' : 'text-cream/75'
+                  active ? 'text-accent' : 'text-cream/75 hover:text-cream'
                 }`}
               >
                 <span className="flex size-3.5 flex-none items-center justify-center">

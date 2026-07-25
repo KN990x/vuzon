@@ -146,3 +146,19 @@ input {
   background: rgba(17, 17, 17, 0.94);
   backdrop-filter: blur(16px);
 }
+
+/* Header dropdown menus: same blur + rim as .glass-header, with a denser fill so
+   list items stay readable over scrolling dashboard content. */
+.glass-menu {
+  background: rgba(17, 17, 17, 0.88);
+  backdrop-filter: blur(24px);
+}
+
+.glass-menu::before {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 180, 110, 0.28),
+    transparent 55%,
+    rgba(255, 180, 110, 0.1)
+  );
+}

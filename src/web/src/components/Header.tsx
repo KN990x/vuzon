@@ -1,16 +1,24 @@
-import { KeyRound, LogOut, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { useI18n } from '../i18n/context';
 import { GitHubIcon, iconButtonClass, VuzonMark } from './primitives';
+import { AccountMenu } from './AccountMenu';
 import { LanguageMenu } from './LanguageMenu';
 
 interface HeaderProps {
   loading: boolean;
   onRefresh: () => void;
-  onOpenAccount: () => void;
+  onOpenPassword: () => void;
+  onOpenUsername: () => void;
   onLogout: () => void;
 }
 
-export function Header({ loading, onRefresh, onOpenAccount, onLogout }: HeaderProps) {
+export function Header({
+  loading,
+  onRefresh,
+  onOpenPassword,
+  onOpenUsername,
+  onLogout,
+}: HeaderProps) {
   const { t } = useI18n();
 
   return (
@@ -30,25 +38,11 @@ export function Header({ loading, onRefresh, onOpenAccount, onLogout }: HeaderPr
         >
           <RefreshCw size={17} className={loading ? 'animate-spin' : undefined} />
         </button>
-        <LanguageMenu />
-        <button
-          type="button"
-          className={iconButtonClass}
-          onClick={onOpenAccount}
-          title={t('header.account')}
-          aria-label={t('header.account')}
-        >
-          <KeyRound size={17} />
-        </button>
-        <button
-          type="button"
-          className={iconButtonClass}
-          onClick={onLogout}
-          title={t('header.logout')}
-          aria-label={t('header.logout')}
-        >
-          <LogOut size={17} />
-        </button>
+        <AccountMenu
+          onOpenPassword={onOpenPassword}
+          onOpenUsername={onOpenUsername}
+          onLogout={onLogout}
+        />
         <a
           href="https://github.com/KN990x/vuzon"
           target="_blank"
@@ -59,6 +53,7 @@ export function Header({ loading, onRefresh, onOpenAccount, onLogout }: HeaderPr
         >
           <GitHubIcon />
         </a>
+        <LanguageMenu />
       </div>
     </header>
   );

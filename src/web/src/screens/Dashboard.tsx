@@ -16,6 +16,7 @@ import { useI18n } from '../i18n/context';
 import { translateApiError } from '../i18n/api-errors';
 import { Header } from '../components/Header';
 import { AccountDialog } from '../components/AccountDialog';
+import type { AccountChangeKind } from '../components/AccountDialog';
 import { Footer } from '../components/Footer';
 import { Toast } from '../components/Toast';
 import { AliasesCard, DROP_DEST_VALUE } from '../components/AliasesCard';
@@ -55,7 +56,7 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
   const [statusMsg, setStatusMsg] = useState('');
   const [errors, setErrors] = useState<FormErrors>({ alias: null, dest: null });
   const [copied, setCopied] = useState(false);
-  const [accountOpen, setAccountOpen] = useState(false);
+  const [accountMode, setAccountMode] = useState<AccountChangeKind | null>(null);
 
   const statusTimerRef = useRef<number | null>(null);
   const copiedTimerRef = useRef<number | null>(null);
@@ -483,19 +484,21 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
       <Header
         loading={busy.has('refresh')}
         onRefresh={() => void refreshAll()}
-        onOpenAccount={() => setAccountOpen(true)}
+        onOpenPassword={() => setAccountMode('password')}
+        onOpenUsername={() => setAccountMode('username')}
         onLogout={() => void logout()}
       />
-      {accountOpen && (
+      {accountMode !== null && (
         <AccountDialog
+          mode={accountMode}
           currentUsername={profile.username}
-          onClose={() => setAccountOpen(false)}
+          onClose={() => setAccountMode(null)}
           onUnauthorized={() => {
-            setAccountOpen(false);
+            setAccountMode(null);
             onUnauthorized();
           }}
           onChanged={(kind) => {
-            setAccountOpen(false);
+            setAccountMode(null);
             setStatus(kind === 'username' ? t('account.username.done') : t('account.password.done'));
             if (kind === 'username') {
               void api<Profile>('/api/me')

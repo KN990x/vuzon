@@ -14,6 +14,7 @@ const FOCUSABLE_SELECTOR =
 export type AccountChangeKind = 'username' | 'password';
 
 interface AccountDialogProps {
+  mode: AccountChangeKind;
   currentUsername: string;
   onClose: () => void;
   /** Session gone while the dialog was open — same path as any other 401 on the panel. */
@@ -29,13 +30,15 @@ function listFocusable(container: HTMLElement): HTMLElement[] {
 }
 
 /**
- * Account credentials dialog: rename the panel user and/or change the password. Both
- * forms verify the current password and revoke every other session on success.
+ * Account credentials dialog: rename the panel user or change the password (one form
+ * at a time). Both flows verify the current password and revoke every other session
+ * on success.
  *
  * The overlay is hand-rolled — the panel ships no dialog library and no animation library
  * (see AGENTS.md); `.fade-in` in index.css is the whole transition budget.
  */
 export function AccountDialog({
+  mode,
   currentUsername,
   onClose,
   onUnauthorized,
@@ -61,6 +64,8 @@ export function AccountDialog({
   const firstFieldRef = useRef<HTMLInputElement>(null);
   const onUnauthorizedRef = useRef(onUnauthorized);
   onUnauthorizedRef.current = onUnauthorized;
+
+  const titleKey = mode === 'username' ? 'account.username.title' : 'account.password.title';
 
   useEffect(() => {
     const previousActive = document.activeElement instanceof HTMLElement
@@ -133,7 +138,7 @@ export function AccountDialog({
 
   async function handleUsernameSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (usernameSubmitting || passwordSubmitting) {
+    if (usernameSubmitting) {
       return;
     }
 
@@ -154,7 +159,7 @@ export function AccountDialog({
 
   async function handlePasswordSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (passwordSubmitting || usernameSubmitting) {
+    if (passwordSubmitting) {
       return;
     }
 
@@ -192,7 +197,15 @@ export function AccountDialog({
     passwordErrorMessage = buildAuthErrorMessage(i18n, passwordError, 'account.password.error.generic');
   }
 
-  const busy = usernameSubmitting || passwordSubmitting;
+  const cancelButton = (
+    <button
+      type="button"
+      onClick={onClose}
+      className="cursor-pointer text-[12.5px] text-cream/65 transition-colors duration-200 hover:text-cream"
+    >
+      {t('account.cancel')}
+    </button>
+  );
 
   return (
     <div
@@ -214,129 +227,121 @@ export function AccountDialog({
           ref={dialogRef}
           role="dialog"
           aria-modal="true"
-          aria-label={t('account.title')}
+          aria-label={t(titleKey)}
           className="fade-in glass glass-dialog relative w-full max-w-sm rounded-panel p-7"
           onKeyDown={trapTab}
         >
-        <h2 className="m-0 mb-1.5 text-[15px] font-semibold tracking-[-0.02em] text-cream">
-          {t('account.title')}
-        </h2>
-        <p className="m-0 mb-5 text-[12.5px] leading-relaxed text-cream/60">
-          {t('account.notice')}
-        </p>
-
-        <form className="flex flex-col gap-4" onSubmit={handleUsernameSubmit}>
-          <h3 className="m-0 font-mono text-[10px] uppercase tracking-[0.18em] text-cream/65">
-            {t('account.username.title')}
-          </h3>
-          <p className="m-0 -mt-2 font-mono text-[11px] text-cream/45">
-            {t('account.username.current', { username: currentUsername })}
+          <h2 className="m-0 mb-1.5 text-[15px] font-semibold tracking-[-0.02em] text-cream">
+            {t(titleKey)}
+          </h2>
+          <p className="m-0 mb-5 text-[12.5px] leading-relaxed text-cream/60">
+            {t('account.notice')}
           </p>
-          <label className="flex flex-col gap-1.5">
-            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-cream/65">
-              {t('account.username.new')}
-            </span>
-            <input
-              ref={firstFieldRef}
-              type="text"
-              value={newUsername}
-              onChange={(e) => setNewUsername(e.target.value)}
-              autoComplete="username"
-              required
-              className={authFieldClass}
-            />
-          </label>
-          <label className="flex flex-col gap-1.5">
-            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-cream/65">
-              {t('account.username.currentPassword')}
-            </span>
-            <input
-              type="password"
-              value={usernamePassword}
-              onChange={(e) => setUsernamePassword(e.target.value)}
-              autoComplete="current-password"
-              required
-              className={authFieldClass}
-            />
-          </label>
 
-          {usernameErrorMessage && (
-            <p className="m-0 rounded-[10px] bg-accent-dark/10 px-3 py-2 font-mono text-xs text-accent-dark" role="alert">
-              {usernameErrorMessage}
-            </p>
+          {mode === 'username' ? (
+            <form className="flex flex-col gap-4" onSubmit={handleUsernameSubmit}>
+              <p className="m-0 font-mono text-[11px] text-cream/45">
+                {t('account.username.current', { username: currentUsername })}
+              </p>
+              <label className="flex flex-col gap-1.5">
+                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-cream/65">
+                  {t('account.username.new')}
+                </span>
+                <input
+                  ref={firstFieldRef}
+                  type="text"
+                  value={newUsername}
+                  onChange={(e) => setNewUsername(e.target.value)}
+                  autoComplete="username"
+                  required
+                  className={authFieldClass}
+                />
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-cream/65">
+                  {t('account.username.currentPassword')}
+                </span>
+                <input
+                  type="password"
+                  value={usernamePassword}
+                  onChange={(e) => setUsernamePassword(e.target.value)}
+                  autoComplete="current-password"
+                  required
+                  className={authFieldClass}
+                />
+              </label>
+
+              {usernameErrorMessage && (
+                <p className="m-0 rounded-[10px] bg-accent-dark/10 px-3 py-2 font-mono text-xs text-accent-dark" role="alert">
+                  {usernameErrorMessage}
+                </p>
+              )}
+
+              <div className="mt-1 flex items-center gap-3">
+                <button type="submit" className={pillButtonClass} disabled={usernameSubmitting}>
+                  {usernameSubmitting ? t('account.username.submitting') : t('account.username.submit')}
+                </button>
+                {cancelButton}
+              </div>
+            </form>
+          ) : (
+            <form className="flex flex-col gap-4" onSubmit={handlePasswordSubmit}>
+              <label className="flex flex-col gap-1.5">
+                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-cream/65">
+                  {t('account.password.current')}
+                </span>
+                <input
+                  ref={firstFieldRef}
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  autoComplete="current-password"
+                  required
+                  className={authFieldClass}
+                />
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-cream/65">
+                  {t('account.password.new')}
+                </span>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  autoComplete="new-password"
+                  required
+                  className={authFieldClass}
+                />
+                <span className="font-mono text-[11px] text-cream/45">{t('setup.passwordHint')}</span>
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-cream/65">
+                  {t('account.password.confirm')}
+                </span>
+                <input
+                  type="password"
+                  value={newPasswordConfirm}
+                  onChange={(e) => setNewPasswordConfirm(e.target.value)}
+                  autoComplete="new-password"
+                  required
+                  className={authFieldClass}
+                />
+              </label>
+
+              {passwordErrorMessage && (
+                <p className="m-0 rounded-[10px] bg-accent-dark/10 px-3 py-2 font-mono text-xs text-accent-dark" role="alert">
+                  {passwordErrorMessage}
+                </p>
+              )}
+
+              <div className="mt-1 flex items-center gap-3">
+                <button type="submit" className={pillButtonClass} disabled={passwordSubmitting}>
+                  {passwordSubmitting ? t('account.password.submitting') : t('account.password.submit')}
+                </button>
+                {cancelButton}
+              </div>
+            </form>
           )}
-
-          <button type="submit" className={pillButtonClass} disabled={busy}>
-            {usernameSubmitting ? t('account.username.submitting') : t('account.username.submit')}
-          </button>
-        </form>
-
-        <div className="my-6 h-px bg-white/[0.08]" aria-hidden />
-
-        <form className="flex flex-col gap-4" onSubmit={handlePasswordSubmit}>
-          <h3 className="m-0 font-mono text-[10px] uppercase tracking-[0.18em] text-cream/65">
-            {t('account.password.title')}
-          </h3>
-          <label className="flex flex-col gap-1.5">
-            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-cream/65">
-              {t('account.password.current')}
-            </span>
-            <input
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-              className={authFieldClass}
-            />
-          </label>
-          <label className="flex flex-col gap-1.5">
-            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-cream/65">
-              {t('account.password.new')}
-            </span>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              autoComplete="new-password"
-              required
-              className={authFieldClass}
-            />
-            <span className="font-mono text-[11px] text-cream/45">{t('setup.passwordHint')}</span>
-          </label>
-          <label className="flex flex-col gap-1.5">
-            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-cream/65">
-              {t('account.password.confirm')}
-            </span>
-            <input
-              type="password"
-              value={newPasswordConfirm}
-              onChange={(e) => setNewPasswordConfirm(e.target.value)}
-              autoComplete="new-password"
-              required
-              className={authFieldClass}
-            />
-          </label>
-
-          {passwordErrorMessage && (
-            <p className="m-0 rounded-[10px] bg-accent-dark/10 px-3 py-2 font-mono text-xs text-accent-dark" role="alert">
-              {passwordErrorMessage}
-            </p>
-          )}
-
-          <div className="mt-1 flex items-center gap-3">
-            <button type="submit" className={pillButtonClass} disabled={busy}>
-              {passwordSubmitting ? t('account.password.submitting') : t('account.password.submit')}
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="cursor-pointer text-[12.5px] text-cream/65 transition-colors duration-200 hover:text-cream"
-            >
-              {t('account.cancel')}
-            </button>
-          </div>
-        </form>
         </div>
       </div>
     </div>
