@@ -3,7 +3,7 @@ import type { FormEvent } from 'react';
 import { apiRequest } from '../lib/api';
 import { buildLoginErrorMessage } from '../lib/login-error';
 import { useI18n } from '../i18n/context';
-import { pillButtonClass, authFieldClass, VuzonMark } from '../components/primitives';
+import { authFieldClass, formErrorClass, pillButtonClass, VuzonMark } from '../components/primitives';
 import { LanguageMenu } from '../components/LanguageMenu';
 
 export function Login({ onSuccess }: { onSuccess: () => void }) {
@@ -81,7 +81,7 @@ export function Login({ onSuccess }: { onSuccess: () => void }) {
             />
           </label>
           {errorMessage && (
-            <p className="m-0 rounded-[10px] bg-accent-dark/10 px-3 py-2 font-mono text-xs text-accent-dark" role="alert">
+            <p className={formErrorClass} role="alert">
               {errorMessage}
             </p>
           )}

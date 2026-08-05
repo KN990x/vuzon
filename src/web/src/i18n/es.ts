@@ -44,7 +44,6 @@ export const es = {
   'setup.warning':
     'No hay recuperación de contraseña: apúntala en un sitio seguro.',
 
-  'account.title': 'Cuenta',
   'account.notice': 'Cualquier otra sesión abierta se cerrará.',
   'account.cancel': 'Cancelar',
   'account.username.title': 'Cambiar usuario',
@@ -63,6 +62,17 @@ export const es = {
   'account.password.submitting': 'Cambiando…',
   'account.password.error.generic': 'No se pudo cambiar la contraseña',
   'account.password.done': 'Contraseña cambiada',
+
+  // Modal de confirmación (ConfirmDialog.tsx), que sustituyó a window.confirm.
+  'confirm.accept': 'Continuar',
+  'confirm.cancel': 'Cancelar',
+  'confirm.dismiss': 'Entendido',
+  'confirm.delete': 'Eliminar',
+  'confirm.deleteAlias.title': 'Eliminar alias',
+  'confirm.deleteDest.title': 'Eliminar destinatario',
+  'confirm.deleteDestInUse.title': 'Este destinatario está en uso',
+  'confirm.catchAllDisable.title': 'Pausar el catch-all',
+  'confirm.replaceAction.title': 'Sustituir la acción actual',
 
   'dashboard.eyebrow': 'Panel de enrutamiento',
   'dashboard.activeAliases': 'alias activos',
@@ -93,10 +103,13 @@ export const es = {
   'aliases.search.label': 'Buscar alias',
   'aliases.count.one': '{count} regla',
   'aliases.count.other': '{count} reglas',
+  'aliases.countFiltered': '{shown} de {total}',
   'aliases.empty.noResults': 'No se encontraron alias.',
   'aliases.empty.onlyCatchAll': 'No hay alias personalizados; solo aplica el catch-all.',
   'aliases.empty.none': 'No hay alias creados.',
+  'aliases.empty.loading': 'Cargando alias…',
   'aliases.row.fallbackName': 'alias',
+  'aliases.row.unknownAlias': 'una regla sin nombre',
   'aliases.row.nameLabel': '{name}',
   'aliases.row.badge.worker': 'Worker',
   'aliases.row.badge.fanout': 'Varios destinos',
@@ -147,12 +160,14 @@ export const es = {
   'dests.delete': 'Eliminar destinatario',
   'dests.deleteNamed': 'Eliminar {email}',
   'dests.empty': 'Sin destinos todavía.',
+  'dests.loading': 'Cargando destinos…',
   'dests.new.placeholder': 'tu@correo.com',
   'dests.new.label': 'Nuevo destinatario',
   'dests.new.submit': 'Añadir',
 
   'catchAll.title': 'Catch-all',
   'catchAll.state.unavailable': 'no disponible',
+  'catchAll.state.loading': 'cargando',
   'catchAll.state.active': 'activo',
   'catchAll.state.paused': 'pausado',
   'catchAll.description':
@@ -197,6 +212,7 @@ export const es = {
   'error.dest.in_use':
     'No se puede eliminar {email}: todavía lo usan {aliases}. '
     + 'Quita o cambia esas reglas primero.',
+  'error.dest.not_found': 'Ese destinatario ya no existe. Actualiza el panel.',
   'error.dest.usage_check_failed':
     'No se pudo comprobar si este destino sigue en uso. Inténtalo de nuevo más tarde.',
   'error.csrf.blocked': 'Petición de otro origen bloqueada.',
@@ -206,6 +222,7 @@ export const es = {
   'error.server.not_found': 'No encontrado',
   'error.client.non_json': 'Respuesta inesperada del servidor (HTTP {status})',
   'error.client.invalid_json': 'Respuesta JSON inválida del servidor (HTTP {status})',
+  'error.client.timeout': 'El servidor tardó demasiado en responder. Revisa la conexión e inténtalo de nuevo.',
 
   'error.field.email': 'Email',
   'error.field.localPart': 'Alias',
@@ -226,7 +243,6 @@ export const es = {
   'error.issue.dest_email.invalid': 'email de destino inválido',
   'error.issue.action.type': 'la acción debe ser «forward» o «drop»',
   'error.issue.action.forward_single': 'un reenvío admite exactamente una dirección de destino',
-  'error.issue.rule_name.empty': 'el nombre no puede estar vacío',
   'error.issue.rule_name.too_long': 'el nombre es demasiado largo',
   'error.issue.rule_update.empty': 'nada que actualizar',
   'error.issue.username.required': 'usuario requerido',

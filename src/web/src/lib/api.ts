@@ -44,6 +44,17 @@ interface ApiErrorBody {
   params?: unknown;
 }
 
+/**
+ * Ceiling for a single panel request.
+ *
+ * The backend already caps its own leg at 10s per Cloudflare call, but that does nothing
+ * for the browser leg: a stalled connection (a VPN dropping, a tailnet hiccup) left `fetch`
+ * pending forever, so the busy key was never released and the refresh button stayed
+ * disabled for the rest of the session. Sized above the backend's worst case — an alias
+ * create makes several upstream calls — so a slow-but-alive request is not cut short.
+ */
+const REQUEST_TIMEOUT_MS = 45_000;
+
 function readErrorFields(data: ApiErrorBody): ApiErrorOptions {
   return {
     code: typeof data.code === 'string' ? data.code : undefined,
@@ -75,7 +86,24 @@ export async function apiRequest<T = unknown>(
     }
   }
 
-  const res = await fetch(requestPath, options);
+  // AbortSignal.timeout rejects with a TimeoutError DOMException, which is not an
+  // ApiError — the screens would render it as an unrecognised failure. Normalising it here
+  // keeps every caller on the same `{ code }` contract.
+  let res: Response;
+  try {
+    res = await fetch(requestPath, {
+      ...options,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'TimeoutError') {
+      throw new ApiError('The server took too long to answer', 0, {
+        code: 'client.timeout',
+      });
+    }
+    throw err;
+  }
+
   const contentType = (res.headers.get('content-type') || '').toLowerCase();
   const isJson = contentType.includes('application/json');
 

@@ -166,9 +166,35 @@ test('HTTP 200 with success:false is treated as an error, not a success', async 
       assert.ok(err instanceof CloudflareApiError);
       assert.equal(err.message, 'Invalid zone');
       assert.equal(err.code, 1001);
+      // The status must land in the 4xx band. Carrying `res.status` verbatim gave the
+      // error a status of 200, and the caller's "is this a client error?" test
+      // (`status >= 400 && status < 500`) was false — so rule-diagnostics never ran and a
+      // duplicate alias came back as the generic Cloudflare message.
+      assert.equal(err.status, 400);
+      assert.equal(err.retryable, false);
       return true;
     },
   );
+});
+
+test('a 2xx envelope rejection is diagnosable as a client error', async () => {
+  // 204 and 201 travel the same path as 200; none of them may leak through as "not a
+  // client error" just because the HTTP layer was happy.
+  for (const status of [200, 201, 204]) {
+    stubFetch(() => jsonResponse(
+      { success: false, errors: [{ message: 'duplicate', code: 5009 }] },
+      { status },
+    ));
+    const client = createCloudflareClient({ env: ENV });
+
+    await assert.rejects(
+      () => client.fetchCloudflare('/zones/z/email/routing/rules', 'POST', { a: 1 }),
+      (err) => {
+        assert.ok(err.status >= 400 && err.status < 500, `HTTP ${status} produced ${err.status}`);
+        return true;
+      },
+    );
+  }
 });
 
 test('the error details never include the token', async () => {

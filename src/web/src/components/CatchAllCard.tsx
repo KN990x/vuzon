@@ -1,14 +1,16 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Activity, ArrowRight, Pencil } from 'lucide-react';
 import type { Destination, Rule, RuleEditorPatch } from '../lib/types';
 import { describeRuleActions, getRuleDest } from '../lib/rules';
 import { useI18n } from '../i18n/context';
 import { Switch } from './Switch';
 import { RuleEditor } from './RuleEditor';
-import { CardIcon, chipClass } from './primitives';
+import { CardIcon, cardTitleClass, chipClass, rowEditButtonClass } from './primitives';
 
 interface CatchAllCardProps {
   catchAll: Rule | null;
+  /** False until the first refresh comes back; see the note on the card below. */
+  loaded: boolean;
   verifiedDests: Destination[];
   busy: boolean;
   onToggle: () => void;
@@ -22,11 +24,16 @@ interface CatchAllCardProps {
  * deleted: `PUT /api/rules/catch-all` forces `matchers: [{ type: 'all' }]` and there is no
  * DELETE. A catch-all that stopped catching everything would blackhole mail in silence,
  * so that part is not the panel's to offer.
+ *
+ * `catchAll === null` alone could not say WHY there is no rule, so the very first paint —
+ * before the fetch had even resolved — announced "Could not load the catch-all rule".
+ * `loaded` separates "not fetched yet" from "fetched, and there is nothing".
  */
-export function CatchAllCard({ catchAll, verifiedDests, busy, onToggle, onEdit }: CatchAllCardProps) {
+export function CatchAllCard({ catchAll, loaded, verifiedDests, busy, onToggle, onEdit }: CatchAllCardProps) {
   const i18n = useI18n();
   const { t } = i18n;
   const [editing, setEditing] = useState(false);
+  const editorId = useId();
 
   const enabled = Boolean(catchAll?.enabled);
   const summary = describeRuleActions(catchAll);
@@ -34,20 +41,27 @@ export function CatchAllCard({ catchAll, verifiedDests, busy, onToggle, onEdit }
   const editable = catchAll !== null && summary.kind !== 'unknown';
 
   let stateLabel = t('catchAll.state.unavailable');
-  if (catchAll !== null) {
+  if (!loaded) {
+    stateLabel = t('catchAll.state.loading');
+  } else if (catchAll !== null) {
     stateLabel = enabled ? t('catchAll.state.active') : t('catchAll.state.paused');
   }
 
+  let chipText = destText || t('catchAll.noAction');
+  if (!loaded) {
+    chipText = t('app.loading');
+  } else if (catchAll === null) {
+    chipText = t('catchAll.loadError');
+  }
+
   return (
-    <section className="glass relative rounded-panel p-5">
+    <section className="glass relative rounded-card p-5">
       <div className="mb-2.5 flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2.5">
           <CardIcon>
             <Activity size={14} />
           </CardIcon>
-          <span className="truncate text-[15px] font-bold tracking-[-0.01em]">
-            {t('catchAll.title')}
-          </span>
+          <span className={`truncate ${cardTitleClass}`}>{t('catchAll.title')}</span>
         </div>
         <div className="flex flex-none items-center gap-2.5">
           <span
@@ -60,7 +74,7 @@ export function CatchAllCard({ catchAll, verifiedDests, busy, onToggle, onEdit }
           {catchAll !== null && (
             <Switch
               on={enabled}
-              disabled={busy}
+              busy={busy}
               label={enabled ? t('catchAll.toggle.pause') : t('catchAll.toggle.enable')}
               onToggle={onToggle}
             />
@@ -71,11 +85,10 @@ export function CatchAllCard({ catchAll, verifiedDests, busy, onToggle, onEdit }
               onClick={() => setEditing((prev) => !prev)}
               disabled={busy}
               aria-expanded={editing}
+              aria-controls={editing ? editorId : undefined}
               title={t('catchAll.edit')}
               aria-label={t('catchAll.edit')}
-              className={`flex-none transition-colors duration-200 disabled:cursor-wait disabled:opacity-60 enabled:cursor-pointer ${
-                editing ? 'text-accent' : 'text-cream/65 hover:text-accent'
-              }`}
+              className={rowEditButtonClass(editing)}
             >
               <Pencil size={14} />
             </button>
@@ -86,7 +99,7 @@ export function CatchAllCard({ catchAll, verifiedDests, busy, onToggle, onEdit }
         {t('catchAll.description')}
       </p>
       {editing ? (
-        <div className="fade-in -mx-2 overflow-hidden rounded-[10px]">
+        <div className="fade-in -mx-2 overflow-hidden rounded-[10px]" id={editorId}>
           <RuleEditor
             key={`${summary.kind}:${summary.destinations.join(',')}`}
             summary={summary}
@@ -104,9 +117,7 @@ export function CatchAllCard({ catchAll, verifiedDests, busy, onToggle, onEdit }
       ) : (
         <div className={`${chipClass} ${enabled ? 'text-cream/75' : 'text-cream/65'}`}>
           <ArrowRight size={13} className="flex-none" aria-hidden />
-          <span className="min-w-0 truncate">
-            {catchAll === null ? t('catchAll.loadError') : destText || t('catchAll.noAction')}
-          </span>
+          <span className="min-w-0 truncate">{chipText}</span>
         </div>
       )}
     </section>

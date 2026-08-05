@@ -4,7 +4,7 @@ import { ERROR_CODES } from '../../platform/http/error-codes.js';
 import {
   createLoginRateLimiter,
   createLogoutRateLimiter,
-  createPasswordChangeRateLimiter,
+  createCredentialVerifyRateLimiter,
   createSetupRateLimiter,
 } from '../../platform/http/rate-limiters.js';
 import { SESSION_COOKIE_NAME } from '../../platform/session/middleware.js';
@@ -24,7 +24,7 @@ export function registerAuthRoutes(app, {
   loginLimiter = createLoginRateLimiter(),
   logoutLimiter = createLogoutRateLimiter(),
   setupLimiter = createSetupRateLimiter(),
-  passwordChangeLimiter = createPasswordChangeRateLimiter(),
+  credentialVerifyLimiter = createCredentialVerifyRateLimiter(),
 } = {}) {
   // Synchronous claim lock for the setup window. Node is single-threaded, so checking and
   // setting this flag in the same tick is atomic across handlers: the second concurrent
@@ -57,6 +57,12 @@ export function registerAuthRoutes(app, {
       }
 
       await credentialStore.save({ username: body.username, password: body.password });
+
+      // Claiming the panel must drop every session issued before it. `session-secret` and
+      // `session-epoch` survive the `auth.json` deletion that credential-store.js documents
+      // as the password-reset path, so without this a cookie captured before the reset
+      // stayed valid for its full 7-day maxAge against the brand-new credentials.
+      revokeSessionsIssuedUntilNow();
 
       // Signing in right away: asking the user to retype what they just chose adds nothing.
       req.session = {
@@ -108,7 +114,7 @@ export function registerAuthRoutes(app, {
    * `requireAuth` runs BEFORE the limiter, like every other guarded route: an anonymous
    * caller must not be able to burn the quota of the legitimate user (see create-app.js).
    */
-  app.post('/api/account/password', requireAuth, passwordChangeLimiter, asyncHandler(async (req, res) => {
+  app.post('/api/account/password', requireAuth, credentialVerifyLimiter, asyncHandler(async (req, res) => {
     let body;
     try {
       body = passwordChangeBodySchema.parse(req.body);
@@ -145,7 +151,7 @@ export function registerAuthRoutes(app, {
    * Username change: same guard order and session revocation as the password route. The
    * password hash is left untouched (`updateUsername`); only the login name changes.
    */
-  app.post('/api/account/username', requireAuth, passwordChangeLimiter, asyncHandler(async (req, res) => {
+  app.post('/api/account/username', requireAuth, credentialVerifyLimiter, asyncHandler(async (req, res) => {
     let body;
     try {
       body = usernameChangeBodySchema.parse(req.body);
@@ -154,17 +160,22 @@ export function registerAuthRoutes(app, {
     }
 
     const currentUsername = credentialStore.getUsername();
-    // Same name after trim: nothing to write and no reason to kick other sessions.
-    if (body.newUsername === currentUsername) {
-      return res.json({ success: true });
-    }
 
+    // The password is verified BEFORE the no-op short-circuit below. Answering the
+    // same-name case first turned the route into an unlimited username oracle: it returned
+    // 200 without the KDF, and `skipSuccessfulRequests` on the limiter means a 200 costs no
+    // quota either, so the caller could probe names for free.
     // Same 400 (not 401) as the password route: see comment there.
     if (!(await credentialStore.verify({ username: currentUsername, password: body.currentPassword }))) {
       return res.status(400).json({
         error: 'The current password is not correct',
         code: ERROR_CODES.AUTH_CURRENT_PASSWORD_INVALID,
       });
+    }
+
+    // Same name after trim: nothing to write and no reason to kick other sessions.
+    if (body.newUsername === currentUsername) {
+      return res.json({ success: true });
     }
 
     credentialStore.updateUsername(body.newUsername);

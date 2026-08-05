@@ -1930,6 +1930,92 @@ test('HTTP integration: a CloudflareApiError 401 is not exposed as 401 to the cl
   }
 });
 
+test('HTTP integration: an uppercase /API path does not bypass the /api middlewares', async () => {
+  // Express matches routes case-insensitively by default, but the Cache-Control middleware,
+  // the same-origin guard and the API error handler all test `req.path` against a lowercase
+  // '/api/' prefix. Before `case sensitive routing`, GET /API/rules reached the handler with
+  // all three skipped: a Cloudflare failure answered with its upstream status, the upstream
+  // message and a full stack trace instead of the { error, code } envelope.
+  const base = createMockCloudflareClient();
+  const cloudflareClient = {
+    ...base,
+    async fetchAllCloudflare(requestPath) {
+      if (requestPath.includes('/email/routing/rules')) {
+        throw new CloudflareApiError('mensaje_upstream_secreto', { status: 401, code: '9109' });
+      }
+      return base.fetchAllCloudflare(requestPath);
+    },
+  };
+
+  const env = {
+    CF_ZONE_ID: 'zone_test_1',
+    CF_ACCOUNT_ID: 'acct_test_1',
+    DOMAIN: 'example.com',
+    NODE_ENV: 'development',
+  };
+
+  const { app } = createApp({
+    env,
+    cloudflareClient,
+    sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
+  });
+
+  const { server, baseUrl } = await listen(app);
+
+  try {
+    const loginRes = await fetch(`${baseUrl}/api/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'testuser', password: 'test-secret-pass' }),
+    });
+    assert.equal(loginRes.status, 200);
+    const sessionCookie = sessionCookieHeaderFromResponse(loginRes);
+
+    // The lowercase route still behaves: the upstream 401 is normalized and the message
+    // never travels. This is the baseline the uppercase variants must not undercut.
+    {
+      const res = await fetch(`${baseUrl}/api/rules`, { headers: { Cookie: sessionCookie } });
+      assert.equal(res.status, 502);
+      const body = await res.text();
+      assert.ok(!body.includes('mensaje_upstream'));
+    }
+
+    for (const variant of ['/API/rules', '/Api/Rules', '/aPi/rules']) {
+      const res = await fetch(`${baseUrl}${variant}`, { headers: { Cookie: sessionCookie } });
+      const body = await res.text();
+      assert.ok(
+        !body.includes('mensaje_upstream'),
+        `${variant} leaked the upstream Cloudflare message`,
+      );
+      assert.ok(
+        !/at\s+\S+\s+\(.*node_modules/.test(body),
+        `${variant} leaked a stack trace`,
+      );
+      assert.notEqual(res.status, 401, `${variant} answered a raw upstream 401`);
+    }
+
+    // A mutation on an uppercase path must not slip past the same-origin guard either.
+    {
+      const res = await fetch(`${baseUrl}/API/rules`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: sessionCookie,
+          Origin: 'http://evil.example',
+          'Sec-Fetch-Site': 'cross-site',
+        },
+        body: JSON.stringify({ localPart: 'x', action: { type: 'drop' } }),
+      });
+      assert.notEqual(res.status, 200, 'a cross-origin POST to /API/rules was accepted');
+    }
+  } finally {
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+  }
+});
+
 test('HTTP integration: DELETE /api/addresses/:id refuses a destination still used by a rule', async () => {
   let addressDeleteCalls = 0;
   const base = createMockCloudflareClient();
@@ -2233,9 +2319,11 @@ test('HTTP integration: same-origin guard blocks same-site Sec-Fetch-Site with a
   }
 });
 
-test('HTTP integration: DELETE /api/addresses/:id fails closed when the address cannot be resolved', async () => {
+test('HTTP integration: DELETE /api/addresses/:id separates "already gone" from "cannot verify"', async () => {
   let addressDeleteCalls = 0;
   const base = createMockCloudflareClient();
+  // The address listing is what tells the two cases apart, so it is swapped per request.
+  let addressListing = [{ id: 'addr-known', email: 'known@example.com', verified: true }];
   const cloudflareClient = {
     async fetchCloudflare(requestPath, method = 'GET', body = null) {
       if (requestPath.includes('/email/routing/addresses') && method === 'DELETE') {
@@ -2246,7 +2334,7 @@ test('HTTP integration: DELETE /api/addresses/:id fails closed when the address 
     },
     async fetchAllCloudflare(requestPath) {
       if (requestPath.includes('/email/routing/addresses')) {
-        return [{ id: 'addr-known', email: 'known@example.com', verified: true }];
+        return addressListing;
       }
       if (requestPath.includes('/email/routing/rules')) {
         return [];
@@ -2267,14 +2355,43 @@ test('HTTP integration: DELETE /api/addresses/:id fails closed when the address 
     resetSessionEpochForTests();
     const sessionCookie = await loginAndGetCookie(baseUrl);
 
-    const res = await fetch(`${baseUrl}/api/addresses/addr-missing`, {
-      method: 'DELETE',
-      headers: { Cookie: sessionCookie },
-    });
-    assert.equal(res.status, 502);
-    const data = await readJson(res);
-    assert.equal(data.code, ERROR_CODES.DEST_USAGE_CHECK_FAILED);
-    assert.equal(addressDeleteCalls, 0, 'must not DELETE when the destination email cannot be resolved');
+    {
+      // The listing succeeded and the id is not in it: the destination is already gone
+      // (another tab, or Cloudflare's own panel). 502 "try again later" was misleading —
+      // retrying can never resolve it.
+      const res = await fetch(`${baseUrl}/api/addresses/addr-missing`, {
+        method: 'DELETE',
+        headers: { Cookie: sessionCookie },
+      });
+      assert.equal(res.status, 404);
+      assert.equal((await readJson(res)).code, ERROR_CODES.DEST_NOT_FOUND);
+      assert.equal(addressDeleteCalls, 0);
+    }
+
+    {
+      // The address exists but carries no usable email: the usage scan cannot run, so the
+      // route still fails closed with 502 rather than deleting blindly.
+      addressListing = [{ id: 'addr-known', email: '   ', verified: true }];
+      const res = await fetch(`${baseUrl}/api/addresses/addr-known`, {
+        method: 'DELETE',
+        headers: { Cookie: sessionCookie },
+      });
+      assert.equal(res.status, 502);
+      assert.equal((await readJson(res)).code, ERROR_CODES.DEST_USAGE_CHECK_FAILED);
+      assert.equal(addressDeleteCalls, 0, 'must not DELETE when the destination email cannot be resolved');
+    }
+
+    {
+      // A listing that is not a list at all means the check could not run either.
+      addressListing = null;
+      const res = await fetch(`${baseUrl}/api/addresses/addr-known`, {
+        method: 'DELETE',
+        headers: { Cookie: sessionCookie },
+      });
+      assert.equal(res.status, 502);
+      assert.equal((await readJson(res)).code, ERROR_CODES.DEST_USAGE_CHECK_FAILED);
+      assert.equal(addressDeleteCalls, 0);
+    }
   } finally {
     resetSessionEpochForTests();
     await new Promise((resolve) => {
@@ -2492,6 +2609,87 @@ test('HTTP integration: concurrent setup claims yield exactly one 200', async (t
     await new Promise((resolve) => {
       server.close(resolve);
     });
+  }
+});
+
+test('HTTP integration: re-running the setup after an auth.json reset revokes old cookies', async (t) => {
+  // credential-store.js documents deleting auth.json as the way to recover a lost password.
+  // `session-secret` and `session-epoch` are separate files that survive that deletion, so a
+  // cookie captured before the reset stayed signed with the same key and passed
+  // isSessionIssuanceValid — the panel got new credentials while the old session kept
+  // working for the rest of its 7-day maxAge.
+  const dataDir = tempDataDir(t);
+  const authFile = path.join(dataDir, 'auth.json');
+
+  let stolenCookie = '';
+  {
+    const { app } = createApp({
+      env: { ...DIAGNOSTICS_ENV },
+      cloudflareClient: createMockCloudflareClient(),
+      dataDir,
+    });
+    const { server, baseUrl } = await listen(app);
+
+    try {
+      resetSessionEpochForTests();
+
+      const res = await fetch(`${baseUrl}/api/setup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: 'kn',
+          password: SETUP_PASSWORD,
+          passwordConfirm: SETUP_PASSWORD,
+        }),
+      });
+      assert.equal(res.status, 200);
+      stolenCookie = sessionCookieHeaderFromResponse(res);
+
+      const me = await fetch(`${baseUrl}/api/me`, { headers: { Cookie: stolenCookie } });
+      assert.equal(me.status, 200, 'the cookie should work before the reset');
+    } finally {
+      await new Promise((resolve) => {
+        server.close(resolve);
+      });
+    }
+  }
+
+  // The operator forgets the password and follows the documented recovery path.
+  fs.rmSync(authFile);
+
+  {
+    // Same data directory, so the signing key and the revocation mark are the real ones.
+    const { app } = createApp({
+      env: { ...DIAGNOSTICS_ENV },
+      cloudflareClient: createMockCloudflareClient(),
+      dataDir,
+    });
+    const { server, baseUrl } = await listen(app);
+
+    try {
+      const res = await fetch(`${baseUrl}/api/setup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: 'kn',
+          password: `${SETUP_PASSWORD}-v2`,
+          passwordConfirm: `${SETUP_PASSWORD}-v2`,
+        }),
+      });
+      assert.equal(res.status, 200);
+      const freshCookie = sessionCookieHeaderFromResponse(res);
+
+      const stolen = await fetch(`${baseUrl}/api/me`, { headers: { Cookie: stolenCookie } });
+      assert.equal(stolen.status, 401, 'the pre-reset cookie must not survive the new claim');
+
+      const fresh = await fetch(`${baseUrl}/api/me`, { headers: { Cookie: freshCookie } });
+      assert.equal(fresh.status, 200, 'the caller who ran the wizard stays signed in');
+    } finally {
+      resetSessionEpochForTests();
+      await new Promise((resolve) => {
+        server.close(resolve);
+      });
+    }
   }
 });
 
@@ -2781,6 +2979,22 @@ test('HTTP integration: changing the username revokes every other session', asyn
       assert.deepEqual(await readJson(res), { success: true });
       const resMe = await fetch(`${baseUrl}/api/me`, { headers: { Cookie: rotatedCookie } });
       assert.equal(resMe.status, 200);
+    }
+
+    {
+      // The no-op path must still run the KDF. Answering 200 before verifying turned the
+      // route into an unlimited username oracle: `skipSuccessfulRequests` on the limiter
+      // means a 200 costs no quota either, so names could be probed for free.
+      const res = await fetch(`${baseUrl}/api/account/username`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Cookie: rotatedCookie },
+        body: JSON.stringify({
+          newUsername: 'owner',
+          currentPassword: 'not-the-current-one',
+        }),
+      });
+      assert.equal(res.status, 400);
+      assert.equal((await readJson(res)).code, ERROR_CODES.AUTH_CURRENT_PASSWORD_INVALID);
     }
   } finally {
     resetSessionEpochForTests();

@@ -1,11 +1,22 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import type { FormEvent } from 'react';
-import { ChevronDown } from 'lucide-react';
 import type { Destination, RuleEditorPatch } from '../lib/types';
 import type { RuleActionSummary } from '../lib/rules';
 import { getDestSelectionState } from '../lib/dest-selection';
+import type { ActionChoice } from '../lib/rule-patch';
+import {
+  buildRulePatch,
+  currentForwardDestination,
+  initialActionChoice,
+} from '../lib/rule-patch';
 import { useI18n } from '../i18n/context';
-import { pillButtonClass, selectFieldClass, textFieldClass } from './primitives';
+import {
+  formErrorClass,
+  pillButtonClass,
+  SelectField,
+  SelectOption,
+  textFieldClass,
+} from './primitives';
 
 /**
  * Inline editor for what a rule does with the mail. Shared by an alias row
@@ -27,20 +38,18 @@ interface RuleEditorProps {
   onCancel: () => void;
 }
 
-type ActionChoice = 'keep' | 'forward' | 'drop';
-
 const radioLabelClass = 'flex cursor-pointer items-center gap-2 text-[12.5px] text-cream/75';
 
 export function RuleEditor({ summary, verifiedDests, busy, name, onSave, onCancel }: RuleEditorProps) {
   const { t } = useI18n();
+  // An alias-row editor and the catch-all editor can be open at the same time. Naming the
+  // radio group after `summary.kind` made two `forward` rules share one DOM group, so
+  // picking "Discard it" in one visually unchecked the other while its React state still
+  // said 'forward' — the rendered form and the patch disagreed.
+  const groupName = `${useId()}-action`;
 
-  // A Worker or fan-out action has no equivalent among the choices the panel can write,
-  // so those rules start on "keep" and nothing is replaced unless the user says so.
   const preserved = summary.kind === 'worker' || summary.kind === 'fanout';
-  const [choice, setChoice] = useState<ActionChoice>(() => {
-    if (preserved) return 'keep';
-    return summary.kind === 'drop' ? 'drop' : 'forward';
-  });
+  const [choice, setChoice] = useState<ActionChoice>(() => initialActionChoice(summary));
   // The configured address wins even if it lost its verification: the editor shows what
   // Cloudflare holds. With nothing configured, fall back to the first verified one.
   const [dest, setDest] = useState(() => (
@@ -50,32 +59,16 @@ export function RuleEditor({ summary, verifiedDests, busy, name, onSave, onCance
   ));
   const [nameDraft, setNameDraft] = useState(name ?? '');
 
-  const currentDest = summary.kind === 'forward' ? summary.destinations[0] : null;
+  const currentDest = currentForwardDestination(summary);
   const noDests = verifiedDests.length === 0;
   const canSave = choice !== 'forward' || Boolean(dest);
-
-  function buildPatch(): RuleEditorPatch {
-    const patch: RuleEditorPatch = {};
-
-    if (choice === 'drop' && summary.kind !== 'drop') {
-      patch.action = { type: 'drop' };
-    }
-    if (choice === 'forward' && dest && dest !== currentDest) {
-      patch.action = { type: 'forward', value: [dest] };
-    }
-    if (name !== undefined && nameDraft.trim() !== '' && nameDraft.trim() !== name) {
-      patch.name = nameDraft.trim();
-    }
-
-    return patch;
-  }
 
   function submit(event: FormEvent) {
     event.preventDefault();
     if (!canSave) {
       return;
     }
-    onSave(buildPatch());
+    onSave(buildRulePatch({ summary, choice, dest, name, nameDraft }));
   }
 
   let preservedNotice = '';
@@ -107,7 +100,7 @@ export function RuleEditor({ summary, verifiedDests, busy, name, onSave, onCance
           <label className={radioLabelClass}>
             <input
               type="radio"
-              name={`action-${summary.kind}`}
+              name={groupName}
               checked={choice === 'keep'}
               onChange={() => setChoice('keep')}
               className="accent-accent"
@@ -118,7 +111,7 @@ export function RuleEditor({ summary, verifiedDests, busy, name, onSave, onCance
         <label className={radioLabelClass}>
           <input
             type="radio"
-            name={`action-${summary.kind}`}
+            name={groupName}
             checked={choice === 'forward'}
             onChange={() => setChoice('forward')}
             disabled={noDests}
@@ -129,7 +122,7 @@ export function RuleEditor({ summary, verifiedDests, busy, name, onSave, onCance
         <label className={radioLabelClass}>
           <input
             type="radio"
-            name={`action-${summary.kind}`}
+            name={groupName}
             checked={choice === 'drop'}
             onChange={() => setChoice('drop')}
             className="accent-accent"
@@ -140,34 +133,22 @@ export function RuleEditor({ summary, verifiedDests, busy, name, onSave, onCance
 
       {choice === 'forward' && (
         noDests ? (
-          <p className="m-0 font-mono text-xs text-accent-dark">
-            {t('rules.editor.noVerifiedDests')}
-          </p>
+          <p className={formErrorClass}>{t('rules.editor.noVerifiedDests')}</p>
         ) : (
-          <div className="relative">
-            <select
-              value={dest}
-              onChange={(e) => setDest(e.target.value)}
-              aria-label={t('rules.editor.destLabel')}
-              className={`${selectFieldClass} w-full truncate py-[7px] pl-3 pr-8 text-[13px]`}
-            >
-              {/* The configured destination may have lost its verification: it stays in
-                  the list so the editor does not misrepresent what Cloudflare holds. */}
-              {currentDest && !verifiedDests.some((d) => d.email === currentDest) && (
-                <option value={currentDest}>{currentDest}</option>
-              )}
-              {verifiedDests.map((d) => (
-                <option key={d.id} value={d.email} className="bg-surface text-cream">
-                  {d.email}
-                </option>
-              ))}
-            </select>
-            <ChevronDown
-              size={13}
-              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-cream/60"
-              aria-hidden
-            />
-          </div>
+          <SelectField
+            value={dest}
+            onChange={(e) => setDest(e.target.value)}
+            aria-label={t('rules.editor.destLabel')}
+          >
+            {/* The configured destination may have lost its verification: it stays in
+                the list so the editor does not misrepresent what Cloudflare holds. */}
+            {currentDest && !verifiedDests.some((d) => d.email === currentDest) && (
+              <SelectOption value={currentDest}>{currentDest}</SelectOption>
+            )}
+            {verifiedDests.map((d) => (
+              <SelectOption key={d.id} value={d.email}>{d.email}</SelectOption>
+            ))}
+          </SelectField>
         )
       )}
 

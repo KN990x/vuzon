@@ -71,10 +71,32 @@ async function parseCloudflareResponse(res) {
   }
 }
 
+/**
+ * HTTP status to carry on the error.
+ *
+ * Cloudflare's v4 API sometimes answers `HTTP 200` with `{"success": false, "errors": [...]}`.
+ * Taking `res.status` verbatim gave the error a status of 200, and the caller's
+ * `status >= 400 && status < 500` test for "the panel sent something wrong" was false — so
+ * rule-diagnostics never ran and a duplicate alias or an unverified destination came back as
+ * the generic Cloudflare message instead of the actionable one. A rejected envelope is a
+ * client error regardless of the HTTP code that carried it.
+ *
+ * @param {number} status
+ * @returns {number}
+ */
+function errorStatusFor(status) {
+  const n = Number(status);
+  if (!Number.isFinite(n) || n < 400) {
+    return 400;
+  }
+  return n;
+}
+
 function buildResponseError({ res, parsed, requestPath, method }) {
   if (!parsed.isJson || typeof parsed.body !== 'object' || parsed.body === null) {
+    // A non-JSON body is not the panel's fault: keep 502 as the "upstream misbehaved" mark.
     return new CloudflareApiError(`Unexpected response from Cloudflare (HTTP ${res.status})`, {
-      status: res.status || 502,
+      status: res.status >= 400 ? res.status : 502,
       code: 'invalid_response',
       retryable: isRetryableStatus(res.status),
       details: {
@@ -95,7 +117,7 @@ function buildResponseError({ res, parsed, requestPath, method }) {
   const code = firstError?.code || body.code || 'cloudflare_error';
 
   return new CloudflareApiError(message, {
-    status: res.status || 502,
+    status: errorStatusFor(res.status),
     code,
     retryable: isRetryableStatus(res.status),
     details: {
@@ -253,8 +275,11 @@ export function createCloudflareClient({ env = process.env } = {}) {
     return allResults;
   }
 
+  // `requestCloudflare` stays internal: the envelope it returns (`{ success, result, … }`)
+  // is an implementation detail, and every caller wants the unwrapped `result` that
+  // fetchCloudflare / fetchAllCloudflare hand back. Exposing it also widened the surface
+  // that test doubles had to imitate for no benefit.
   return {
-    requestCloudflare,
     fetchCloudflare,
     fetchAllCloudflare,
   };

@@ -8,20 +8,26 @@ on:
 permissions:
   contents: read
 
+# A new push to the same branch supersedes the one in flight. Without this, every push in a
+# quick series burned a full Docker build on a result nobody would look at.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         # version from package.json#packageManager
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24
           cache: pnpm
@@ -33,8 +39,20 @@ jobs:
       - name: Validate repository
         run: pnpm run check
 
+      # Buildx with a GitHub Actions cache: plain `docker build` rebuilt every layer from
+      # scratch on each run, including the pnpm install. `load: true` puts the result in the
+      # local daemon so the smoke test below can actually run it.
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+
       - name: Verify Docker image build
-        run: docker build -t vuzon-ci .
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          tags: vuzon-ci
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       # `docker build` does not prove the image boots. This smoke test runs it with the
       # same hardening as the compose file (read_only, cap_drop, no-new-privileges, data

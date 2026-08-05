@@ -35,7 +35,13 @@ export interface RuleActionSummary {
   workerName: string | null;
 }
 
-const UNKNOWN_SUMMARY: RuleActionSummary = { kind: 'unknown', destinations: [], workerName: null };
+// Frozen like its server-side mirror in rule-actions.js: one object is handed to every
+// caller, so an accidental mutation of `destinations` would corrupt it globally.
+const UNKNOWN_SUMMARY: RuleActionSummary = Object.freeze({
+  kind: 'unknown',
+  destinations: Object.freeze([]) as unknown as string[],
+  workerName: null,
+});
 
 /**
  * What does this rule actually do?
@@ -186,9 +192,14 @@ export function filterAliasRules(
 
 /**
  * Alias labels (or "catch-all") for rules that forward to this destination.
- * Used by the delete-destination confirm dialog so the user sees the block before the API.
+ * Used by the delete-destination dialog so the user sees the block before the API answers.
+ *
+ * Takes a `Translator` for the same reason `getRuleDest` does: a rule whose alias cannot be
+ * read still has to be listed, and the label for that case is copy. It used to fall back to
+ * the literal 'unknown', which was interpolated straight into a Spanish sentence.
  */
 export function findAliasesUsingDestination(
+  { t }: Translator,
   rules: Rule[],
   destEmail: string,
   catchAll: Rule | null = null,
@@ -217,7 +228,7 @@ export function findAliasesUsingDestination(
       continue;
     }
 
-    const label = getRuleAlias(rule) || 'unknown';
+    const label = getRuleAlias(rule) || t('aliases.row.unknownAlias');
     if (!labels.includes(label)) {
       labels.push(label);
     }

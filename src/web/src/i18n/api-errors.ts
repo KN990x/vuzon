@@ -56,6 +56,14 @@ export function translateApiError(translator: Translator, err: unknown): string 
   const { t, tRaw } = translator;
   const { message, code, params } = (err ?? {}) as ApiErrorLike;
 
+  // `fetch` rejects with a TypeError when the request never reached the server, and its
+  // `message` is a browser string ("Failed to fetch", "NetworkError when attempting…") —
+  // untranslated, and different per browser. login-error.ts already used TypeError as the
+  // signal for this; the dashboard was rendering the raw English instead.
+  if (err instanceof TypeError) {
+    return t('auth.error.network');
+  }
+
   if (code === 'validation.invalid') {
     const issues = params?.issues;
     const translated = Array.isArray(issues)

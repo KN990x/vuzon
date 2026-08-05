@@ -57,11 +57,13 @@ export function createSetupRateLimiter(options = {}) {
 }
 
 /**
- * Limit for the password change. It verifies the current password, so it gets the same
- * anti-brute-force treatment as login (and, like it, does not charge successful calls).
+ * Shared limit for the two routes that verify the current password before acting
+ * (`/api/account/password` and `/api/account/username`). Each request runs a deliberately
+ * slow KDF, so they get the same anti-brute-force treatment as login — and, like login,
+ * successful calls are not charged.
  * @param {import('express-rate-limit').Options} [options]
  */
-export function createPasswordChangeRateLimiter(options = {}) {
+export function createCredentialVerifyRateLimiter(options = {}) {
   return rateLimit({
     ...sharedRateLimitOptions,
     windowMs: FIFTEEN_MINUTES_MS,

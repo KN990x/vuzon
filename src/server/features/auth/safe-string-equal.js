@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 
 /**
- * Constant-time comparison of two UTF-8 strings (e.g. credentials from env).
+ * Constant-time comparison of two UTF-8 strings (the stored username vs the submitted one).
  * Avoids a !== comparison, which short-circuits on the first differing byte.
  */
 export function timingSafeStringEqual(a, b) {

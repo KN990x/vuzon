@@ -2,12 +2,21 @@ import { Check, Clock, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import type { Destination } from '../lib/types';
 import { isVerifiedStatus } from '../lib/verification';
 import { useI18n } from '../i18n/context';
-import { CardIcon, pillButtonClass, textFieldClass } from './primitives';
-
-const ROW_DIVIDER = 'shadow-[inset_0_-1px_0_rgba(255,255,255,0.04)]';
+import {
+  CardIcon,
+  cardTitleClass,
+  formErrorClass,
+  pillButtonClass,
+  rowDeleteButtonClass,
+  rowDividerClass,
+  rowPaddingClass,
+  textFieldClass,
+} from './primitives';
 
 interface DestinationsCardProps {
   dests: Destination[];
+  /** False until the first refresh comes back, so the empty state does not flash first. */
+  loaded: boolean;
   newDestInput: string;
   onInputChange: (value: string) => void;
   onAdd: () => void;
@@ -18,7 +27,7 @@ interface DestinationsCardProps {
 }
 
 export function DestinationsCard({
-  dests, newDestInput, onInputChange, onAdd, onDelete, loading, isDestPending, error,
+  dests, loaded, newDestInput, onInputChange, onAdd, onDelete, loading, isDestPending, error,
 }: DestinationsCardProps) {
   const { t } = useI18n();
 
@@ -28,14 +37,14 @@ export function DestinationsCard({
         <CardIcon>
           <ShieldCheck size={14} />
         </CardIcon>
-        <span className="text-[15px] font-bold tracking-[-0.01em]">{t('dests.title')}</span>
+        <span className={cardTitleClass}>{t('dests.title')}</span>
       </div>
 
       {dests.map((dest) => {
         const verified = isVerifiedStatus(dest.verified);
         const pending = isDestPending(dest.id);
         return (
-          <div key={dest.id} className={`flex items-center gap-2.5 px-[18px] py-3 ${ROW_DIVIDER}`}>
+          <div key={dest.id} className={`flex items-center gap-2.5 ${rowPaddingClass} ${rowDividerClass}`}>
             <span className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-cream/75">
               {dest.email}
             </span>
@@ -56,7 +65,7 @@ export function DestinationsCard({
               disabled={pending}
               title={t('dests.delete')}
               aria-label={t('dests.deleteNamed', { email: dest.email })}
-              className="flex-none text-cream/65 transition-colors duration-200 hover:text-accent-dark disabled:cursor-wait disabled:opacity-60 disabled:hover:text-cream/65 enabled:cursor-pointer"
+              className={rowDeleteButtonClass}
             >
               <Trash2 size={13} />
             </button>
@@ -65,13 +74,13 @@ export function DestinationsCard({
       })}
 
       {dests.length === 0 && (
-        <div className={`px-[18px] py-3 font-mono text-xs text-cream/60 ${ROW_DIVIDER}`}>
-          {t('dests.empty')}
+        <div className={`${rowPaddingClass} font-mono text-xs text-cream/60 ${rowDividerClass}`}>
+          {loaded ? t('dests.empty') : t('dests.loading')}
         </div>
       )}
 
       <form
-        className="px-[18px] py-[13px]"
+        className={rowPaddingClass}
         onSubmit={(e) => {
           e.preventDefault();
           onAdd();
@@ -93,7 +102,7 @@ export function DestinationsCard({
             {t('dests.new.submit')}
           </button>
         </div>
-        {error && <p className="m-0 mt-2 font-mono text-xs text-accent-dark">{error}</p>}
+        {error && <p className={`${formErrorClass} mt-2`}>{error}</p>}
       </form>
     </section>
   );

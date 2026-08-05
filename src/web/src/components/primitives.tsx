@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { ChevronDown } from 'lucide-react';
+import type { ReactNode, SelectHTMLAttributes } from 'react';
 
 /** Pill button from the design (soft amber fill + inner glow + hover scale). */
 export const pillButtonClass =
@@ -35,6 +36,82 @@ export const iconButtonClass =
 /** Monospaced chip on a translucent white background (catch-all destination). */
 export const chipClass =
   'flex items-center gap-2 rounded-[10px] bg-white/[0.04] px-3 py-[9px] font-mono text-xs';
+
+/**
+ * Hairline that separates the rows of a card. Declared once because it was declared twice,
+ * identically, in AliasesCard and DestinationsCard.
+ */
+export const rowDividerClass = 'shadow-[inset_0_-1px_0_rgba(255,255,255,0.04)]';
+
+/** Card title. The two cards in the right column had drifted to 15px vs 15.5px. */
+export const cardTitleClass = 'text-[15px] font-bold tracking-[-0.01em]';
+
+/** Row padding, shared by the alias and destination lists (py-[13px] vs py-3 before). */
+export const rowPaddingClass = 'px-[18px] py-[13px]';
+
+/** Trailing destructive icon button of a row (delete an alias, delete a destination). */
+export const rowDeleteButtonClass =
+  'flex-none text-cream/65 transition-colors duration-200 hover:text-accent-dark '
+  + 'disabled:cursor-wait disabled:opacity-60 disabled:hover:text-cream/65 enabled:cursor-pointer';
+
+/** Disclosure (pencil) button of a row or card, amber while its editor is open. */
+export function rowEditButtonClass(open: boolean): string {
+  return 'flex-none transition-colors duration-200 disabled:cursor-wait disabled:opacity-60 '
+    + `enabled:cursor-pointer ${open ? 'text-accent' : 'text-cream/65 hover:text-accent'}`;
+}
+
+/**
+ * Inline form error.
+ *
+ * One style for one concept: the auth screens boxed it while the two cards rendered a bare
+ * red line, for the same kind of message.
+ */
+export const formErrorClass =
+  'm-0 rounded-[10px] bg-accent-dark/10 px-3 py-2 font-mono text-xs text-accent-dark';
+
+/**
+ * Native `<select>` with the design's chevron.
+ *
+ * The same markup existed in three places with three different icon sizes and paddings.
+ * `compact` is the in-row variant (the quick destination swap); everything else uses the
+ * larger one. Options carry `bg-surface text-cream` so the popup is readable on a dark
+ * theme — a class that was being forgotten on the conditionally rendered options.
+ */
+export function SelectField({
+  compact = false,
+  className = '',
+  children,
+  ...props
+}: SelectHTMLAttributes<HTMLSelectElement> & { compact?: boolean }) {
+  return (
+    <div className="relative min-w-0">
+      <select
+        {...props}
+        className={`${selectFieldClass} w-full truncate ${
+          compact ? 'py-1 pl-2 pr-6 text-[13px]' : 'py-[7px] pl-3 pr-8 text-[13px]'
+        } ${className}`}
+      >
+        {children}
+      </select>
+      <ChevronDown
+        size={compact ? 12 : 13}
+        className={`pointer-events-none absolute ${
+          compact ? 'right-2' : 'right-3'
+        } top-1/2 -translate-y-1/2 text-cream/60`}
+        aria-hidden
+      />
+    </div>
+  );
+}
+
+/** Option of a `SelectField`, styled so the native popup is legible in dark mode. */
+export function SelectOption({ value, children }: { value: string; children: ReactNode }) {
+  return (
+    <option value={value} className="bg-surface text-cream">
+      {children}
+    </option>
+  );
+}
 
 /** 30px amber circle that accompanies card titles. */
 export function CardIcon({ children }: { children: ReactNode }) {

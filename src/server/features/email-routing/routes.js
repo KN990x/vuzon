@@ -60,9 +60,9 @@ function parseCloudflareRule(rule) {
  * send back the fields it already had and change only what was asked for.
  *
  * Unknown fields from a `.passthrough()` parse are preserved — a future Cloudflare
- * property must survive enable/disable. Known read-only / echo-only fields returned on
- * GET (`id`, `tag`, `created`, `modified`, `created_on`, `modified_on`) are stripped
- * because Cloudflare rejects or ignores them on PUT.
+ * property must survive enable/disable. The read-only / echo-only fields returned on GET
+ * are stripped because Cloudflare rejects or ignores them on PUT; `readOnlyKeys` below is
+ * the list (keep it and this sentence in sync rather than restating it here).
  *
  * An override that is NOT passed leaves the rule's own value in place. That is what lets
  * a Worker rule be renamed or paused without the panel ever writing a `worker` action:
@@ -233,13 +233,31 @@ export function registerApiRoutes(app, {
       }),
     ]);
 
-    const address = (Array.isArray(addresses) ? addresses : []).find(
+    // A list that did not come back as a list means the check could not run at all.
+    if (!Array.isArray(addresses)) {
+      throw new PanelRequestError(
+        'Could not verify whether this destination is still in use. Try again later.',
+        { status: 502, code: ERROR_CODES.DEST_USAGE_CHECK_FAILED },
+      );
+    }
+
+    const address = addresses.find(
       (entry) => entry && typeof entry === 'object' && entry.id === addressId,
     );
+    // The listing succeeded and the id is not in it: the destination is already gone
+    // (deleted from another tab, or from Cloudflare's own panel). 404, not 502 — a
+    // "try again later" is misleading advice for something retrying can never fix.
+    if (!address) {
+      throw new PanelRequestError(
+        'That destination no longer exists. Refresh the panel.',
+        { status: 404, code: ERROR_CODES.DEST_NOT_FOUND },
+      );
+    }
+
     // Fail closed: never DELETE when the destination email cannot be resolved —
     // skipping the usage scan would let aliases keep looking "active" while mail
     // silently stops delivering (same trust model as the catch-all check above).
-    if (!address || typeof address.email !== 'string' || address.email.trim() === '') {
+    if (typeof address.email !== 'string' || address.email.trim() === '') {
       throw new PanelRequestError(
         'Could not verify whether this destination is still in use. Try again later.',
         { status: 502, code: ERROR_CODES.DEST_USAGE_CHECK_FAILED },

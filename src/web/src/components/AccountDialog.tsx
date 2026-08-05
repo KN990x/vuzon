@@ -1,15 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
-import type { FormEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useRef, useState } from 'react';
+import type { FormEvent } from 'react';
 import { apiRequest, UnauthorizedError } from '../lib/api';
 import { buildAuthErrorMessage } from '../lib/login-error';
 import { checkNewPassword } from '../lib/password-policy';
 import type { PasswordIssue } from '../lib/password-policy';
+import { useDialog } from '../lib/use-dialog';
 import { useI18n } from '../i18n/context';
-import { pillButtonClass, authFieldClass } from './primitives';
-
-const FOCUSABLE_SELECTOR =
-  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), '
-  + 'select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+import { authFieldClass, formErrorClass, pillButtonClass } from './primitives';
 
 export type AccountChangeKind = 'username' | 'password';
 
@@ -21,12 +18,6 @@ interface AccountDialogProps {
   onUnauthorized: () => void;
   /** Reported to the panel so the change lands in the shared status toast. */
   onChanged: (kind: AccountChangeKind) => void;
-}
-
-function listFocusable(container: HTMLElement): HTMLElement[] {
-  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
-    (el) => el.offsetParent !== null || el === document.activeElement,
-  );
 }
 
 /**
@@ -59,74 +50,24 @@ export function AccountDialog({
   const [policyIssue, setPolicyIssue] = useState<PasswordIssue | null>(null);
   const [passwordSubmitting, setPasswordSubmitting] = useState(false);
 
-  const overlayRef = useRef<HTMLDivElement>(null);
-  const dialogRef = useRef<HTMLDivElement>(null);
   const firstFieldRef = useRef<HTMLInputElement>(null);
   const onUnauthorizedRef = useRef(onUnauthorized);
   onUnauthorizedRef.current = onUnauthorized;
 
   const titleKey = mode === 'username' ? 'account.username.title' : 'account.password.title';
 
-  useEffect(() => {
-    const previousActive = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    // Mark every sibling of the overlay inert so Tab and assistive tech stay inside the
-    // dialog. The overlay is mounted as a sibling of <header> and <main> in Dashboard.
-    const inerted: HTMLElement[] = [];
-    const parent = overlayRef.current?.parentElement;
-    if (parent) {
-      for (const child of parent.children) {
-        if (child !== overlayRef.current && child instanceof HTMLElement) {
-          child.inert = true;
-          inerted.push(child);
-        }
-      }
-    }
-
-    firstFieldRef.current?.focus();
-
-    return () => {
-      for (const el of inerted) {
-        el.inert = false;
-      }
-      document.body.style.overflow = previousOverflow;
-      // Escape / cancel must not leave focus stranded on a node that is being unmounted.
-      previousActive?.focus();
-    };
-  }, []);
-
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
+  // Escape while a submit is in flight would unmount the dialog mid-request: the change
+  // still lands server-side (other sessions really are revoked) but onChanged never fires,
+  // so there is no toast and no profile refresh. The request owns the dialog until it ends.
+  const submitting = usernameSubmitting || passwordSubmitting;
+  const { overlayRef, dialogRef, trapTab, onBackdropMouseDown } = useDialog({
+    onClose: () => {
+      if (!submitting) {
         onClose();
       }
-    }
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
-
-  function trapTab(event: ReactKeyboardEvent<HTMLDivElement>) {
-    if (event.key !== 'Tab' || !dialogRef.current) {
-      return;
-    }
-    const focusable = listFocusable(dialogRef.current);
-    if (focusable.length === 0) {
-      return;
-    }
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  }
+    },
+    initialFocusRef: firstFieldRef,
+  });
 
   function handleAccountError(err: unknown, setError: (value: unknown) => void) {
     if (err instanceof UnauthorizedError) {
@@ -215,13 +156,7 @@ export function AccountDialog({
       {/* Outer scrolls; inner centres. Same-node flex+scroll clips the top on short viewports. */}
       <div
         className="flex min-h-full items-center justify-center px-6 py-10"
-        onMouseDown={(event) => {
-          // Only a click that both starts and ends on the backdrop closes: dragging a
-          // selection out of a field should not throw the form away.
-          if (event.target === event.currentTarget) {
-            onClose();
-          }
-        }}
+        onMouseDown={onBackdropMouseDown}
       >
         <div
           ref={dialogRef}
@@ -272,7 +207,7 @@ export function AccountDialog({
               </label>
 
               {usernameErrorMessage && (
-                <p className="m-0 rounded-[10px] bg-accent-dark/10 px-3 py-2 font-mono text-xs text-accent-dark" role="alert">
+                <p className={formErrorClass} role="alert">
                   {usernameErrorMessage}
                 </p>
               )}
@@ -329,7 +264,7 @@ export function AccountDialog({
               </label>
 
               {passwordErrorMessage && (
-                <p className="m-0 rounded-[10px] bg-accent-dark/10 px-3 py-2 font-mono text-xs text-accent-dark" role="alert">
+                <p className={formErrorClass} role="alert">
                   {passwordErrorMessage}
                 </p>
               )}

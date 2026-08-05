@@ -60,3 +60,14 @@ test('non-primitive params are dropped instead of rendering [object Object]', ()
   };
   expect(translateApiError(en, err)).toContain('{email}');
 });
+
+// A dead connection reached the dashboard as the browser's raw English string ("Failed to
+// fetch"), which is neither translated nor consistent between browsers.
+test('a fetch that never reached the server gets the panel network message', () => {
+  expect(translateApiError(en, new TypeError('Failed to fetch'))).toBe(
+    'Could not reach the server. Check your connection.',
+  );
+  expect(translateApiError(es, new TypeError('NetworkError'))).toBe(
+    'No se pudo conectar con el servidor. Comprueba tu conexión.',
+  );
+});

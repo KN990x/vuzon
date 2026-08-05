@@ -41,13 +41,15 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Self-contained backend (server.js at the bundle root) + built SPA in /app/public.
-COPY --from=build /prod ./
-COPY --from=build /app/src/web/dist ./public
+# --chown on the COPY itself, never a `chown -R` afterwards: that rewrote every file of
+# node_modules and of the SPA bundle into a second layer, duplicating them in the image.
+COPY --from=build --chown=node:node /prod ./
+COPY --from=build --chown=node:node /app/src/web/dist ./public
 
 # State the panel writes itself: the credentials chosen in the setup wizard and the session
 # signing key. Mount a volume here (docker-compose.yml does) or they are lost on every
 # `docker compose up` and the setup wizard reopens.
-RUN mkdir -p /app/data && chown -R node:node /app && chmod 700 /app/data
+RUN mkdir -p /app/data && chown node:node /app/data && chmod 700 /app/data
 
 USER node
 

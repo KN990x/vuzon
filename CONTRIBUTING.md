@@ -16,7 +16,7 @@ You can open issues for bugs or ideas, and pull requests for fixes or features.
 
 - **Node.js 24** (LTS) or newer, matching the `Dockerfile` base image and CI (`setup-node`); see `engines` in `package.json`.
 - **pnpm 11+** only (do not use npm or Yarn). Enable Corepack so the version in `package.json` → `packageManager` is used: `corepack enable`. Project settings live in [`pnpm-workspace.yaml`](pnpm-workspace.yaml) (pnpm 11 no longer reads non-auth settings from `.npmrc`).
-- Create a `.env` in the project root (same fields as end users: Cloudflare token, `DOMAIN`, panel credentials). [`.env.example`](.env.example) is a minimal template; the full list of optional environment variables is in [README.md](README.md).
+- Create a `.env` in the project root with the same fields end users set: `CF_API_TOKEN` and `DOMAIN`. Panel credentials are **not** among them — they are chosen in the browser on first visit (see *Deployment notes*). [`.env.example`](.env.example) is a minimal template; the full list of optional environment variables is in [README.md](README.md).
 
 ```bash
 corepack enable
@@ -119,7 +119,7 @@ The bundled [`docker-compose.yml`](docker-compose.yml) pulls **`ghcr.io/kn990x/v
 **Compose details:**
 
 - **`PORT=8001` inside the container** is set in Compose; **`VUZON_PORT`** in `.env` only changes the **host** side of `ports`. You do not need `PORT` in `.env` for this setup.
-- **`env_file`**: `.env` is optional at Compose parse time (**Docker Compose v2.24+**); create it from `.env.example` so the app receives **`CF_API_TOKEN`**, **`DOMAIN`**, and panel credentials.
+- **`env_file`**: `.env` is optional at Compose parse time (**Docker Compose v2.24+**); create it from `.env.example` so the app receives **`CF_API_TOKEN`** and **`DOMAIN`**. Panel credentials never go in `.env`.
 
 > The repository includes `.dockerignore` for faster local builds.
 
@@ -144,6 +144,7 @@ Put credentials in a repo-root `.env` (see `.env.example`). The server loads tha
 - `src/server/`: `@vuzon/server` backend source split into `bootstrap/`, `features/`, `platform/`, and `config/`; entrypoint `server.js`.
 - `src/web/`: `@vuzon/web` — React + Vite SPA. App code in `src/web/src/` (`screens/`, `components/`, pure helpers in `lib/`).
 - `src/web/dist/`: generated SPA bundle and the only directory served by Express at runtime (not versioned).
+- `src/shared/`: data shared by **both** packages, currently `verified-status-cases.json` — the truth table for "is this destination verified?". Backend and frontend each implement that predicate separately, and each has a test that runs the same table (`src/server/tests/architecture/verified-status-guard.test.js` and `src/web/src/lib/verification.test.ts`), so the two cannot drift. Add to it rather than forking the logic.
 - `docs/assets/`: images referenced by the README (not served by the app).
 
 #### The brand mark

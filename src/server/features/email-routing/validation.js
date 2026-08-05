@@ -34,10 +34,16 @@ export const panelActionSchema = z.discriminatedUnion('type', [
   }),
 ], { errorMap: () => ({ message: 'action.type' }) });
 
-/** Cloudflare's `name` is a free-text label; the panel only bounds it. */
+/**
+ * Cloudflare's `name` is a free-text label; the panel only bounds it.
+ *
+ * The empty string is accepted on purpose: it is the state Cloudflare itself leaves on
+ * rules created from its own panel, so it must be reachable from here too. Rejecting it
+ * made the label add-only — clearing the field produced no patch and the editor looked
+ * broken. `undefined` still means "preserve whatever is there"; `''` means "remove it".
+ */
 export const ruleNameSchema = z.string()
   .trim()
-  .min(1, 'rule_name.empty')
   .max(255, 'rule_name.too_long');
 
 export const ruleSchema = z.object({

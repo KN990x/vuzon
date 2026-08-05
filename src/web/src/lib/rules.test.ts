@@ -80,20 +80,19 @@ test('findAliasesUsingDestination: lists alias labels and catch-all', () => {
     actions: [{ type: 'forward', value: ['dest@example.com'] }],
   };
 
-  expect(findAliasesUsingDestination(rules, 'dest@example.com', catchAll)).toEqual([
+  expect(findAliasesUsingDestination(en, rules, 'dest@example.com', catchAll)).toEqual([
     'a@example.com',
     'catch-all',
   ]);
-  expect(findAliasesUsingDestination(rules, 'nobody@example.com', catchAll)).toEqual([]);
+  expect(findAliasesUsingDestination(en, rules, 'nobody@example.com', catchAll)).toEqual([]);
 });
 
-test('findAliasesUsingDestination: falls back to unknown when nothing identifies the rule', () => {
-  expect(
-    findAliasesUsingDestination(
-      [{ id: '', actions: [{ type: 'forward', value: ['d@example.com'] }] }],
-      'd@example.com',
-    ),
-  ).toEqual(['unknown']);
+// The fallback used to be the literal 'unknown', which got interpolated straight into the
+// Spanish "this destination is used by: …" sentence.
+test('findAliasesUsingDestination: labels an unidentifiable rule in the active language', () => {
+  const orphan = [{ id: '', actions: [{ type: 'forward', value: ['d@example.com'] }] }];
+  expect(findAliasesUsingDestination(en, orphan, 'd@example.com')).toEqual(['an unnamed rule']);
+  expect(findAliasesUsingDestination(es, orphan, 'd@example.com')).toEqual(['una regla sin nombre']);
 });
 
 test('getRuleAlias: matcher wins over name', () => {

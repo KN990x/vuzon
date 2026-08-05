@@ -15,8 +15,9 @@
  * `CLOUDFLARE_GENERIC` is precisely the code for "something upstream failed and we are
  * not saying what".
  *
- * Adding a code here without adding it to `src/web/src/i18n/api-errors.ts` is a CI
- * failure (see tests/architecture/error-codes-guard.test.js).
+ * Adding a code here without adding `error.<code>` to BOTH catalogues
+ * (`src/web/src/i18n/en.ts` and `es.ts`) is a CI failure — see
+ * tests/architecture/error-codes-guard.test.js. `api-errors.ts` only renders them.
  */
 export const ERROR_CODES = Object.freeze({
   AUTH_SETUP_REQUIRED: 'auth.setup_required',
@@ -35,6 +36,7 @@ export const ERROR_CODES = Object.freeze({
   DEST_UNKNOWN: 'dest.unknown',
   DEST_UNVERIFIED: 'dest.unverified',
   DEST_IN_USE: 'dest.in_use',
+  DEST_NOT_FOUND: 'dest.not_found',
   DEST_USAGE_CHECK_FAILED: 'dest.usage_check_failed',
   CSRF_BLOCKED: 'csrf.blocked',
   CLOUDFLARE_GENERIC: 'cloudflare.generic',

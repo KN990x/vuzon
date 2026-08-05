@@ -123,17 +123,21 @@ async function verifyPassword(password, record) {
  * @param {unknown} record
  */
 function writeRecordAtomically(filePath, record) {
-  const tmpPath = `${filePath}.tmp`;
+  // Unique temp name: a shared `${filePath}.tmp` let a second writer rmSync the file the
+  // first had just written, so its renameSync threw ENOENT. It also means a leftover .tmp
+  // from a crash is never reused, so its stale mode cannot apply to a new record.
+  const tmpPath = `${filePath}.${crypto.randomBytes(6).toString('hex')}.tmp`;
   const payload = `${JSON.stringify(record, null, 2)}\n`;
 
-  // A leftover .tmp from a crash would keep its old mode: remove it first so the mode
-  // below is the one that actually applies.
-  fs.rmSync(tmpPath, { force: true });
-  fs.writeFileSync(tmpPath, payload, { mode: FILE_MODE });
-  fs.chmodSync(tmpPath, FILE_MODE);
-  // rename() is atomic within a filesystem: readers see either the old file or the new
-  // one, never a half-written credential.
-  fs.renameSync(tmpPath, filePath);
+  try {
+    fs.writeFileSync(tmpPath, payload, { mode: FILE_MODE });
+    fs.chmodSync(tmpPath, FILE_MODE);
+    // rename() is atomic within a filesystem: readers see either the old file or the new
+    // one, never a half-written credential.
+    fs.renameSync(tmpPath, filePath);
+  } finally {
+    fs.rmSync(tmpPath, { force: true });
+  }
 }
 
 /**

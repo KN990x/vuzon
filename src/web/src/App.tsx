@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { apiRequest, UnauthorizedError } from './lib/api';
 import { useI18n } from './i18n/context';
 import { pillButtonClass } from './components/primitives';
+import { LanguageMenu } from './components/LanguageMenu';
 import { Login } from './screens/Login';
 import { Setup } from './screens/Setup';
 import { Dashboard } from './screens/Dashboard';
@@ -57,7 +58,12 @@ export default function App() {
 
   if (session === 'error') {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center gap-5 bg-ink px-6 font-sans text-cream">
+      <main className="relative flex min-h-screen flex-col items-center justify-center gap-5 bg-ink px-6 font-sans text-cream">
+        {/* Login and Setup both offer the switcher; this screen is where a user is most
+            likely to be stuck, and it was the one place they could not change language. */}
+        <div className="absolute right-5 top-5">
+          <LanguageMenu />
+        </div>
         <p role="alert" className="m-0 text-center font-mono text-[13px] text-cream/70">
           {t('app.sessionCheckFailed')}
         </p>

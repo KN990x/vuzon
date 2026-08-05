@@ -92,7 +92,7 @@ Give every service its own address (`netflix@yourdomain.com`, `shop@yourdomain.c
 
 **Interface**
 
-- **English and Spanish**, switched from the globe in the header. English is the default; your choice is remembered in the browser.
+- **English and Spanish**, switched from the translate icon in the header. English is the default; your choice is remembered in the browser.
 - Error messages are localised too: the API answers with a machine-readable code and the panel writes the sentence in your language.
 
 **Operations**
@@ -101,12 +101,12 @@ Give every service its own address (`netflix@yourdomain.com`, `shop@yourdomain.c
 - **No database.** The only thing on disk is one small file with your panel credentials (hashed) and the session signing key.
 - **Plain HTTP keeps working** for a homelab LAN; TLS-specific hardening (`COOKIE_SECURE`, HSTS) is opt-in.
 - **Zone/account autodetection** from `DOMAIN`, so there are usually only two variables to set.
-- **Credentials are set in the browser**, the first time you open the panel — not in a configuration file, and never in plain text.
+- **Credentials are set in the browser**, the first time you open the panel — not in a configuration file, and never in plain text. You can **change the username or the password** later from the account menu in the header; either change signs out every other session.
 - Refuses to start with an obviously unsafe config (a template `CF_API_TOKEN`, an unwritable data directory) instead of coming up in a broken state.
 
 > Everything runs against **your** Cloudflare account with **your** API token. vuzon has no backend of its own, no telemetry, and no third-party services.
 
-> **Heads-up:** the screenshot above shows the Spanish interface. The panel opens in **English** by default — use the globe in the header to switch.
+> **Heads-up:** the screenshot above shows the Spanish interface. The panel opens in **English** by default — use the translate icon in the header to switch.
 
 ---
 
@@ -233,7 +233,7 @@ vuzon only writes actions it fully understands — forward to one verified addre
 
 - **Refuses to start** with an unwritable data directory or a template `CF_API_TOKEN` / `DOMAIN`.
 - Panel credentials are compared in **constant time**; login is rate-limited to **10 attempts / 15 min**.
-- **Logging out invalidates the cookie**, not just the browser copy — a cookie captured earlier stops working.
+- **Logging out from a live session invalidates the cookie**, not just the browser copy — a cookie captured earlier stops working. (A logout sent without a valid session only clears the caller's own cookie, so it cannot be used to sign everyone else out.)
 - Cloudflare's error text is **logged server-side and never returned to the browser**; upstream 401/403 are normalised to 502 so they can't be mistaken for your own session expiring.
 - Strict **CSP**, `nosniff`, `Referrer-Policy`, and `Cache-Control: no-store` on every API response.
 - The published **API token is never logged or returned**, and the container runs as a **non-root** user, read-only, with all capabilities dropped.
@@ -282,7 +282,7 @@ Da a cada servicio su propia dirección (`netflix@tudominio.com`, `tienda@tudomi
 
 **Interfaz**
 
-- **Inglés y español**, con el selector en el globo de la cabecera. El idioma por defecto es el inglés; tu elección se recuerda en el navegador.
+- **Inglés y español**, con el selector del icono de traducción en la cabecera. El idioma por defecto es el inglés; tu elección se recuerda en el navegador.
 - Los mensajes de error también se traducen: la API responde con un código y es el panel quien escribe la frase en tu idioma.
 
 **Operación**
@@ -291,7 +291,7 @@ Da a cada servicio su propia dirección (`netflix@tudominio.com`, `tienda@tudomi
 - **Sin base de datos, nada en disco** — la sesión vive en una cookie firmada.
 - **El HTTP plano sigue funcionando** en una LAN de homelab; lo específico de TLS (`COOKIE_SECURE`, HSTS) es opcional.
 - **Autodetección de zona y cuenta** a partir de `DOMAIN`, así que normalmente solo hay cuatro variables que definir.
-- **Las credenciales se eligen en el navegador**, la primera vez que abres el panel: ni en un fichero de configuración, ni nunca en texto plano.
+- **Las credenciales se eligen en el navegador**, la primera vez que abres el panel: ni en un fichero de configuración, ni nunca en texto plano. Después puedes **cambiar el usuario o la contraseña** desde el menú de cuenta de la cabecera; cualquiera de los dos cambios cierra el resto de sesiones.
 - Se niega a arrancar con una configuración claramente insegura (`CF_API_TOKEN` de plantilla, directorio de datos no escribible) en vez de levantarse en un estado roto.
 
 > Todo funciona contra **tu** cuenta de Cloudflare con **tu** token de API. vuzon no tiene backend propio, ni telemetría, ni servicios de terceros.
@@ -402,7 +402,7 @@ Otras variables orientadas a desarrollo (`VUZON_PUBLIC_DIR`): **[CONTRIBUTING.md
 
 1. **Habilita Email Routing** en la zona (panel de Cloudflare).
 2. Añade una **dirección de destino** (se envía un correo de verificación). Queda en **Pendiente** hasta que pulses el enlace de ese correo.
-3. Inicia sesión en vuzon y crea un **alias (regla)** con una parte local en minúsculas y un destino **verificado** — o pulsa el icono de dados para uno aleatorio.
+3. Inicia sesión en vuzon y crea un **alias (regla)** con una parte local en minúsculas y un destino **verificado** — o pulsa el icono de barajar para uno aleatorio.
 4. Más adelante: **cambia su destino** desde el desplegable de la fila del alias, **pausa** con el interruptor, abre el **lápiz** para cambiar la acción o renombrarlo, o bórralo.
 
 vuzon solo escribe acciones que entiende del todo: reenviar a una dirección verificada, o descartar. Una regla que use cualquier otra cosa se muestra pero no se edita aquí, así que el enrutamiento que hayas configurado fuera del panel nunca se sobrescribe a ciegas.
@@ -421,7 +421,7 @@ vuzon solo escribe acciones que entiende del todo: reenviar a una dirección ver
 
 - **Se niega a arrancar** con un directorio de datos no escribible o un `CF_API_TOKEN` / `DOMAIN` de plantilla.
 - Las credenciales del panel se comparan en **tiempo constante**; el login está limitado a **10 intentos / 15 min**.
-- **Cerrar sesión invalida la cookie**, no solo la copia del navegador: una cookie capturada antes deja de funcionar.
+- **Cerrar sesión con una sesión válida invalida la cookie**, no solo la copia del navegador: una cookie capturada antes deja de funcionar. (Un logout sin sesión válida solo borra la cookie de quien lo envía, así que no sirve para cerrar la sesión de nadie más.)
 - El texto de error de Cloudflare se **registra en el servidor y nunca se devuelve al navegador**; los 401/403 upstream se normalizan a 502 para que no se confundan con la caducidad de tu propia sesión.
 - **CSP** estricta, `nosniff`, `Referrer-Policy` y `Cache-Control: no-store` en todas las respuestas de la API.
 - El **token de API nunca se registra ni se devuelve**, y el contenedor se ejecuta como usuario **no root**, en solo lectura y sin capabilities.

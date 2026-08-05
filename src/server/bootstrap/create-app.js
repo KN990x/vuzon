@@ -20,7 +20,7 @@ import {
   createLoginRateLimiter,
   createLogoutRateLimiter,
   createPagesRateLimiter,
-  createPasswordChangeRateLimiter,
+  createCredentialVerifyRateLimiter,
   createSetupRateLimiter,
 } from '../platform/http/rate-limiters.js';
 import { createSameOriginGuard } from '../platform/http/same-origin-guard.js';
@@ -86,7 +86,7 @@ export function createApp({
   loginLimiter = createLoginRateLimiter(),
   logoutLimiter = createLogoutRateLimiter(),
   setupLimiter = createSetupRateLimiter(),
-  passwordChangeLimiter = createPasswordChangeRateLimiter(),
+  credentialVerifyLimiter = createCredentialVerifyRateLimiter(),
   apiLimiter = createApiRateLimiter(),
   pagesLimiter = createPagesRateLimiter(),
 } = {}) {
@@ -98,6 +98,12 @@ export function createApp({
   // Nothing useful comes from telling the world which framework serves the panel.
   app.disable('x-powered-by');
   app.set('trust proxy', runtime.trustProxy);
+  // Express matches routes case-insensitively by default, but every guard below tests
+  // `req.path` against a lowercase '/api/' prefix. Without this, `GET /API/rules` reached
+  // the route handler while skipping Cache-Control: no-store, the same-origin guard AND the
+  // API error handler — so a Cloudflare failure answered with its upstream status, the
+  // upstream message and a stack trace instead of the `{ error, code }` envelope.
+  app.set('case sensitive routing', true);
 
   // HSTS only with COOKIE_SECURE=1 (deployed behind TLS); on plain-HTTP homelabs it must not be sent.
   app.use(createSecurityHeadersMiddleware({ hsts: runtime.cookieSecure }));
@@ -111,8 +117,12 @@ export function createApp({
   //      allows same-origin / none; rejects same-site and mismatched Origin;
   //      allows curl (no Origin / no Sec-Fetch-Site).
   // Changing any of these means revisiting this decision.
-  app.use(express.json({ limit: JSON_BODY_LIMIT }));
+  //
+  // The guard runs BEFORE express.json on purpose: it only reads headers, so parsing up to
+  // 256kb of a request that is about to be rejected with 403 is wasted work — and a
+  // malformed cross-origin body used to fail in the parser before the guard ever saw it.
   app.use(createSameOriginGuard());
+  app.use(express.json({ limit: JSON_BODY_LIMIT }));
   app.use(createSessionMiddleware({
     sessionSecret,
     cookieSecure: runtime.cookieSecure,
@@ -128,7 +138,7 @@ export function createApp({
     loginLimiter,
     logoutLimiter,
     setupLimiter,
-    passwordChangeLimiter,
+    credentialVerifyLimiter,
   });
   registerApiRoutes(app, { env, requireAuth, credentialStore, cloudflareClient, apiLimiter });
   // The /api JSON 404 must be registered BEFORE registerPageRoutes' SPA catch-all:

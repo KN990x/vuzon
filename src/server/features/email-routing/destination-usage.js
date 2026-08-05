@@ -78,7 +78,7 @@ export function ruleAliasLabel(rule) {
 /**
  * Rules whose forward actions include this destination email.
  * Mirror of `hasRuleForAlias` (rule-diagnostics.js): same trim/lowercase, same
- * scalar-or-array `actions[].value` handling as `isSingleForwardRule`.
+ * scalar-or-array `actions[].value` handling as `describeRuleActions`.
  *
  * @param {unknown[]} rules Result of /email/routing/rules (plus catch-all if fetched).
  * @param {string} destEmail

@@ -5,7 +5,7 @@ import { buildAuthErrorMessage } from '../lib/login-error';
 import { checkNewPassword } from '../lib/password-policy';
 import type { PasswordIssue } from '../lib/password-policy';
 import { useI18n } from '../i18n/context';
-import { pillButtonClass, authFieldClass, VuzonMark } from '../components/primitives';
+import { authFieldClass, formErrorClass, pillButtonClass, VuzonMark } from '../components/primitives';
 import { LanguageMenu } from '../components/LanguageMenu';
 
 /**
@@ -140,7 +140,7 @@ export function Setup({ onSuccess, onAlreadyConfigured }: SetupProps) {
           </label>
 
           {errorMessage && (
-            <p className="m-0 rounded-[10px] bg-accent-dark/10 px-3 py-2 font-mono text-xs text-accent-dark" role="alert">
+            <p className={formErrorClass} role="alert">
               {errorMessage}
             </p>
           )}

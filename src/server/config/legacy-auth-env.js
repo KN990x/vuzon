@@ -1,5 +1,5 @@
 /** @type {readonly string[]} */
-export const LEGACY_AUTH_ENV_KEYS = Object.freeze([
+const LEGACY_AUTH_ENV_KEYS = Object.freeze([
   'AUTH_USER',
   'AUTH_PASS',
   'SESSION_SECRET',

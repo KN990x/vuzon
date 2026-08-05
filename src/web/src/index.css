@@ -51,8 +51,33 @@ body {
 }
 
 input {
+  /*
+   * The design's fields draw their own focus treatment (focus:border-cream/40 in
+   * primitives.tsx), so the UA ring is dropped for pointer focus. It is put back for
+   * :focus-visible below — a 1px border shift at low contrast is not a usable focus
+   * indicator for anyone navigating by keyboard.
+   */
   outline: none;
   background: transparent;
+}
+
+/*
+ * Keyboard focus, everywhere. `:focus-visible` only matches when the browser decides the
+ * user is navigating by keyboard, so this never fires on a mouse click.
+ */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Inputs already carry a radius; matching it keeps the ring flush with the field. */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+  border-radius: inherit;
 }
 
 /*
@@ -124,6 +149,28 @@ input {
   opacity: 1;
   transform: translate(-50%, 0);
   visibility: visible;
+}
+
+/*
+ * Reduced motion. Everything that moves in the panel is decorative — the page fade, the
+ * toast slide, the hover scales, the switch knob, the refresh spinner — so it can all be
+ * reduced to near-instant without losing information. Kept at 0.01ms rather than 0 so
+ * transitionend/animationend still fire for anything that listens.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* The hover/active scales are the one thing worth removing outright. */
+  .fade-in {
+    animation: none;
+  }
 }
 
 /* Fixed-header variant: stronger blur and a fainter border. */

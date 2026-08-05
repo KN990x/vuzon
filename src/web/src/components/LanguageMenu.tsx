@@ -1,8 +1,9 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId } from 'react';
 import { Check, Languages } from 'lucide-react';
 import { useI18n } from '../i18n/context';
 import { LOCALES } from '../i18n/locale';
 import type { Locale } from '../i18n/locale';
+import { useMenu } from '../lib/use-menu';
 import { iconButtonClass } from './primitives';
 
 const LOCALE_LABEL_KEY = {
@@ -20,42 +21,12 @@ const LOCALE_LABEL_KEY = {
  */
 export function LanguageMenu() {
   const { locale, setLocale, t } = useI18n();
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const { open, toggle, close, containerRef, triggerRef, menuRef } = useMenu();
   const menuId = useId();
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    function handlePointerDown(event: PointerEvent) {
-      if (!containerRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setOpen(false);
-        // Escape must not leave focus stranded on a node that is being unmounted.
-        triggerRef.current?.focus();
-      }
-    }
-
-    document.addEventListener('pointerdown', handlePointerDown);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [open]);
 
   function choose(next: Locale) {
     setLocale(next);
-    setOpen(false);
-    triggerRef.current?.focus();
+    close();
   }
 
   const currentLabel = t(LOCALE_LABEL_KEY[locale]);
@@ -66,7 +37,7 @@ export function LanguageMenu() {
         ref={triggerRef}
         type="button"
         className={iconButtonClass}
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={toggle}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
@@ -77,6 +48,7 @@ export function LanguageMenu() {
       </button>
       {open && (
         <div
+          ref={menuRef}
           id={menuId}
           role="menu"
           aria-label={t('header.language')}

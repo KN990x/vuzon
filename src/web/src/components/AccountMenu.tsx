@@ -1,6 +1,7 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId } from 'react';
 import { User } from 'lucide-react';
 import { useI18n } from '../i18n/context';
+import { useMenu } from '../lib/use-menu';
 import { iconButtonClass } from './primitives';
 
 interface AccountMenuProps {
@@ -19,43 +20,13 @@ const menuItemClass =
  */
 export function AccountMenu({ onOpenPassword, onOpenUsername, onLogout }: AccountMenuProps) {
   const { t } = useI18n();
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const { open, toggle, close, containerRef, triggerRef, menuRef } = useMenu();
   const menuId = useId();
 
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    function handlePointerDown(event: PointerEvent) {
-      if (!containerRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setOpen(false);
-        // Escape must not leave focus stranded on a node that is being unmounted.
-        triggerRef.current?.focus();
-      }
-    }
-
-    document.addEventListener('pointerdown', handlePointerDown);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [open]);
-
   function choose(action: () => void) {
-    setOpen(false);
-    // Park focus on the trigger before the dialog mounts so AccountDialog's
+    // `close` parks focus on the trigger before the dialog mounts, so AccountDialog's
     // "restore previousActive" lands back on this button when the dialog closes.
-    triggerRef.current?.focus();
+    close();
     action();
   }
 
@@ -65,7 +36,7 @@ export function AccountMenu({ onOpenPassword, onOpenUsername, onLogout }: Accoun
         ref={triggerRef}
         type="button"
         className={iconButtonClass}
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={toggle}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
@@ -76,6 +47,7 @@ export function AccountMenu({ onOpenPassword, onOpenUsername, onLogout }: Accoun
       </button>
       {open && (
         <div
+          ref={menuRef}
           id={menuId}
           role="menu"
           aria-label={t('header.account')}

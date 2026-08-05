@@ -1,18 +1,26 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import {
-  ArrowRight, Check, ChevronDown, Copy, Mail, Pencil, Plus, Search, Shuffle, Trash2,
+  ArrowRight, Check, Copy, Mail, Pencil, Plus, Search, Shuffle, Trash2,
 } from 'lucide-react';
 import type { Destination, Rule, RuleEditorPatch } from '../lib/types';
+import { DROP_DEST_VALUE } from '../lib/dest-selection';
 import { describeRuleActions, getRuleAlias, getRuleDest } from '../lib/rules';
 import { useI18n } from '../i18n/context';
 import { Switch } from './Switch';
 import { RuleEditor } from './RuleEditor';
-import { CardIcon, pillButtonClass, selectFieldClass, textFieldClass } from './primitives';
-
-const ROW_DIVIDER = 'shadow-[inset_0_-1px_0_rgba(255,255,255,0.04)]';
-
-/** Sentinel for the "discard the mail" entry of the create form's destination select. */
-export const DROP_DEST_VALUE = '__drop__';
+import {
+  CardIcon,
+  cardTitleClass,
+  formErrorClass,
+  pillButtonClass,
+  rowDeleteButtonClass,
+  rowDividerClass,
+  rowEditButtonClass,
+  rowPaddingClass,
+  SelectField,
+  SelectOption,
+  textFieldClass,
+} from './primitives';
 
 interface AliasesCardProps {
   domain: string;
@@ -54,6 +62,8 @@ export function AliasesCard(props: AliasesCardProps) {
   // Only one row is expanded at a time: the editor is tall and two open at once turns the
   // list into a wall. `null` means every row is collapsed.
   const [editingId, setEditingId] = useState<string | null>(null);
+  // Prefix for the per-row editor ids that `aria-controls` points at.
+  const editorIdPrefix = useId();
 
   return (
     <section className="overflow-hidden rounded-card bg-surface">
@@ -62,7 +72,7 @@ export function AliasesCard(props: AliasesCardProps) {
           <CardIcon>
             <Mail size={14} />
           </CardIcon>
-          <span className="text-[15.5px] font-bold tracking-[-0.01em]">{t('aliases.title')}</span>
+          <span className={cardTitleClass}>{t('aliases.title')}</span>
         </div>
         <div className="flex min-w-0 items-center gap-3">
           <label className="flex min-w-0 items-center gap-2 text-cream/65">
@@ -75,8 +85,12 @@ export function AliasesCard(props: AliasesCardProps) {
               className={`${textFieldClass} w-28 min-w-0 text-xs`}
             />
           </label>
+          {/* While a search is active the plain total read as a lie: "12 rules" over a
+              one-row list. Show both numbers instead. */}
           <span className="flex-none font-mono text-[11px] text-cream/60">
-            {tn('aliases.count', totalCount)}
+            {search.trim() === ''
+              ? tn('aliases.count', totalCount)
+              : t('aliases.countFiltered', { shown: rules.length, total: totalCount })}
           </span>
         </div>
       </div>
@@ -93,6 +107,7 @@ export function AliasesCard(props: AliasesCardProps) {
         const currentDest = summary.destinations[0];
         const editable = summary.kind !== 'unknown';
         const editing = editingId === rule.id;
+        const editorId = `${editorIdPrefix}-${rule.id}`;
         const alias = getRuleAlias(rule);
         const aliasName = alias || t('aliases.row.fallbackName');
         const freeName = typeof rule.name === 'string' ? rule.name.trim() : '';
@@ -109,9 +124,9 @@ export function AliasesCard(props: AliasesCardProps) {
                   }
                 : null;
         return (
-          <div key={rule.id} className={ROW_DIVIDER}>
+          <div key={rule.id} className={rowDividerClass}>
             <div
-              className={`flex items-center gap-3.5 px-[18px] py-[13px] transition-opacity duration-[250ms] ${
+              className={`flex items-center gap-3.5 ${rowPaddingClass} transition-opacity duration-[250ms] ${
                 enabled ? '' : 'opacity-45'
               }`}
             >
@@ -127,30 +142,24 @@ export function AliasesCard(props: AliasesCardProps) {
               </span>
               <ArrowRight size={14} className="flex-none text-cream/65" aria-hidden />
               {quickSwap ? (
-                <div className="relative min-w-0 flex-1">
-                  <select
+                <div className="min-w-0 flex-1">
+                  <SelectField
+                    compact
                     value={currentDest}
                     disabled={pending}
                     onChange={(e) => onChangeRuleDest(rule, e.target.value)}
                     aria-label={t('aliases.row.destLabel', { alias: aliasName })}
-                    className={`${selectFieldClass} w-full truncate py-1 pl-2 pr-6 text-[13px] text-cream/70 disabled:cursor-wait disabled:opacity-60`}
+                    className="text-cream/70 disabled:cursor-wait disabled:opacity-60"
                   >
                     {/* The current destination may have become unverified: it is kept as an
                         option so we do not misrepresent what is configured in Cloudflare. */}
                     {!verifiedDests.some((d) => d.email === currentDest) && (
-                      <option value={currentDest}>{currentDest}</option>
+                      <SelectOption value={currentDest}>{currentDest}</SelectOption>
                     )}
                     {verifiedDests.map((d) => (
-                      <option key={d.id} value={d.email} className="bg-surface text-cream">
-                        {d.email}
-                      </option>
+                      <SelectOption key={d.id} value={d.email}>{d.email}</SelectOption>
                     ))}
-                  </select>
-                  <ChevronDown
-                    size={12}
-                    className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-cream/60"
-                    aria-hidden
-                  />
+                  </SelectField>
                 </div>
               ) : (
                 <span className="flex min-w-0 flex-1 items-center gap-2 truncate">
@@ -179,7 +188,10 @@ export function AliasesCard(props: AliasesCardProps) {
               </span>
               <Switch
                 on={enabled}
-                disabled={pending || !editable}
+                busy={pending}
+                // A rule whose action the panel cannot describe is not toggleable at all —
+                // a different thing from "an update is in flight".
+                disabled={!editable}
                 label={enabled ? t('aliases.row.pause') : t('aliases.row.enable')}
                 onToggle={() => onToggleRule(rule)}
               />
@@ -189,11 +201,10 @@ export function AliasesCard(props: AliasesCardProps) {
                   onClick={() => setEditingId(editing ? null : rule.id)}
                   disabled={pending}
                   aria-expanded={editing}
+                  aria-controls={editing ? editorId : undefined}
                   title={t('aliases.row.edit')}
                   aria-label={t('aliases.row.editNamed', { alias: aliasName })}
-                  className={`flex-none transition-colors duration-200 disabled:cursor-wait disabled:opacity-60 enabled:cursor-pointer ${
-                    editing ? 'text-accent' : 'text-cream/65 hover:text-accent'
-                  }`}
+                  className={rowEditButtonClass(editing)}
                 >
                   <Pencil size={14} />
                 </button>
@@ -205,14 +216,14 @@ export function AliasesCard(props: AliasesCardProps) {
                   disabled={pending}
                   title={t('aliases.row.delete')}
                   aria-label={t('aliases.row.deleteNamed', { alias: aliasName })}
-                  className="flex-none text-cream/65 transition-colors duration-200 hover:text-accent-dark disabled:cursor-wait disabled:opacity-60 disabled:hover:text-cream/65 enabled:cursor-pointer"
+                  className={rowDeleteButtonClass}
                 >
                   <Trash2 size={14} />
                 </button>
               )}
             </div>
             {editing && (
-              <div className="fade-in">
+              <div className="fade-in" id={editorId}>
                 <RuleEditor
                   // Remounts on a refresh so the draft always starts from what Cloudflare
                   // holds, never from a stale copy of the row.
@@ -236,13 +247,13 @@ export function AliasesCard(props: AliasesCardProps) {
       })}
 
       {rules.length === 0 && (
-        <div className={`px-[18px] py-[13px] font-mono text-xs text-cream/60 ${ROW_DIVIDER}`}>
+        <div className={`${rowPaddingClass} font-mono text-xs text-cream/60 ${rowDividerClass}`}>
           {emptyMessage}
         </div>
       )}
 
       <form
-        className="flex flex-col gap-3 px-[18px] py-[13px]"
+        className={`flex flex-col gap-3 ${rowPaddingClass}`}
         onSubmit={(e) => {
           e.preventDefault();
           onCreate();
@@ -282,33 +293,24 @@ export function AliasesCard(props: AliasesCardProps) {
           </button>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="relative min-w-0 w-full sm:flex-1">
-            <select
+          <div className="min-w-0 w-full sm:flex-1">
+            <SelectField
               value={dest}
               onChange={(e) => onDestChange(e.target.value)}
               aria-label={t('aliases.new.destLabel')}
-              className={`${selectFieldClass} w-full rounded-[10px] py-[7px] pl-3 pr-8 text-xs`}
+              className="rounded-[10px]"
             >
               {verifiedDests.length === 0 && (
-                <option value="">{t('aliases.new.noVerifiedDests')}</option>
+                <SelectOption value="">{t('aliases.new.noVerifiedDests')}</SelectOption>
               )}
               {verifiedDests.map((d) => (
-                <option key={d.id} value={d.email} className="bg-surface text-cream">
-                  {d.email}
-                </option>
+                <SelectOption key={d.id} value={d.email}>{d.email}</SelectOption>
               ))}
               {/* An alias that discards the mail: useful to make an address look valid
                   without receiving anything. It rides in the same select rather than adding
                   a control to a row that is already crowded. */}
-              <option value={DROP_DEST_VALUE} className="bg-surface text-cream">
-                {t('aliases.new.discard')}
-              </option>
-            </select>
-            <ChevronDown
-              size={13}
-              className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-cream/60"
-              aria-hidden
-            />
+              <SelectOption value={DROP_DEST_VALUE}>{t('aliases.new.discard')}</SelectOption>
+            </SelectField>
           </div>
           <button
             type="submit"
@@ -318,9 +320,7 @@ export function AliasesCard(props: AliasesCardProps) {
             {t('aliases.new.submit')}
           </button>
         </div>
-        {aliasError && (
-          <span className="font-mono text-xs text-accent-dark">{aliasError}</span>
-        )}
+        {aliasError && <p className={formErrorClass}>{aliasError}</p>}
       </form>
     </section>
   );

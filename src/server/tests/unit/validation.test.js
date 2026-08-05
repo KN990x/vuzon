@@ -103,7 +103,15 @@ test('ruleUpdateSchema: every field is optional but the patch cannot be empty', 
 });
 
 test('ruleUpdateSchema: bounds the rule name', () => {
-  assert.equal(firstIssue(ruleUpdateSchema.safeParse({ name: '   ' })), 'rule_name.empty');
+  // An empty name means "remove the label" — the state Cloudflare itself leaves on rules
+  // created from its own panel. Rejecting it made the label add-only: clearing the field
+  // produced no patch at all and the editor looked broken.
+  const cleared = ruleUpdateSchema.safeParse({ name: '   ' });
+  assert.equal(cleared.success, true);
+  assert.equal(cleared.data.name, '');
+  // `undefined` still means "preserve whatever Cloudflare holds", which is a different thing.
+  assert.equal(firstIssue(ruleUpdateSchema.safeParse({ name: undefined })), 'rule_update.empty');
+
   assert.equal(ruleUpdateSchema.safeParse({ name: 'a'.repeat(255) }).success, true);
   assert.equal(firstIssue(ruleUpdateSchema.safeParse({ name: 'a'.repeat(256) })), 'rule_name.too_long');
 

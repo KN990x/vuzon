@@ -29,14 +29,36 @@ function readSecretFile(filePath) {
  */
 function createSecretFile(filePath) {
   const secret = crypto.randomBytes(32).toString('hex');
-  const tmpPath = `${filePath}.tmp`;
-  fs.rmSync(tmpPath, { force: true });
-  fs.writeFileSync(tmpPath, `${secret}\n`, { mode: FILE_MODE });
-  fs.chmodSync(tmpPath, FILE_MODE);
-  // rename() is atomic within a filesystem: two processes racing on a fresh data
-  // directory cannot leave a half-written key behind.
-  fs.renameSync(tmpPath, filePath);
-  return secret;
+  // Unique temp name: a shared `${filePath}.tmp` let one process rmSync the file another
+  // had just written, so its renameSync threw ENOENT and aborted startup.
+  const tmpPath = `${filePath}.${crypto.randomBytes(6).toString('hex')}.tmp`;
+  try {
+    fs.writeFileSync(tmpPath, `${secret}\n`, { mode: FILE_MODE });
+    fs.chmodSync(tmpPath, FILE_MODE);
+    // link() is atomic AND fails with EEXIST instead of overwriting, unlike rename(): two
+    // processes racing on a fresh data directory must end up with the SAME key, otherwise
+    // the loser keeps signing cookies that the file on disk can no longer validate.
+    try {
+      fs.linkSync(tmpPath, filePath);
+      return secret;
+    } catch (err) {
+      if (err?.code !== 'EEXIST') {
+        throw err;
+      }
+    }
+
+    // Something is already there. If it holds a usable key, another process won the race
+    // and we adopt its key. If it is empty (interrupted first boot, badly restored volume)
+    // it is not a competitor, so overwrite it — rename() replaces unconditionally.
+    const existing = readSecretFile(filePath);
+    if (existing) {
+      return existing;
+    }
+    fs.renameSync(tmpPath, filePath);
+    return secret;
+  } finally {
+    fs.rmSync(tmpPath, { force: true });
+  }
 }
 
 /**

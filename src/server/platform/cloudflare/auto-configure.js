@@ -4,11 +4,24 @@ import { getPanelDomain } from '../../config/domain-env.js';
 export async function ensureCloudflareIdentifiers({
   env = process.env,
   cloudflareClient,
+  warn = console.warn,
 } = {}) {
   const configuredZoneId = getCloudflareResourceId('CF_ZONE_ID', env);
   const configuredAccountId = getCloudflareResourceId('CF_ACCOUNT_ID', env);
   if (configuredZoneId && configuredAccountId) {
     return;
+  }
+
+  // The pair is all-or-nothing (see cloudflare-env.js): with only one set, detection runs
+  // and overwrites it. Silently ignoring a value the user deliberately pinned is the kind
+  // of thing that is only noticed once the panel points at the wrong zone.
+  if (configuredZoneId || configuredAccountId) {
+    const provided = configuredZoneId ? 'CF_ZONE_ID' : 'CF_ACCOUNT_ID';
+    const missing = configuredZoneId ? 'CF_ACCOUNT_ID' : 'CF_ZONE_ID';
+    warn(
+      `Warning: ${provided} is set but ${missing} is not, so both are auto-detected from DOMAIN `
+        + `and the ${provided} you configured is ignored. Set both, or neither.`,
+    );
   }
 
   console.log('Auto-configuration: detecting CF_ZONE_ID and CF_ACCOUNT_ID…');

@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -61,15 +62,20 @@ function readEpochFile(filePath) {
  * @param {number} value
  */
 function writeEpochFile(filePath, value) {
-  const tmpPath = `${filePath}.tmp`;
+  // Unique temp name: a shared `${filePath}.tmp` let a second writer rmSync the file the
+  // first had just written, so its renameSync threw ENOENT.
+  const tmpPath = `${filePath}.${crypto.randomBytes(6).toString('hex')}.tmp`;
   // Tests (and a first boot before anything else wrote here) may point at a data dir
   // that exists for credentials but has not been mkdir'd yet when only the epoch is
   // touched — create the parent the same way data-dir.js does for the volume root.
   fs.mkdirSync(path.dirname(filePath), { recursive: true, mode: 0o700 });
-  fs.rmSync(tmpPath, { force: true });
-  fs.writeFileSync(tmpPath, `${value}\n`, { mode: FILE_MODE });
-  fs.chmodSync(tmpPath, FILE_MODE);
-  fs.renameSync(tmpPath, filePath);
+  try {
+    fs.writeFileSync(tmpPath, `${value}\n`, { mode: FILE_MODE });
+    fs.chmodSync(tmpPath, FILE_MODE);
+    fs.renameSync(tmpPath, filePath);
+  } finally {
+    fs.rmSync(tmpPath, { force: true });
+  }
 }
 
 /**
@@ -83,9 +89,18 @@ export function configureSessionEpochPersistence({ dataDir }) {
   revokedBefore = readEpochFile(epochFilePath);
 }
 
-/** Invalidates every session issued up to this moment. */
+/**
+ * Invalidates every session issued up to this moment.
+ *
+ * The mark is `max(now, revokedBefore + 1)`, not `now`, for the mirror of the reason
+ * documented on `nextIssuedAt`: that function hands out `revokedBefore + 1`, which is one
+ * millisecond in the FUTURE when both run inside the same millisecond. A plain
+ * `revokedBefore = now` then landed *below* the stamp it was supposed to revoke, so a
+ * logout or password change occurring in the same millisecond as a login left that login
+ * alive. Taking the max keeps the mark at or above every stamp issued so far.
+ */
 export function revokeSessionsIssuedUntilNow(now = Date.now()) {
-  revokedBefore = now;
+  revokedBefore = Math.max(now, revokedBefore + 1);
   if (epochFilePath) {
     writeEpochFile(epochFilePath, revokedBefore);
   }

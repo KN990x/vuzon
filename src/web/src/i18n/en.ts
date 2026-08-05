@@ -49,7 +49,6 @@ export const en = {
   'setup.warning':
     'There is no password recovery: write it down somewhere safe.',
 
-  'account.title': 'Account',
   'account.notice': 'Any other session that is open will be signed out.',
   'account.cancel': 'Cancel',
   'account.username.title': 'Change username',
@@ -68,6 +67,17 @@ export const en = {
   'account.password.submitting': 'Changing…',
   'account.password.error.generic': 'Could not change the password',
   'account.password.done': 'Password changed',
+
+  // Confirmation modal (ConfirmDialog.tsx), which replaced window.confirm.
+  'confirm.accept': 'Continue',
+  'confirm.cancel': 'Cancel',
+  'confirm.dismiss': 'Got it',
+  'confirm.delete': 'Delete',
+  'confirm.deleteAlias.title': 'Delete alias',
+  'confirm.deleteDest.title': 'Delete destination',
+  'confirm.deleteDestInUse.title': 'This destination is in use',
+  'confirm.catchAllDisable.title': 'Pause the catch-all',
+  'confirm.replaceAction.title': 'Replace the current action',
 
   'dashboard.eyebrow': 'Routing panel',
   'dashboard.activeAliases': 'active aliases',
@@ -98,10 +108,15 @@ export const en = {
   'aliases.search.label': 'Search aliases',
   'aliases.count.one': '{count} rule',
   'aliases.count.other': '{count} rules',
+  'aliases.countFiltered': '{shown} of {total}',
   'aliases.empty.noResults': 'No aliases found.',
   'aliases.empty.onlyCatchAll': 'No custom aliases; only the catch-all applies.',
   'aliases.empty.none': 'No aliases created yet.',
+  'aliases.empty.loading': 'Loading aliases…',
   'aliases.row.fallbackName': 'alias',
+  // A rule whose matcher the panel cannot read still has to be named in the list of rules
+  // blocking a destination deletion.
+  'aliases.row.unknownAlias': 'an unnamed rule',
   'aliases.row.nameLabel': '{name}',
   'aliases.row.badge.worker': 'Worker',
   'aliases.row.badge.fanout': 'Several destinations',
@@ -152,12 +167,14 @@ export const en = {
   'dests.delete': 'Delete destination',
   'dests.deleteNamed': 'Delete {email}',
   'dests.empty': 'No destinations yet.',
+  'dests.loading': 'Loading destinations…',
   'dests.new.placeholder': 'you@email.com',
   'dests.new.label': 'New destination',
   'dests.new.submit': 'Add',
 
   'catchAll.title': 'Catch-all',
   'catchAll.state.unavailable': 'unavailable',
+  'catchAll.state.loading': 'loading',
   'catchAll.state.active': 'active',
   'catchAll.state.paused': 'paused',
   'catchAll.description':
@@ -206,6 +223,7 @@ export const en = {
   'error.dest.in_use':
     'Cannot delete {email}: it is still used by {aliases}. '
     + 'Remove or re-point those rules first.',
+  'error.dest.not_found': 'That destination no longer exists. Refresh the panel.',
   'error.dest.usage_check_failed':
     'Could not verify whether this destination is still in use. Try again later.',
   'error.csrf.blocked': 'Cross-origin request blocked.',
@@ -215,6 +233,7 @@ export const en = {
   'error.server.not_found': 'Not found',
   'error.client.non_json': 'Unexpected response from the server (HTTP {status})',
   'error.client.invalid_json': 'Invalid JSON response from the server (HTTP {status})',
+  'error.client.timeout': 'The server took too long to answer. Check the connection and retry.',
 
   // Field labels and per-issue slugs of a `validation.invalid` response.
   'error.field.email': 'Email',
@@ -236,7 +255,6 @@ export const en = {
   'error.issue.dest_email.invalid': 'invalid destination email',
   'error.issue.action.type': 'the action must be "forward" or "drop"',
   'error.issue.action.forward_single': 'a forward action takes exactly one destination address',
-  'error.issue.rule_name.empty': 'the name cannot be empty',
   'error.issue.rule_name.too_long': 'the name is too long',
   'error.issue.rule_update.empty': 'nothing to update',
   'error.issue.username.required': 'username required',
