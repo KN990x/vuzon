@@ -51,6 +51,10 @@ function listenWhenReady(app, port) {
     const server = app.listen(port);
     const onError = (err) => {
       server.removeListener('listening', onListening);
+      // Release the handle before rejecting. On EADDRINUSE the socket survived the failed
+      // start until the process exited — which, in tests where `exitProcess` is a stub,
+      // meant the event loop stayed alive and the run hung.
+      server.close(() => {});
       reject(err);
     };
     const onListening = () => {
@@ -87,10 +91,26 @@ export function registerGracefulShutdown(server, {
     shuttingDown = true;
     console.log(`Received ${signal}: shutting the server down…`);
 
+    // The first exit wins. In production `exitProcess` is `process.exit`, so a second call
+    // could never run — but the force-timer path deliberately calls closeAllConnections(),
+    // which makes the pending `server.close()` complete and fire its callback right after.
+    // With any non-terminating exitProcess (the tests, or a future refactor) that produced
+    // two exits with different codes from one shutdown.
+    let exited = false;
+    const exitOnce = (code) => {
+      if (exited) {
+        return;
+      }
+      exited = true;
+      exitProcess(code);
+    };
+
     // If a client holds the connection open, do not wait indefinitely.
     const forceTimer = setTimeout(() => {
       console.error('Graceful shutdown timed out; exiting anyway.');
-      exitProcess(1);
+      // Cut whatever is still attached so the exit is not itself blocked by a socket.
+      server.closeAllConnections?.();
+      exitOnce(1);
     }, graceMs);
     // Does not keep the event loop alive if the shutdown finishes first.
     forceTimer.unref?.();
@@ -99,11 +119,17 @@ export function registerGracefulShutdown(server, {
       clearTimeout(forceTimer);
       if (err) {
         console.error('Error while closing the server:', err.message);
-        exitProcess(1);
+        exitOnce(1);
         return;
       }
-      exitProcess(0);
+      exitOnce(0);
     });
+
+    // No `closeIdleConnections()` here on purpose. Since Node 19 `server.close()` already
+    // drops idle keep-alive sockets by itself — measured at ~1ms on the Node 24 this
+    // project requires — so calling it would be a no-op dressed up as a fix. What
+    // `close()` genuinely waits for is IN-FLIGHT requests, and waiting for those is the
+    // entire point of a graceful shutdown; the force-timer above is what bounds it.
   };
 
   const handlers = signals.map((signal) => {

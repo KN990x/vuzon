@@ -14,6 +14,10 @@
     "noEmit": true,
 
     /* Linting */
+    // tsconfig.app.json sets this and tsconfig.test.json inherits it; this project was the
+    // one gap, so a build-config bug (an implicit-any plugin option, an unchecked
+    // process.env read) type-checked clean and shipped.
+    "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,

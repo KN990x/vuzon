@@ -5,9 +5,18 @@ export { cloudflareResourceIdSchema };
 
 // Every issue `message` is a stable slug, not prose: the panel is bilingual and the
 // wording the user reads is picked by the browser (platform/http/format-zod-error.js).
+//
+// That includes the ones zod raises on its own. A schema declared as a bare `z.string()`
+// answers a missing or mistyped field with zod's built-in English ("Required", "Expected
+// string, received number"), which no catalogue can translate — a Spanish user saw zod
+// internals. `required_error` / `invalid_type_error` put those two back under the slug
+// contract; `validation.test.js` asserts every emitted code still looks like a slug.
 
 export const addressSchema = z.object({
-  email: z.string().trim().email('email.invalid'),
+  email: z.string({
+    required_error: 'email.invalid',
+    invalid_type_error: 'email.invalid',
+  }).trim().email('email.invalid'),
 });
 
 /**
@@ -26,7 +35,13 @@ export const addressSchema = z.object({
 export const panelActionSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('forward'),
-    value: z.array(z.string().trim().email('dest_email.invalid'))
+    value: z.array(z.string({
+      required_error: 'dest_email.invalid',
+      invalid_type_error: 'dest_email.invalid',
+    }).trim().email('dest_email.invalid'), {
+      required_error: 'action.forward_single',
+      invalid_type_error: 'action.forward_single',
+    })
       .length(1, 'action.forward_single'),
   }),
   z.object({
@@ -42,7 +57,10 @@ export const panelActionSchema = z.discriminatedUnion('type', [
  * made the label add-only — clearing the field produced no patch and the editor looked
  * broken. `undefined` still means "preserve whatever is there"; `''` means "remove it".
  */
-export const ruleNameSchema = z.string()
+export const ruleNameSchema = z.string({
+  required_error: 'rule_name.invalid',
+  invalid_type_error: 'rule_name.invalid',
+})
   .trim()
   .max(255, 'rule_name.too_long');
 
@@ -50,7 +68,10 @@ export const ruleSchema = z.object({
   // Must start and end alphanumeric, and `.` / `_` / `-` may not be consecutive:
   // ".", "..", "-alias", "alias.", "a..b" produce invalid addresses that Cloudflare
   // rejects with a generic, confusing error.
-  localPart: z.string()
+  localPart: z.string({
+    required_error: 'alias.empty',
+    invalid_type_error: 'alias.charset',
+  })
     .min(1, 'alias.empty')
     .max(64, 'alias.too_long')
     .regex(/^[a-z0-9]+(?:[._-][a-z0-9]+)*$/, 'alias.charset'),
@@ -65,7 +86,7 @@ export const ruleSchema = z.object({
 export const ruleUpdateSchema = z.object({
   action: panelActionSchema.optional(),
   name: ruleNameSchema.optional(),
-  enabled: z.boolean().optional(),
+  enabled: z.boolean({ invalid_type_error: 'enabled.invalid' }).optional(),
 }).refine(
   (body) => body.action !== undefined || body.name !== undefined || body.enabled !== undefined,
   'rule_update.empty',
@@ -78,7 +99,7 @@ export const ruleUpdateSchema = z.object({
  */
 export const catchAllUpdateSchema = z.object({
   action: panelActionSchema.optional(),
-  enabled: z.boolean().optional(),
+  enabled: z.boolean({ invalid_type_error: 'enabled.invalid' }).optional(),
 }).refine(
   (body) => body.action !== undefined || body.enabled !== undefined,
   'rule_update.empty',

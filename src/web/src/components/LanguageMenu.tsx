@@ -21,7 +21,13 @@ const LOCALE_LABEL_KEY = {
  */
 export function LanguageMenu() {
   const { locale, setLocale, t } = useI18n();
-  const { open, toggle, close, containerRef, triggerRef, menuRef } = useMenu();
+  const {
+    open, toggle, onTriggerKeyDown, close, containerRef, triggerRef, menuRef,
+  } = useMenu({
+    // Open onto the language that is actually selected. In a `menuitemradio` group,
+    // landing on the first item announces "English, not checked" when Spanish is active.
+    initialFocus: () => LOCALES.indexOf(locale),
+  });
   const menuId = useId();
 
   function choose(next: Locale) {
@@ -38,6 +44,7 @@ export function LanguageMenu() {
         type="button"
         className={iconButtonClass}
         onClick={toggle}
+        onKeyDown={onTriggerKeyDown}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}

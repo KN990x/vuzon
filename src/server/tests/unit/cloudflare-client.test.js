@@ -290,3 +290,62 @@ test('fetchAllCloudflare: stops when the item cap is exceeded', async () => {
     },
   );
 });
+
+test('a 204 No Content on DELETE is a success, not a 502', async () => {
+  // parseCloudflareResponse only parses JSON when the content-type announces it, so an
+  // empty 2xx used to fall through to buildResponseError and come back as a 502
+  // `invalid_response` — the panel reporting failure for a DELETE that had already gone
+  // through, leaving the row on screen and the user retrying into a 404.
+  stubFetch([textResponse('', { status: 204, contentType: null })]);
+  const client = createCloudflareClient({ env: ENV });
+
+  const result = await client.fetchCloudflare('/accounts/a/email/routing/addresses/x', 'DELETE');
+  assert.equal(result, null, 'no body means no result, and that is not an error');
+});
+
+test('an empty 200 with no JSON content-type is a success too', async () => {
+  stubFetch([textResponse('', { status: 200, contentType: 'text/plain' })]);
+  const client = createCloudflareClient({ env: ENV });
+
+  assert.equal(await client.fetchCloudflare('/zones/z/email/routing/rules/r', 'DELETE'), null);
+});
+
+test('a non-empty non-JSON 200 is still an invalid response', async () => {
+  // The 204 short-circuit must not swallow "200 OK <html>Service Unavailable</html>" from
+  // a captive portal or a proxy: that is genuinely not a Cloudflare answer.
+  stubFetch([textResponse('<html>nope</html>', { status: 200 })]);
+  const client = createCloudflareClient({ env: ENV });
+
+  await assert.rejects(
+    () => client.fetchCloudflare('/zones/z/email/routing/rules'),
+    (err) => err instanceof CloudflareApiError && err.code === 'invalid_response',
+  );
+});
+
+test('Retry-After is honoured over the linear backoff, and capped', async () => {
+  const retryAfter = (seconds) => ({
+    ok: false,
+    status: 429,
+    headers: {
+      get: (name) => {
+        const key = name.toLowerCase();
+        if (key === 'content-type') return 'application/json';
+        if (key === 'retry-after') return String(seconds);
+        return null;
+      },
+    },
+    json: async () => ({ success: false, errors: [{ code: 1, message: 'slow down' }] }),
+    text: async () => '{}',
+  });
+
+  // 1s > the 200ms first backoff, so the header wins; it is also below the 5s cap, so the
+  // whole retry chain still finishes well inside the request budget.
+  const started = Date.now();
+  stubFetch([retryAfter(1), jsonResponse({ success: true, result: [] })]);
+  const client = createCloudflareClient({ env: ENV });
+
+  await client.fetchCloudflare('/zones/z/email/routing/rules');
+  const elapsed = Date.now() - started;
+  assert.ok(elapsed >= 900, `expected to wait for Retry-After, waited ${elapsed}ms`);
+  assert.ok(elapsed < 5_000, `expected the cap to bound the wait, waited ${elapsed}ms`);
+});

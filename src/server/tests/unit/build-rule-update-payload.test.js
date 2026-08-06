@@ -140,3 +140,52 @@ test('buildRuleUpdatePayload: an omitted override preserves the Worker action ve
   assert.deepEqual(payload.actions, actions);
   assert.equal(payload.enabled, false);
 });
+
+test('buildRuleUpdatePayload: unknown and Worker-owned fields survive the round trip', () => {
+  // The Worker-preservation invariant is not only about `actions`. Cloudflare returns
+  // `owner_worker_tag` on a Worker rule, and `cloudflareRuleSchema` is `.passthrough()`
+  // precisely so fields this version has never heard of travel back untouched. Dropping
+  // them on a plain enable/disable would silently rewrite a rule the panel did not create.
+  const rule = {
+    name: 'w@example.com',
+    matchers: [{ type: 'literal', field: 'to', value: 'w@example.com' }],
+    actions: [{ type: 'worker', value: ['email-worker'] }],
+    owner_worker_tag: 'tag-abc123',
+    priority: 42,
+    some_future_cloudflare_field: { nested: true },
+  };
+
+  const payload = buildRuleUpdatePayload(rule, false);
+
+  assert.equal(payload.owner_worker_tag, 'tag-abc123');
+  assert.equal(payload.priority, 42);
+  assert.deepEqual(payload.some_future_cloudflare_field, { nested: true });
+  assert.deepEqual(payload.actions, rule.actions);
+});
+
+test('buildRuleUpdatePayload: read-only fields Cloudflare rejects on PUT are stripped', () => {
+  const payload = buildRuleUpdatePayload(
+    {
+      id: 'rule1',
+      tag: 'tag1',
+      created: '2024-01-01',
+      modified: '2024-01-02',
+      created_on: '2024-01-01',
+      modified_on: '2024-01-02',
+      zone: 'z',
+      zone_id: 'zid',
+      zone_name: 'example.com',
+      name: 'a@example.com',
+      actions: [{ type: 'drop' }],
+    },
+    true,
+  );
+
+  for (const key of [
+    'id', 'tag', 'created', 'modified', 'created_on', 'modified_on',
+    'zone', 'zone_id', 'zone_name',
+  ]) {
+    assert.equal(Object.hasOwn(payload, key), false, `${key} must not be sent on PUT`);
+  }
+  assert.equal(payload.name, 'a@example.com');
+});

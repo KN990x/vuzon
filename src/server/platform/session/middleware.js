@@ -2,7 +2,14 @@ import cookieSession from 'cookie-session';
 
 export const SESSION_COOKIE_NAME = 'vuzon_session';
 
-const SESSION_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 7;
+/**
+ * Cookie lifetime AND the server-side ceiling on a session's age.
+ *
+ * Exported because the cookie attribute alone is advisory: it asks the browser to forget
+ * the cookie, and nothing stops a copy from being replayed afterwards. `session-epoch.js`
+ * enforces the same value against the session's `issuedAt`, so both must come from here.
+ */
+export const SESSION_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 7;
 
 export function getSessionCookieClearOptions({ cookieSecure = false } = {}) {
   return {

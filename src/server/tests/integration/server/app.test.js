@@ -1300,6 +1300,68 @@ test('HTTP integration: a duplicate alias is diagnosed after the Cloudflare fail
   }
 });
 
+test('HTTP integration: an upstream 429 on create is NOT diagnosed (no extra Cloudflare calls)', async () => {
+  // 429 and 408 say nothing about the payload, so there is nothing to diagnose. Running
+  // the diagnostics anyway fired two more GETs, each of which the client retries twice on
+  // 429 — up to six extra requests and roughly a second of backoff spent while already
+  // rate-limited, only to fall through to the same generic message.
+  const base = createMockCloudflareClient();
+  // The pre-flight duplicate check legitimately lists rules BEFORE the POST, so only the
+  // calls made after the failure tell us whether the diagnostics ran.
+  let postAttempted = false;
+  let listCallsAfterFailure = 0;
+  const cloudflareClient = {
+    ...base,
+    async fetchCloudflare(requestPath, method = 'GET', body = null) {
+      if (requestPath.includes('/email/routing/rules') && method === 'POST') {
+        postAttempted = true;
+        throw new CloudflareApiError('slow down', { status: 429, code: 'x', retryable: true });
+      }
+      return base.fetchCloudflare(requestPath, method, body);
+    },
+    async fetchAllCloudflare(requestPath) {
+      if (postAttempted) {
+        listCallsAfterFailure += 1;
+      }
+      return base.fetchAllCloudflare(requestPath);
+    },
+  };
+
+  const { app } = createApp({
+    env: { ...DIAGNOSTICS_ENV },
+    cloudflareClient,
+    sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
+  });
+  const { server, baseUrl } = await listen(app);
+
+  try {
+    resetSessionEpochForTests();
+    const sessionCookie = await loginAndGetCookie(baseUrl);
+
+    const res = await fetch(`${baseUrl}/api/rules`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: sessionCookie },
+      body: JSON.stringify({ localPart: 'throttled', action: { type: 'drop' } }),
+    });
+
+    assert.equal(res.status, 429);
+    const data = await readJson(res);
+    assert.equal(data.code, ERROR_CODES.CLOUDFLARE_GENERIC);
+    assert.ok(!data.error.includes('slow down'), 'no upstream text reaches the client');
+    assert.ok(postAttempted, 'the POST must actually have been attempted');
+    assert.equal(
+      listCallsAfterFailure, 0,
+      'the diagnostic listing must not run while rate-limited',
+    );
+  } finally {
+    resetSessionEpochForTests();
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+  }
+});
+
 test('HTTP integration: a Cloudflare failure with no identifiable cause stays generic', async () => {
   const base = createMockCloudflareClient();
   const cloudflareClient = {
@@ -1468,7 +1530,7 @@ function createSpecialRulesClient(puts) {
   };
 }
 
-test('HTTP integration: a rule with an unknown action type cannot be edited', async () => {
+test('HTTP integration: a rule with an unknown action type cannot be edited, but can be deleted', async () => {
   const puts = [];
   const { app } = createApp({
     env: { ...DIAGNOSTICS_ENV },
@@ -1503,7 +1565,8 @@ test('HTTP integration: a rule with an unknown action type cannot be edited', as
 
     assert.deepEqual(puts, [], 'no undescribable rule may be overwritten in Cloudflare');
 
-    // enable/disable and DELETE share the same guard as PUT.
+    // enable/disable share the same guard as PUT: both go through buildRuleUpdatePayload,
+    // which sends the whole object back.
     for (const pathSuffix of ['/enable', '/disable']) {
       const res = await fetch(`${baseUrl}/api/rules/alien_rule${pathSuffix}`, {
         method: 'POST',
@@ -1512,15 +1575,21 @@ test('HTTP integration: a rule with an unknown action type cannot be edited', as
       assert.equal(res.status, 400, pathSuffix);
       assert.equal((await readJson(res)).code, NOT_EDITABLE_RULE_CODE);
     }
+    assert.deepEqual(puts, [], 'enable/disable must not rewrite an undescribable rule either');
+
+    // DELETE, on the other hand, IS allowed. The guard above exists because a PUT would
+    // rewrite an action the panel could not read; deleting reconstructs nothing, so the
+    // reason does not carry over. Refusing here too left a rule with no actions at all
+    // removable only from Cloudflare's own dashboard — the panel would show it forever
+    // and offer no way out. The SPA warns that the action is unreadable before asking.
     {
       const res = await fetch(`${baseUrl}/api/rules/alien_rule`, {
         method: 'DELETE',
         headers,
       });
-      assert.equal(res.status, 400);
-      assert.equal((await readJson(res)).code, NOT_EDITABLE_RULE_CODE);
+      assert.equal(res.status, 200);
+      assert.deepEqual(await readJson(res), { ok: true });
     }
-    assert.deepEqual(puts, [], 'enable/disable must not rewrite an undescribable rule either');
   } finally {
     resetSessionEpochForTests();
     await new Promise((resolve) => {
@@ -2010,6 +2079,162 @@ test('HTTP integration: an uppercase /API path does not bypass the /api middlewa
       assert.notEqual(res.status, 200, 'a cross-origin POST to /API/rules was accepted');
     }
   } finally {
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+  }
+});
+
+test('HTTP integration: POST /api/addresses names a duplicate instead of the generic error', async () => {
+  // Cloudflare rejects an address it already holds with a plain 4xx, which reached the user
+  // as `cloudflare.generic` ("Could not complete the operation…") — true and useless, when
+  // the actual answer is "it is already in your list". Diagnosed on the error branch only.
+  const base = createMockCloudflareClient();
+  let listCallsAfterFailure = 0;
+  let postAttempted = false;
+  const cloudflareClient = {
+    ...base,
+    async fetchCloudflare(requestPath, method = 'GET', body = null) {
+      if (requestPath.includes('/email/routing/addresses') && method === 'POST') {
+        postAttempted = true;
+        throw new CloudflareApiError('mensaje_upstream_secreto', { status: 400, code: 'x' });
+      }
+      return base.fetchCloudflare(requestPath, method, body);
+    },
+    async fetchAllCloudflare(requestPath) {
+      if (postAttempted && requestPath.includes('/email/routing/addresses')) {
+        listCallsAfterFailure += 1;
+        return [{ id: 'addr1', email: 'dest@example.com', verified: '2024-01-01T00:00:00Z' }];
+      }
+      return base.fetchAllCloudflare(requestPath);
+    },
+  };
+
+  const { app } = createApp({
+    env: { ...DIAGNOSTICS_ENV },
+    cloudflareClient,
+    sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
+  });
+  const { server, baseUrl } = await listen(app);
+
+  try {
+    resetSessionEpochForTests();
+    const sessionCookie = await loginAndGetCookie(baseUrl);
+
+    const res = await fetch(`${baseUrl}/api/addresses`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: sessionCookie },
+      body: JSON.stringify({ email: 'dest@example.com' }),
+    });
+
+    assert.equal(res.status, 400);
+    const data = await readJson(res);
+    assert.equal(data.code, ERROR_CODES.DEST_DUPLICATE);
+    assert.deepEqual(data.params, { email: 'dest@example.com' });
+    // The invariant still holds: no Cloudflare text reaches the client.
+    assert.ok(!data.error.includes('mensaje_upstream'));
+    assert.equal(listCallsAfterFailure, 1, 'the address list is checked exactly once');
+  } finally {
+    resetSessionEpochForTests();
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+  }
+});
+
+test('HTTP integration: POST /api/addresses stays generic when the address is genuinely new', async () => {
+  // Same failure, but the address is NOT in the list, so there is no cause to name and the
+  // original Cloudflare error must survive untouched rather than being mislabelled.
+  const base = createMockCloudflareClient();
+  const cloudflareClient = {
+    ...base,
+    async fetchCloudflare(requestPath, method = 'GET', body = null) {
+      if (requestPath.includes('/email/routing/addresses') && method === 'POST') {
+        throw new CloudflareApiError('mensaje_upstream_secreto', { status: 400, code: 'x' });
+      }
+      return base.fetchCloudflare(requestPath, method, body);
+    },
+    async fetchAllCloudflare(requestPath) {
+      if (requestPath.includes('/email/routing/addresses')) {
+        return [{ id: 'addr1', email: 'someone-else@example.com', verified: null }];
+      }
+      return base.fetchAllCloudflare(requestPath);
+    },
+  };
+
+  const { app } = createApp({
+    env: { ...DIAGNOSTICS_ENV },
+    cloudflareClient,
+    sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
+  });
+  const { server, baseUrl } = await listen(app);
+
+  try {
+    resetSessionEpochForTests();
+    const sessionCookie = await loginAndGetCookie(baseUrl);
+
+    const res = await fetch(`${baseUrl}/api/addresses`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: sessionCookie },
+      body: JSON.stringify({ email: 'brand-new@example.com' }),
+    });
+
+    assert.equal(res.status, 400);
+    const data = await readJson(res);
+    assert.equal(data.code, ERROR_CODES.CLOUDFLARE_GENERIC);
+    assert.ok(!data.error.includes('mensaje_upstream'));
+  } finally {
+    resetSessionEpochForTests();
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+  }
+});
+
+test('HTTP integration: POST /api/addresses rejects a malformed email before calling Cloudflare', async () => {
+  const base = createMockCloudflareClient();
+  let posts = 0;
+  const cloudflareClient = {
+    ...base,
+    async fetchCloudflare(requestPath, method = 'GET', body = null) {
+      if (requestPath.includes('/email/routing/addresses') && method === 'POST') {
+        posts += 1;
+      }
+      return base.fetchCloudflare(requestPath, method, body);
+    },
+  };
+
+  const { app } = createApp({
+    env: { ...DIAGNOSTICS_ENV },
+    cloudflareClient,
+    sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
+  });
+  const { server, baseUrl } = await listen(app);
+
+  try {
+    resetSessionEpochForTests();
+    const sessionCookie = await loginAndGetCookie(baseUrl);
+
+    for (const body of [{ email: 'not-an-email' }, { email: '' }, {}, { email: 42 }]) {
+      const res = await fetch(`${baseUrl}/api/addresses`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Cookie: sessionCookie },
+        body: JSON.stringify(body),
+      });
+      assert.equal(res.status, 400, JSON.stringify(body));
+      const data = await readJson(res);
+      assert.equal(data.code, ERROR_CODES.VALIDATION_INVALID);
+      // Slugs, never zod's own English prose — the SPA translates by code.
+      for (const issue of data.params.issues) {
+        assert.match(issue.code, /^[a-z_]+\.[a-z_]+$/, JSON.stringify(issue));
+      }
+    }
+    assert.equal(posts, 0, 'a malformed address must never reach Cloudflare');
+  } finally {
+    resetSessionEpochForTests();
     await new Promise((resolve) => {
       server.close(resolve);
     });

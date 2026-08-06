@@ -18,6 +18,11 @@
 
     /* Linting */
     "strict": true,
+    // Indexing an array yields `T | undefined`. Without it `summary.destinations[0]`
+    // and the RuleEditor's first-destination lookup typed as `string` while genuinely
+    // being able to be undefined — the compiler was agreeing with code that could not
+    // be right.
+    "noUncheckedIndexedAccess": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,

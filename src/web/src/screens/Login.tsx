@@ -3,10 +3,22 @@ import type { FormEvent } from 'react';
 import { apiRequest } from '../lib/api';
 import { buildLoginErrorMessage } from '../lib/login-error';
 import { useI18n } from '../i18n/context';
+import type { MessageKey } from '../i18n/en';
 import { authFieldClass, formErrorClass, pillButtonClass, VuzonMark } from '../components/primitives';
 import { LanguageMenu } from '../components/LanguageMenu';
 
-export function Login({ onSuccess }: { onSuccess: () => void }) {
+interface LoginProps {
+  onSuccess: () => void;
+  /**
+   * One-shot explanation for why the user is looking at this screen (today: they lost the
+   * setup race). Held as a key, not as text, so it follows the language switcher like
+   * every other message here.
+   */
+  notice?: MessageKey | null;
+  onNoticeDismiss?: () => void;
+}
+
+export function Login({ onSuccess, notice = null, onNoticeDismiss }: LoginProps) {
   const i18n = useI18n();
   const { t } = i18n;
   const [username, setUsername] = useState('');
@@ -53,7 +65,30 @@ export function Login({ onSuccess }: { onSuccess: () => void }) {
             <LanguageMenu />
           </span>
         </div>
-        <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+
+        {/* The screen had no heading at all, unlike the setup wizard. A page with zero
+            headings gives a screen-reader user nothing to navigate by and no announcement
+            of what they landed on. */}
+        <h1 className="m-0 mb-6 text-[15px] font-semibold tracking-[-0.02em]">
+          {t('login.title')}
+        </h1>
+
+        {notice && (
+          <p
+            role="status"
+            className="m-0 mb-5 rounded-[10px] bg-cream/[0.06] px-3.5 py-2.5 text-[12.5px] leading-relaxed text-cream/80"
+          >
+            {t(notice)}
+          </p>
+        )}
+
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={handleSubmit}
+          // The notice explains a past event; once the user starts typing it is no longer
+          // what they are doing, and it must not outlive this visit to the screen.
+          onInput={onNoticeDismiss}
+        >
           <label className="flex flex-col gap-1.5">
             <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-cream/65">
               {t('login.username')}

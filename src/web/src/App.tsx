@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiRequest, UnauthorizedError } from './lib/api';
 import { useI18n } from './i18n/context';
+import type { MessageKey } from './i18n/en';
 import { pillButtonClass } from './components/primitives';
 import { LanguageMenu } from './components/LanguageMenu';
 import { Login } from './screens/Login';
@@ -21,6 +22,10 @@ type Session = 'checking' | 'setup' | 'anon' | 'authed' | 'error';
 export default function App() {
   const { t } = useI18n();
   const [session, setSession] = useState<Session>('checking');
+  // One-shot message handed to the login screen. Losing the setup race used to drop the
+  // user straight onto an unexplained login form: the wizard 409s, App re-checks, the
+  // re-check answers a plain 401, and the reason they were moved never reached the screen.
+  const [loginNotice, setLoginNotice] = useState<MessageKey | null>(null);
 
   useEffect(() => {
     if (session !== 'checking') {
@@ -49,6 +54,9 @@ export default function App() {
   if (session === 'checking') {
     return (
       <main className="flex min-h-screen items-center justify-center bg-ink font-mono text-cream/70">
+        {/* `sr-only` heading: the screen is a single status line, but a page with no
+            heading at all leaves a screen-reader user with nothing to orient by. */}
+        <h1 className="sr-only">{t('app.loading')}</h1>
         <p role="status" className="m-0 text-[13px] uppercase tracking-[0.22em]">
           {t('app.loading')}
         </p>
@@ -64,6 +72,7 @@ export default function App() {
         <div className="absolute right-5 top-5">
           <LanguageMenu />
         </div>
+        <h1 className="sr-only">{t('app.sessionCheckFailed')}</h1>
         <p role="alert" className="m-0 text-center font-mono text-[13px] text-cream/70">
           {t('app.sessionCheckFailed')}
         </p>
@@ -78,13 +87,22 @@ export default function App() {
     return (
       <Setup
         onSuccess={() => setSession('authed')}
-        onAlreadyConfigured={() => setSession('checking')}
+        onAlreadyConfigured={() => {
+          setLoginNotice('error.setup.already_done');
+          setSession('checking');
+        }}
       />
     );
   }
 
   if (session === 'anon') {
-    return <Login onSuccess={() => setSession('authed')} />;
+    return (
+      <Login
+        onSuccess={() => setSession('authed')}
+        notice={loginNotice}
+        onNoticeDismiss={() => setLoginNotice(null)}
+      />
+    );
   }
 
   return <Dashboard onUnauthorized={() => setSession('anon')} />;

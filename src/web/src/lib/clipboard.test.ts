@@ -1,17 +1,55 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { copyTextToClipboard } from './clipboard';
 
+interface StubTextArea {
+  value: string;
+  style: { cssText: string };
+  attributes: Record<string, string>;
+  setAttribute(name: string, value: string): void;
+  select(): void;
+}
+
 function stubDocument(execCommandResult: boolean) {
+  const created: StubTextArea[] = [];
+  const appended: StubTextArea[] = [];
+  const removed: StubTextArea[] = [];
+
   vi.stubGlobal('document', {
     body: {
-      appendChild() {},
-      removeChild() {},
+      appendChild(el: StubTextArea) {
+        appended.push(el);
+      },
+      removeChild(el: StubTextArea) {
+        removed.push(el);
+      },
     },
     createElement() {
-      return { value: '', select() {} };
+      const el: StubTextArea = {
+        value: '',
+        style: { cssText: '' },
+        attributes: {},
+        setAttribute(name, value) {
+          this.attributes[name] = value;
+        },
+        select() {},
+      };
+      created.push(el);
+      return el;
     },
     execCommand() {
       return execCommandResult;
+    },
+  });
+
+  return { created, appended, removed };
+}
+
+function stubFailingClipboard() {
+  vi.stubGlobal('navigator', {
+    clipboard: {
+      writeText: async () => {
+        throw new Error('denied');
+      },
     },
   });
 }
@@ -26,65 +64,46 @@ test('Clipboard API available: copies and does not fail', async () => {
     clipboard: { writeText: async () => {} },
   });
 
-  const result = await copyTextToClipboard('alias@example.com', 'Copy this address');
-  expect(result).toEqual({ copied: true, failed: false });
+  expect(await copyTextToClipboard('alias@example.com')).toEqual({ copied: true, failed: false });
 });
 
 test('Clipboard API fails and execCommand true: copies', async () => {
-  vi.spyOn(console, 'error').mockImplementation(() => {});
-  vi.stubGlobal('navigator', {
-    clipboard: {
-      writeText: async () => {
-        throw new Error('denied');
-      },
-    },
-  });
-  const promptSpy = vi.fn();
-  vi.stubGlobal('prompt', promptSpy);
+  stubFailingClipboard();
   stubDocument(true);
 
-  const result = await copyTextToClipboard('alias@example.com', 'Copy this address');
-  expect(result).toEqual({ copied: true, failed: false });
+  expect(await copyTextToClipboard('alias@example.com')).toEqual({ copied: true, failed: false });
+});
+
+test('both paths fail: reports failure so the caller can show the translated toast', async () => {
+  stubFailingClipboard();
+  stubDocument(false);
+
+  // No prompt() tier any more: its buttons came from the browser's locale, it blocked the
+  // main thread, and it was a silent no-op in a sandboxed iframe — exactly where a
+  // fallback was supposed to help.
+  const promptSpy = vi.fn();
+  vi.stubGlobal('prompt', promptSpy);
+
+  expect(await copyTextToClipboard('manual@example.com')).toEqual({ copied: false, failed: true });
   expect(promptSpy).not.toHaveBeenCalled();
 });
 
-test('Clipboard API and execCommand both fail: falls back to prompt and flags failure', async () => {
-  vi.spyOn(console, 'error').mockImplementation(() => {});
-  vi.stubGlobal('navigator', {
-    clipboard: {
-      writeText: async () => {
-        throw new Error('denied');
-      },
-    },
-  });
-  const prompts: Array<{ msg: string; value: string }> = [];
-  vi.stubGlobal('prompt', (msg: string, value: string) => {
-    prompts.push({ msg, value });
-    return value;
-  });
-  stubDocument(false);
+test('the fallback textarea is off-screen, read-only, and always removed', async () => {
+  stubFailingClipboard();
+  const { created, appended, removed } = stubDocument(false);
 
-  const result = await copyTextToClipboard('manual@example.com', 'Copy this address');
-  expect(result).toEqual({ copied: false, failed: true });
-  expect(prompts).toHaveLength(1);
-  expect(prompts[0].msg).toBe('Copy this address');
-  expect(prompts[0].value).toBe('manual@example.com');
-});
+  await copyTextToClipboard('manual@example.com');
 
-test('prompt blocked (iframe/sandbox): still reports failure without throwing', async () => {
-  vi.spyOn(console, 'error').mockImplementation(() => {});
-  vi.stubGlobal('navigator', {
-    clipboard: {
-      writeText: async () => {
-        throw new Error('denied');
-      },
-    },
-  });
-  vi.stubGlobal('prompt', () => {
-    throw new Error('blocked');
-  });
-  stubDocument(false);
-
-  const result = await copyTextToClipboard('x@y.com', 'Copy this address');
-  expect(result).toEqual({ copied: false, failed: true });
+  expect(created).toHaveLength(1);
+  const el = created[0];
+  if (!el) throw new Error('unreachable: the length assertion above guarantees one element');
+  expect(el.value).toBe('manual@example.com');
+  // Rendering it at default size for a frame caused a visible flash, and on iOS select()
+  // on a focusable editable field scrolls and zooms the page.
+  expect(el.attributes.readonly).toBe('');
+  expect(el.style.cssText).toContain('position:fixed');
+  expect(el.style.cssText).toContain('opacity:0');
+  // Appended and removed exactly once, even on the failing path.
+  expect(appended).toEqual([el]);
+  expect(removed).toEqual([el]);
 });

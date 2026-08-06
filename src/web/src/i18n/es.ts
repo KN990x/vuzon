@@ -8,6 +8,7 @@ export const es = {
   'app.loading': 'Cargando…',
   'app.sessionCheckFailed': 'No se pudo comprobar la sesión. Revisa la conexión con el servidor.',
   'app.retry': 'Reintentar',
+  'app.skipToContent': 'Saltar al contenido',
 
   'header.refresh': 'Actualizar',
   'header.account': 'Cuenta',
@@ -19,6 +20,7 @@ export const es = {
   'language.en': 'English',
   'language.es': 'Español',
 
+  'login.title': 'Accede al panel',
   'login.username': 'Usuario',
   'login.password': 'Contraseña',
   'login.submit': 'Entrar',
@@ -33,7 +35,7 @@ export const es = {
   'setup.title': 'Configura tu panel',
   'setup.intro':
     'Elige el usuario y la contraseña con los que entrarás. Se guardan en tu servidor, '
-    + 'cifrados con un hash, no en ningún fichero de configuración.',
+    + 'protegidas con un hash (no se guardan en texto plano), no en ningún fichero de configuración.',
   'setup.username': 'Usuario',
   'setup.password': 'Contraseña',
   'setup.passwordHint': 'Al menos 12 caracteres.',
@@ -69,16 +71,17 @@ export const es = {
   'confirm.dismiss': 'Entendido',
   'confirm.delete': 'Eliminar',
   'confirm.deleteAlias.title': 'Eliminar alias',
-  'confirm.deleteDest.title': 'Eliminar destinatario',
-  'confirm.deleteDestInUse.title': 'Este destinatario está en uso',
+  'confirm.deleteDest.title': 'Eliminar destino',
+  'confirm.deleteDestInUse.title': 'Este destino está en uso',
   'confirm.catchAllDisable.title': 'Pausar el catch-all',
   'confirm.replaceAction.title': 'Sustituir la acción actual',
 
   'dashboard.eyebrow': 'Panel de enrutamiento',
-  'dashboard.activeAliases': 'alias activos',
+  'dashboard.activeAliases.one': 'alias activo',
+  'dashboard.activeAliases.other': 'alias activos',
   'dashboard.catchAll': 'catch-all',
   'dashboard.resource.rules': 'reglas',
-  'dashboard.resource.addresses': 'destinatarios',
+  'dashboard.resource.addresses': 'destinos',
   'dashboard.resource.catchAll': 'catch-all',
   'dashboard.status.partialLoad': 'Carga parcial: {details}',
   'dashboard.status.profileError': 'perfil: {message}',
@@ -89,14 +92,17 @@ export const es = {
   'dashboard.status.destUpdated': 'Destino actualizado',
   'dashboard.status.catchAllUpdated': 'Catch-all actualizado',
   'dashboard.status.destAdded': 'Añadido. Revisa tu correo para verificar.',
-  'dashboard.status.destDeleted': 'Destinatario eliminado',
+  'dashboard.status.destDeleted': 'Destino eliminado',
   'dashboard.status.copyFailed': 'No se pudo copiar (¿Usas HTTPS?)',
+  'dashboard.status.noChanges': 'No hay cambios que guardar',
   'dashboard.confirm.deleteAlias': '¿Eliminar alias permanentemente?',
+  'dashboard.confirm.deleteAliasUnknown':
+    'Esta regla usa una acción que el panel no sabe leer, así que no puede mostrarte qué hace ahora mismo. '
+    + '¿Eliminarla permanentemente de todas formas?',
   'dashboard.confirm.deleteDest':
-    '¿Eliminar destinatario? Si hay reglas usándolo, dejarán de funcionar.',
+    '¿Eliminar destino? Si hay reglas usándolo, dejarán de funcionar.',
   'dashboard.confirm.deleteDestInUse':
-    'Este destinatario lo usan: {aliases}. Quita o cambia esas reglas antes de eliminarlo.',
-  'dashboard.copyPrompt': 'Copia tu alias manualmente:',
+    'Este destino lo usan: {aliases}. Quita o cambia esas reglas antes de eliminarlo.',
 
   'aliases.title': 'Alias',
   'aliases.search.placeholder': 'buscar alias',
@@ -143,7 +149,7 @@ export const es = {
   'rules.editor.save': 'Guardar',
   'rules.editor.cancel': 'Cancelar',
   'rules.editor.noVerifiedDests':
-    'Añade y verifica un destinatario antes de reenviarle correo.',
+    'Añade y verifica un destino antes de reenviarle correo.',
   'rules.editor.workerNotice': 'De esta regla se encarga el Email Worker {name}.',
   'rules.editor.workerNoticeDefault': 'De esta regla se encarga un Email Worker.',
   'rules.editor.fanoutNotice': 'Esta regla reenvía a varias direcciones: {addresses}.',
@@ -155,14 +161,14 @@ export const es = {
     'Esto sustituye la acción actual de la regla, y vuzon no puede recuperarla. ¿Continuar?',
 
   'dests.title': 'Destinos verificados',
-  'dests.verified': 'Verificada',
+  'dests.verified': 'Verificado',
   'dests.pending': 'Pendiente',
-  'dests.delete': 'Eliminar destinatario',
+  'dests.delete': 'Eliminar destino',
   'dests.deleteNamed': 'Eliminar {email}',
   'dests.empty': 'Sin destinos todavía.',
   'dests.loading': 'Cargando destinos…',
   'dests.new.placeholder': 'tu@correo.com',
-  'dests.new.label': 'Nuevo destinatario',
+  'dests.new.label': 'Nuevo destino',
   'dests.new.submit': 'Añadir',
 
   'catchAll.title': 'Catch-all',
@@ -194,7 +200,8 @@ export const es = {
   'error.auth.unauthorized': 'Sesión expirada',
   'error.setup.already_done':
     'Este panel ya está configurado. Entra con las credenciales que elegiste.',
-  'error.rate_limit.login': 'Demasiados intentos. Espera un momento e inténtalo de nuevo.',
+  'error.rate_limit.login': 'Demasiados intentos de acceso. Espera un momento e inténtalo de nuevo.',
+  'error.rate_limit.credential': 'Demasiados intentos. Espera un momento e inténtalo de nuevo.',
   'error.rate_limit.api': 'Demasiadas peticiones. Espera un momento e inténtalo de nuevo.',
   'error.validation.invalid': 'Datos no válidos',
   'error.request.malformed': 'El cuerpo de la petición no es JSON válido.',
@@ -205,14 +212,15 @@ export const es = {
     'Esta regla usa una acción que el panel no entiende, así que no se puede editar aquí.',
   'error.rules.duplicate_alias': 'El alias {alias} ya existe.',
   'error.dest.unknown':
-    '{email} no está en la lista de destinos de la cuenta. Añádelo primero como destinatario.',
+    '{email} no está en la lista de destinos de la cuenta. Añádelo primero como destino.',
   'error.dest.unverified':
     'El destino {email} no está verificado en Cloudflare. '
     + 'Revisa su bandeja de entrada y confirma la dirección antes de crear el alias.',
   'error.dest.in_use':
     'No se puede eliminar {email}: todavía lo usan {aliases}. '
     + 'Quita o cambia esas reglas primero.',
-  'error.dest.not_found': 'Ese destinatario ya no existe. Actualiza el panel.',
+  'error.dest.not_found': 'Ese destino ya no existe. Actualiza el panel.',
+  'error.dest.duplicate': '{email} ya es uno de tus destinos.',
   'error.dest.usage_check_failed':
     'No se pudo comprobar si este destino sigue en uso. Inténtalo de nuevo más tarde.',
   'error.csrf.blocked': 'Petición de otro origen bloqueada.',
@@ -244,6 +252,8 @@ export const es = {
   'error.issue.action.type': 'la acción debe ser «forward» o «drop»',
   'error.issue.action.forward_single': 'un reenvío admite exactamente una dirección de destino',
   'error.issue.rule_name.too_long': 'el nombre es demasiado largo',
+  'error.issue.rule_name.invalid': 'el nombre debe ser texto',
+  'error.issue.enabled.invalid': 'el estado activo debe ser verdadero o falso',
   'error.issue.rule_update.empty': 'nada que actualizar',
   'error.issue.username.required': 'usuario requerido',
   'error.issue.username.invalid': 'usuario inválido',
@@ -256,6 +266,7 @@ export const es = {
   // en sintonía con MIN_PASSWORD_LENGTH.
   'error.issue.password.too_short': 'la contraseña debe tener al menos 12 caracteres',
   'error.issue.password.mismatch': 'las dos contraseñas no coinciden',
+  'error.issue.password.unchanged': 'la contraseña nueva debe ser distinta de la actual',
   'error.issue.password.current_required': 'contraseña actual requerida',
   'error.issue.id.empty': 'identificador inválido',
   'error.issue.id.too_long': 'identificador demasiado largo',

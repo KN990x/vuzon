@@ -14,7 +14,12 @@ import { ERROR_CODES } from '../../platform/http/error-codes.js';
  * @returns {boolean}
  */
 export function isCatchAllRuleId(ruleId) {
-  return ruleId === 'catch_all' || ruleId === 'catch-all';
+  // Case-folded: `cloudflareResourceIdSchema` accepts uppercase, so `PUT /api/rules/CATCH_ALL`
+  // cleared this guard and went upstream as a rule id. Whether that then resolved to the
+  // catch-all depended on Cloudflare's own path casing — not something a security boundary
+  // should be delegating.
+  return typeof ruleId === 'string'
+    && ['catch_all', 'catch-all'].includes(ruleId.toLowerCase());
 }
 
 /**

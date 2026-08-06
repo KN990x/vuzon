@@ -32,6 +32,9 @@ function createSecretFile(filePath) {
   // Unique temp name: a shared `${filePath}.tmp` let one process rmSync the file another
   // had just written, so its renameSync threw ENOENT and aborted startup.
   const tmpPath = `${filePath}.${crypto.randomBytes(6).toString('hex')}.tmp`;
+  // Same reasoning as session-epoch.js and credential-store.js: the data dir is validated
+  // at startup, but all three writers into it should behave alike if it disappears later.
+  fs.mkdirSync(path.dirname(filePath), { recursive: true, mode: 0o700 });
   try {
     fs.writeFileSync(tmpPath, `${secret}\n`, { mode: FILE_MODE });
     fs.chmodSync(tmpPath, FILE_MODE);

@@ -49,6 +49,14 @@ export const passwordChangeBodySchema = z.object({
 }).refine((body) => body.newPassword === body.newPasswordConfirm, {
   message: 'password.mismatch',
   path: ['newPasswordConfirm'],
+}).refine((body) => body.newPassword !== body.currentPassword, {
+  // The username route already short-circuits a rename to the same name. This is the
+  // password equivalent: re-hashing the same secret with a fresh salt and dropping every
+  // other session is real, disruptive work for a change the user did not make. Rejecting
+  // is safe to do in the schema — it runs before the KDF, and the value being compared is
+  // the caller's own submitted input, so it leaks nothing about the stored credential.
+  message: 'password.unchanged',
+  path: ['newPassword'],
 });
 
 /** Username change from the panel: `POST /api/account/username`. */

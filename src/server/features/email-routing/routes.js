@@ -24,6 +24,7 @@ import {
 import {
   countRulesForAlias,
   duplicateAliasError,
+  duplicateDestinationError,
   hasRuleForAlias,
   inspectDestination,
   resolvePanelAction,
@@ -209,9 +210,37 @@ export function registerApiRoutes(app, {
 
   app.post('/api/addresses', ...gate, asyncHandler(async (req, res) => {
     const body = addressSchema.parse(req.body);
-    const apiRes = await fetchCloudflare(`/accounts/${env.CF_ACCOUNT_ID}/email/routing/addresses`, 'POST', {
-      email: body.email,
-    });
+
+    // Diagnostic parity with POST /api/rules. Cloudflare rejects a duplicate destination
+    // with a generic 4xx, which reached the user as `cloudflare.generic` — "Could not
+    // complete the operation with Cloudflare", for something whose actual answer is "it is
+    // already in your list". Checked on the ERROR branch only, so the happy path still
+    // costs exactly one round trip.
+    let apiRes;
+    try {
+      apiRes = await fetchCloudflare(`/accounts/${env.CF_ACCOUNT_ID}/email/routing/addresses`, 'POST', {
+        email: body.email,
+      });
+    } catch (err) {
+      const status = Number(err?.status);
+      const diagnosable = err instanceof CloudflareApiError
+        && Number.isFinite(status)
+        && status >= 400
+        && status < 500
+        // Same exclusions as diagnoseRuleCreationFailure: a bad token or a throttled
+        // account says nothing about the address, and re-listing while rate-limited only
+        // spends more quota.
+        && ![401, 403, 408, 429].includes(status);
+
+      if (diagnosable) {
+        // A failure here must not mask the original error.
+        const addresses = await listAddresses().catch(() => null);
+        if (addresses && inspectDestination(addresses, body.email).exists) {
+          throw duplicateDestinationError(body.email);
+        }
+      }
+      throw err;
+    }
 
     res.json({ ok: true, result: apiRes });
   }));
@@ -221,24 +250,28 @@ export function registerApiRoutes(app, {
   app.delete('/api/addresses/:id', ...gate, asyncHandler(async (req, res) => {
     const addressId = cloudflareResourceIdSchema.parse(req.params.id);
 
+    // All three fetches share one failure meaning — "usage could not be verified" — so they
+    // share one error. Only the catch-all leg used to be mapped: a failure of the rules or
+    // addresses listing propagated as the generic `cloudflare.generic`, which rendered a
+    // different message to the user for the identical condition. The DELETE is skipped
+    // either way; what differed was only what the panel said about why.
+    const usageCheckFailed = () => new PanelRequestError(
+      'Could not verify whether this destination is still in use. Try again later.',
+      { status: 502, code: ERROR_CODES.DEST_USAGE_CHECK_FAILED },
+    );
+
     const [addresses, rules, catchAll] = await Promise.all([
       listAddresses(),
       fetchAllCloudflare(`/zones/${env.CF_ZONE_ID}/email/routing/rules`),
-      fetchCloudflare(`/zones/${env.CF_ZONE_ID}/email/routing/rules/catch_all`).catch(() => {
-        // Never delete blindly when catch-all usage cannot be verified.
-        throw new PanelRequestError(
-          'Could not verify whether this destination is still in use. Try again later.',
-          { status: 502, code: ERROR_CODES.DEST_USAGE_CHECK_FAILED },
-        );
-      }),
-    ]);
+      fetchCloudflare(`/zones/${env.CF_ZONE_ID}/email/routing/rules/catch_all`),
+    ]).catch(() => {
+      // Never delete blindly when usage cannot be verified.
+      throw usageCheckFailed();
+    });
 
     // A list that did not come back as a list means the check could not run at all.
     if (!Array.isArray(addresses)) {
-      throw new PanelRequestError(
-        'Could not verify whether this destination is still in use. Try again later.',
-        { status: 502, code: ERROR_CODES.DEST_USAGE_CHECK_FAILED },
-      );
+      throw usageCheckFailed();
     }
 
     const address = addresses.find(
@@ -258,10 +291,7 @@ export function registerApiRoutes(app, {
     // skipping the usage scan would let aliases keep looking "active" while mail
     // silently stops delivering (same trust model as the catch-all check above).
     if (typeof address.email !== 'string' || address.email.trim() === '') {
-      throw new PanelRequestError(
-        'Could not verify whether this destination is still in use. Try again later.',
-        { status: 502, code: ERROR_CODES.DEST_USAGE_CHECK_FAILED },
-      );
+      throw usageCheckFailed();
     }
 
     const allRules = Array.isArray(rules) ? [...rules] : [];
@@ -301,14 +331,21 @@ export function registerApiRoutes(app, {
    */
   const diagnoseRuleCreationFailure = async ({ err, aliasEmail, action }) => {
     const status = Number(err?.status);
-    const isClientError = err instanceof CloudflareApiError
+    // 401/403 mean the token is wrong, not the request. 408/429 mean Cloudflare is
+    // throttling or timing out: nothing about the payload is diagnosable, and the two
+    // fetches below are GETs that `client.js` retries twice more on 429 — six extra calls
+    // and roughly a second of backoff while already rate-limited, only to fall through to
+    // the generic message anyway. Everything else in the 4xx range is worth inspecting.
+    const isDiagnosableClientError = err instanceof CloudflareApiError
       && Number.isFinite(status)
       && status >= 400
       && status < 500
       && status !== 401
-      && status !== 403;
+      && status !== 403
+      && status !== 408
+      && status !== 429;
 
-    if (!isClientError) {
+    if (!isDiagnosableClientError) {
       throw err;
     }
 
@@ -345,21 +382,42 @@ export function registerApiRoutes(app, {
     throw err;
   };
 
-  // Serialises creates in this process so two concurrent POSTs for the same alias cannot
-  // both pass the pre-flight check. The post-create recount below still covers races that
-  // slip past (another replica, or a matcher Cloudflare already held outside this window).
-  let createRuleTail = Promise.resolve();
-  const withCreateRuleLock = (run) => {
-    const next = createRuleTail.then(run, run);
-    createRuleTail = next.then(() => undefined, () => undefined);
+  /**
+   * Serialises creates so two concurrent POSTs for the same alias cannot both pass the
+   * pre-flight check. The post-create recount below still covers races that slip past
+   * (another replica, or a matcher Cloudflare already held outside this window).
+   *
+   * Keyed BY ALIAS, not global. A single queue meant one slow create blocked every other
+   * one: `client.js` can spend 3 x 10s plus backoff on a stalled GET, and Express sets no
+   * request timeout, so a single hung upstream call held up creates for unrelated aliases
+   * for roughly half a minute each. Two different aliases have no reason to wait for each
+   * other — the check they race on is per-matcher.
+   *
+   * The map entry is dropped once its tail settles, so it cannot grow with every alias
+   * ever created.
+   */
+  const createRuleTails = new Map();
+  const withCreateRuleLock = (aliasEmail, run) => {
+    const previous = createRuleTails.get(aliasEmail) ?? Promise.resolve();
+    const next = previous.then(run, run);
+    const tail = next.then(() => undefined, () => undefined);
+    createRuleTails.set(aliasEmail, tail);
+    void tail.then(() => {
+      // Only if nothing queued behind us in the meantime.
+      if (createRuleTails.get(aliasEmail) === tail) {
+        createRuleTails.delete(aliasEmail);
+      }
+    });
     return next;
   };
 
   app.post('/api/rules', ...gate, asyncHandler(async (req, res) => {
-    await withCreateRuleLock(async () => {
-      const { localPart, action } = ruleSchema.parse(req.body);
-      const aliasEmail = `${localPart}@${getPanelDomain(env)}`;
+    // Parsed BEFORE the lock: the alias is the lock key, and a malformed body should fail
+    // validation immediately rather than queueing behind someone else's create.
+    const { localPart, action } = ruleSchema.parse(req.body);
+    const aliasEmail = `${localPart}@${getPanelDomain(env)}`;
 
+    await withCreateRuleLock(aliasEmail, async () => {
       // Pre-flight check: the SPA already offers verified destinations only, but the
       // server cannot trust the client, and this way the error arrives clear right away.
       //
@@ -502,12 +560,20 @@ export function registerApiRoutes(app, {
     if (isCatchAllRule(rule)) {
       return rejectCatchAllMutation(res);
     }
-    // Unknown actions are not deletable from the panel either: the user cannot see what
-    // they are removing. Worker/fan-out rules stay deletable (the SPA confirms first).
-    if (!isPanelEditableRule(rule)) {
-      return rejectNotEditableRule(res);
-    }
 
+    // NO `isPanelEditableRule` guard here, unlike PUT and enable/disable.
+    //
+    // That guard exists because `buildRuleUpdatePayload` replaces `actions` wholesale: the
+    // panel must not hand back an action it failed to understand, because it would be
+    // rewriting something it cannot reconstruct. Deleting reconstructs nothing, so the
+    // reason does not carry over.
+    //
+    // Applying it here had a real cost: a rule with no actions at all, or with two, is
+    // `unknown`, so it could not be removed from the panel AT ALL — the user had to go to
+    // Cloudflare's own dashboard to clean up a rule vuzon itself was showing them. The
+    // alias is visible in the row either way, so "delete this alias" is a comprehensible
+    // action even when the panel cannot describe what the alias currently does; the SPA
+    // says exactly that in the confirmation before getting here.
     await fetchCloudflare(`/zones/${env.CF_ZONE_ID}/email/routing/rules/${ruleId}`, 'DELETE');
     return res.json({ ok: true });
   }));

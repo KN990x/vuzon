@@ -36,7 +36,6 @@ test('startServer: a data directory it cannot write to invokes exitProcess(1)', 
     DOMAIN: 'example.com',
     CF_API_TOKEN: 'tok',
     NODE_ENV: 'development',
-    SESSION_SECRET: 'test-session-secret-32chars!!',
     VUZON_DATA_DIR: filePath,
   };
 
@@ -58,7 +57,6 @@ test('startServer: without CF_API_TOKEN it invokes exitProcess(1)', async (t) =>
     CF_ACCOUNT_ID: 'acct_test_1',
     DOMAIN: 'example.com',
     NODE_ENV: 'development',
-    SESSION_SECRET: 'test-session-secret-32chars!!',
     VUZON_DATA_DIR: tempDataDir(t),
   };
 
@@ -115,7 +113,6 @@ test('startServer: a missing zone prints the actionable Zone/account hint', asyn
       DOMAIN: 'homelab.test',
       CF_API_TOKEN: 'tok',
       NODE_ENV: 'development',
-      SESSION_SECRET: 'test-session-secret-32chars!!',
       VUZON_DATA_DIR: tempDataDir(t),
     };
     const cloudflareClient = {

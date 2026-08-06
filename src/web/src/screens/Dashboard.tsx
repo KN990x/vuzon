@@ -35,13 +35,35 @@ const REFRESH_ENDPOINTS = [
   { path: '/api/rules/catch-all', labelKey: 'dashboard.resource.catchAll' },
 ] as const;
 
+const MAIN_CONTENT_ID = 'main-content';
+
+/** One failed endpoint of the last refresh, kept untranslated so it follows the switcher. */
+interface LoadFailure {
+  labelKey: (typeof REFRESH_ENDPOINTS)[number]['labelKey'];
+  error: unknown;
+}
+
 interface ListResponse<T> {
   result?: T;
 }
 
+/**
+ * `{ result }` narrowed to a real array.
+ *
+ * `apiRequest` casts its success body to `T` without validating it, so a `result` that was
+ * anything other than an array — `{}` from a proxy rewrite, a future API change, a
+ * partially cached response — used to sail through the old `?.result || []` (an object is
+ * truthy) and blow up on the first `.filter` DURING RENDER. That is the one failure the
+ * SPA cannot recover from on its own, so it is checked at the boundary instead.
+ */
+function asList<T>(value: unknown): T[] {
+  const result = (value as ListResponse<unknown>)?.result;
+  return Array.isArray(result) ? (result as T[]) : [];
+}
+
 export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
   const i18n = useI18n();
-  const { t } = i18n;
+  const { t, tn } = i18n;
   const [profile, setProfile] = useState<Profile>({ rootDomain: '', username: '' });
   const [rules, setRules] = useState<Rule[]>([]);
   const [dests, setDests] = useState<Destination[]>([]);
@@ -51,7 +73,13 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
   // lists rendered their empty states. Set once the first refresh has come back.
   const [loaded, setLoaded] = useState(false);
   /** Per-resource failures of the last refresh, already translated. Empty when all is well. */
-  const [loadFailures, setLoadFailures] = useState<string[]>([]);
+  // Stored RAW (label key + the error object), never pre-translated. This banner is
+  // designed to stay on screen until a refresh succeeds, so it is exactly the case the
+  // "translate at render" rule exists for — holding formatted strings meant a language
+  // switch left it in the previous language ("rules:" instead of "reglas:") until the
+  // next successful refresh. The toast is the only thing that may hold text, and only
+  // because it lives ~5s.
+  const [loadFailures, setLoadFailures] = useState<LoadFailure[]>([]);
   // A single boolean locked the whole UI: adding a destination also disabled creating
   // aliases and refreshing. Each operation now occupies its own key.
   const [busy, setBusy] = useState<ReadonlySet<string>>(() => new Set());
@@ -70,8 +98,12 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
 
   const statusTimerRef = useRef<number | null>(null);
+  // Current toast text, readable from callbacks without putting `statusMsg` in their deps.
+  const statusMsgRef = useRef('');
   const copiedTimerRef = useRef<number | null>(null);
   const refreshDepthRef = useRef(0);
+  /** Skip-link target, and where focus lands when a delete removes the row it came from. */
+  const mainRef = useRef<HTMLElement>(null);
   // Generation token for `refreshAll`. Three endpoints are fetched concurrently and the
   // results are written as they land, so two overlapping refreshes used to race: pressing
   // Refresh and then toggling a rule let the FIRST refresh's pre-toggle rules resolve last
@@ -91,6 +123,7 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
   // Refs are synced in an effect, not during render: a render that React throws away must
   // not leave a mutated ref behind.
   useEffect(() => {
+    statusMsgRef.current = statusMsg;
     onUnauthorizedRef.current = onUnauthorized;
     // Same trick as onUnauthorizedRef: keeping the translator out of the callback deps
     // stops a language switch from re-running `refreshAll` and refetching everything.
@@ -202,24 +235,29 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
         return;
       }
 
-      const failures: string[] = [];
+      const failures: LoadFailure[] = [];
       let nextDests: Destination[] | null = null;
 
-      results.forEach((result, i) => {
-        const { path, labelKey } = REFRESH_ENDPOINTS[i];
+      // Iterating REFRESH_ENDPOINTS rather than `results`: the two are the same length by
+      // construction (`results` is a map over this very table), but this direction lets the
+      // compiler see it instead of indexing a table with a loose number.
+      REFRESH_ENDPOINTS.forEach(({ path, labelKey }, i) => {
+        const result = results[i];
+        if (!result) {
+          return;
+        }
         if (result.status !== 'fulfilled') {
           if (path === '/api/rules/catch-all') {
             setCatchAll(null);
           }
-          const msg = translateApiError(i18nRef.current, result.reason);
-          failures.push(`${i18nRef.current.t(labelKey)}: ${msg}`);
+          failures.push({ labelKey, error: result.reason });
           return;
         }
 
         if (path === '/api/rules') {
-          setRules((result.value as ListResponse<Rule[]>)?.result || []);
+          setRules(asList<Rule>(result.value));
         } else if (path === '/api/addresses') {
-          nextDests = (result.value as ListResponse<Destination[]>)?.result || [];
+          nextDests = asList<Destination>(result.value);
           setDests(nextDests);
         } else if (path === '/api/rules/catch-all') {
           setCatchAll((result.value as ListResponse<Rule>)?.result ?? null);
@@ -239,7 +277,12 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
       // left with an apparently empty panel and no explanation, so it is kept on screen
       // with a retry until a refresh actually succeeds.
       setLoadFailures(failures);
-      setStatus('');
+      // Only when there is something to clear: `setStatus` arms a 5s timer, so calling it
+      // unconditionally registered a fresh timeout on every refresh to clear a toast that
+      // was already empty.
+      if (statusMsgRef.current !== '') {
+        setStatus('');
+      }
     } finally {
       refreshDepthRef.current = Math.max(0, refreshDepthRef.current - 1);
       if (refreshDepthRef.current === 0) {
@@ -435,8 +478,11 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
   async function updateRule(rule: Rule, patch: RulePatch): Promise<boolean> {
     // Nothing changed (same destination re-picked, "keep" on a Worker rule). Report success
     // so the editor collapses: returning false left it open with no request, no toast and
-    // no explanation, which read as a dead Save button.
+    // no explanation, which read as a dead Save button. Say so out loud, though — collapsing
+    // in silence was only marginally better, and on a `drop` rule with no verified
+    // destinations EVERY save takes this path.
     if (Object.keys(patch).length === 0) {
+      setStatus(t('dashboard.status.noChanges'));
       return true;
     }
 
@@ -469,6 +515,7 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
   async function updateCatchAll(patch: CatchAllPatch): Promise<boolean> {
     // Same as updateRule: an empty patch means "nothing to save", not "the save failed".
     if (Object.keys(patch).length === 0) {
+      setStatus(t('dashboard.status.noChanges'));
       return true;
     }
 
@@ -514,9 +561,16 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
     if (inFlightRef.current.has(`rule:${id}`)) {
       return;
     }
+    // A rule whose action the panel cannot describe is still deletable (deleting
+    // reconstructs nothing), but the user must be told that is what they are removing.
+    const describable = describeRuleActions(
+      rules.find((rule) => rule.id === id),
+    ).kind !== 'unknown';
     const ok = await askConfirm({
       title: t('confirm.deleteAlias.title'),
-      message: t('dashboard.confirm.deleteAlias'),
+      message: describable
+        ? t('dashboard.confirm.deleteAlias')
+        : t('dashboard.confirm.deleteAliasUnknown'),
       confirmLabel: t('confirm.delete'),
       destructive: true,
     });
@@ -598,7 +652,7 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
       return;
     }
 
-    const result = await copyTextToClipboard(previewText, t('dashboard.copyPrompt'));
+    const result = await copyTextToClipboard(previewText);
     if (result.copied) {
       setCopied(true);
       if (copiedTimerRef.current != null) {
@@ -615,6 +669,15 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
 
   return (
     <div className="min-h-screen bg-ink font-sans text-cream">
+      {/* Skip link: the fixed header puts five controls ahead of the content on every
+          load, and a keyboard user had to Tab through all of them every time. Visible only
+          while focused. */}
+      <a
+        href={`#${MAIN_CONTENT_ID}`}
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[70] focus:rounded-full focus:bg-surface focus:px-4 focus:py-2 focus:text-[13px] focus:text-cream"
+      >
+        {t('app.skipToContent')}
+      </a>
       <Header
         loading={busy.has('refresh')}
         onRefresh={() => void refreshAll()}
@@ -627,6 +690,10 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
           {...confirmRequest}
           onConfirm={() => settleConfirm(true)}
           onCancel={() => settleConfirm(false)}
+          // Confirming a delete removes the row whose trash button opened this dialog, so
+          // the usual "restore focus to where it came from" has nowhere to land. <main>
+          // keeps the user in the panel instead of dropping them at <body>.
+          fallbackFocusRef={mainRef}
         />
       )}
       {accountMode !== null && (
@@ -660,14 +727,26 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
         />
       )}
       {/* pb-12 instead of pb-20: the footer now supplies the missing breathing room. */}
-      <main className="fade-in mx-auto max-w-[1180px] px-6 pb-12 pt-[104px]">
+      {/* tabIndex={-1} makes <main> programmatically focusable without putting it in the
+          Tab order — it is the landing spot for the skip link and for focus recovery
+          after a delete. */}
+      <main
+        id={MAIN_CONTENT_ID}
+        ref={mainRef}
+        tabIndex={-1}
+        className="fade-in mx-auto max-w-[1180px] px-6 pb-12 pt-[104px] focus:outline-none"
+      >
         {loadFailures.length > 0 && (
           <div
             role="alert"
             className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-card bg-accent-dark/10 px-4 py-3"
           >
             <p className="m-0 min-w-0 font-mono text-xs text-accent-dark">
-              {t('dashboard.status.partialLoad', { details: loadFailures.join(' · ') })}
+              {t('dashboard.status.partialLoad', {
+                details: loadFailures
+                  .map(({ labelKey, error }) => `${t(labelKey)}: ${translateApiError(i18n, error)}`)
+                  .join(' · '),
+              })}
             </p>
             <button
               type="button"
@@ -693,7 +772,10 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
           <div className="flex w-full gap-4 font-mono text-xs text-cream/65 sm:w-auto sm:gap-6">
             <div className="flex flex-col items-start gap-1 sm:items-end">
               <span className="font-sans text-[22px] font-bold text-cream">{activeCount}</span>
-              {t('dashboard.activeAliases')}
+              {/* The number is rendered separately, so the label carries no {count} — but
+                  it still has to agree with it. A static label read "1 active aliases",
+                  and in Spanish it broke adjective agreement too ("1 alias activos"). */}
+              {tn('dashboard.activeAliases', activeCount)}
             </div>
             <div className="flex flex-col items-start gap-1 sm:items-end">
               {/* uppercase, not a hardcoded 'ON': the label is translated, so its casing

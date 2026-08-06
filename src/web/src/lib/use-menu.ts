@@ -12,11 +12,18 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  * for (no submenus, no type-ahead): arrows wrap, Home/End jump, Escape and Tab close, and
  * focus goes to the first item on open and back to the trigger on close.
  */
-export function useMenu() {
+export function useMenu({ initialFocus }: { initialFocus?: () => number } = {}) {
   const [open, setOpen] = useState(false);
+  // 'last' when the menu was opened with ArrowUp, which by the ARIA pattern lands on the
+  // final item rather than the first.
+  const [openIntent, setOpenIntent] = useState<'first' | 'last'>('first');
   const containerRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const initialFocusRef = useRef(initialFocus);
+  useEffect(() => {
+    initialFocusRef.current = initialFocus;
+  }, [initialFocus]);
 
   const items = useCallback(
     () => Array.from(
@@ -31,13 +38,26 @@ export function useMenu() {
     triggerRef.current?.focus();
   }, []);
 
-  // Focus the first item as soon as the menu mounts. Harmless for pointer users: the ring
-  // is drawn by :focus-visible, which does not match a mouse click.
+  // Focus an item as soon as the menu mounts. Harmless for pointer users: the ring is drawn
+  // by :focus-visible, which does not match a mouse click.
+  //
+  // Which item is not always the first. ArrowUp opens onto the last one, and a caller with
+  // a checked item (the language `menuitemradio` group) points at that instead — landing on
+  // "English" when Spanish is active describes the menu wrongly to a screen reader.
   useEffect(() => {
-    if (open) {
-      items()[0]?.focus();
+    if (!open) {
+      return;
     }
-  }, [open, items]);
+    const list = items();
+    if (list.length === 0) {
+      return;
+    }
+    const preferred = initialFocusRef.current?.() ?? -1;
+    const index = openIntent === 'last'
+      ? list.length - 1
+      : (preferred >= 0 && preferred < list.length ? preferred : 0);
+    list[index]?.focus();
+  }, [open, openIntent, items]);
 
   useEffect(() => {
     if (!open) {
@@ -100,7 +120,27 @@ export function useMenu() {
   return {
     open,
     /** Trigger handler: opens and closes. */
-    toggle: useCallback(() => setOpen((prev) => !prev), []),
+    toggle: useCallback(() => {
+      setOpenIntent('first');
+      setOpen((prev) => !prev);
+    }, []),
+    /**
+     * Trigger `onKeyDown`. `aria-haspopup="menu"` tells a screen-reader user that ArrowDown
+     * opens the popup and ArrowUp opens it on the last item; the trigger only listened for
+     * clicks, so neither did anything and the promise the markup made was not kept.
+     *
+     * Enter and Space are handled by the browser's native button activation, which fires
+     * `click` → `toggle`. Intercepting them here would open and immediately close.
+     */
+    onTriggerKeyDown: useCallback((event: React.KeyboardEvent) => {
+      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+        return;
+      }
+      // Otherwise the page scrolls behind the menu that just opened.
+      event.preventDefault();
+      setOpenIntent(event.key === 'ArrowUp' ? 'last' : 'first');
+      setOpen(true);
+    }, []),
     close,
     containerRef,
     triggerRef,

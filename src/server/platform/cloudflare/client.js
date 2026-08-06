@@ -2,10 +2,25 @@ const CF_API_URL = 'https://api.cloudflare.com/client/v4';
 const REQUEST_TIMEOUT_MS = 10_000;
 const MAX_GET_RETRIES = 2;
 const MAX_LIST_PAGES = 100;
+/**
+ * Second, independent ceiling on a listing.
+ *
+ * Under the client's own `per_page` it is unreachable: 100 pages x 50 items is exactly
+ * 5000, so the page cap always trips first. It exists for the case the page cap cannot
+ * see — Cloudflare ignoring `per_page` and returning far more per page — which is why it
+ * is deliberately NOT derived from `MAX_LIST_PAGES * LIST_PAGE_SIZE`. Comparing with `>=`
+ * so a single oversized page that lands exactly on the boundary is caught too.
+ */
 const MAX_LIST_ITEMS = 5000;
 /** Must match the `per_page` query sent below. */
 const LIST_PAGE_SIZE = 50;
 const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
+/**
+ * Ceiling on an honoured `Retry-After`. The header is upstream-controlled and the panel
+ * still owes the browser an answer: a `Retry-After: 3600` must not park the request for an
+ * hour. Past the cap the client gives up and reports the error instead of waiting.
+ */
+const MAX_RETRY_AFTER_MS = 5_000;
 
 export class CloudflareApiError extends Error {
   constructor(message, {
@@ -13,6 +28,7 @@ export class CloudflareApiError extends Error {
     code = 'cloudflare_error',
     details = null,
     retryable = false,
+    retryAfterMs = 0,
     cause = null,
   } = {}) {
     super(message);
@@ -21,11 +37,39 @@ export class CloudflareApiError extends Error {
     this.code = code;
     this.details = details;
     this.retryable = retryable;
+    this.retryAfterMs = retryAfterMs;
 
     if (cause) {
       this.cause = cause;
     }
   }
+}
+
+/**
+ * `Retry-After` as milliseconds, clamped to `MAX_RETRY_AFTER_MS`.
+ *
+ * RFC 9110 allows both a delay in seconds and an HTTP date; Cloudflare sends seconds, but
+ * both are cheap to accept. Anything unparseable, negative or absent yields 0, which lets
+ * the caller fall back to its own linear backoff.
+ *
+ * @param {string | null} headerValue
+ * @returns {number}
+ */
+function parseRetryAfter(headerValue) {
+  if (!headerValue) {
+    return 0;
+  }
+
+  const trimmed = String(headerValue).trim();
+  const seconds = Number(trimmed);
+  const delayMs = Number.isFinite(seconds)
+    ? seconds * 1000
+    : Date.parse(trimmed) - Date.now();
+
+  if (!Number.isFinite(delayMs) || delayMs <= 0) {
+    return 0;
+  }
+  return Math.min(delayMs, MAX_RETRY_AFTER_MS);
 }
 
 function sleep(delayMs) {
@@ -92,13 +136,14 @@ function errorStatusFor(status) {
   return n;
 }
 
-function buildResponseError({ res, parsed, requestPath, method }) {
+function buildResponseError({ res, parsed, requestPath, method, retryAfterMs = 0 }) {
   if (!parsed.isJson || typeof parsed.body !== 'object' || parsed.body === null) {
     // A non-JSON body is not the panel's fault: keep 502 as the "upstream misbehaved" mark.
     return new CloudflareApiError(`Unexpected response from Cloudflare (HTTP ${res.status})`, {
       status: res.status >= 400 ? res.status : 502,
       code: 'invalid_response',
       retryable: isRetryableStatus(res.status),
+      retryAfterMs,
       details: {
         requestPath,
         method,
@@ -120,6 +165,7 @@ function buildResponseError({ res, parsed, requestPath, method }) {
     status: errorStatusFor(res.status),
     code,
     retryable: isRetryableStatus(res.status),
+    retryAfterMs,
     details: {
       requestPath,
       method,
@@ -154,16 +200,37 @@ export function createCloudflareClient({ env = process.env } = {}) {
         controller.abort();
       }, REQUEST_TIMEOUT_MS);
 
+      // Set inside the catch and awaited AFTER `finally`. Sleeping inside the catch kept
+      // the aborted attempt's 10s timer armed for the whole backoff, because `finally` —
+      // and its `clearTimeout` — does not run until the catch block has fully settled.
+      let retryDelayMs = 0;
+
       try {
         const res = await fetch(url, { ...options, signal: controller.signal });
         const parsed = await parseCloudflareResponse(res);
+
+        // A successful response with no body is still a success. `parseCloudflareResponse`
+        // only parses JSON when the content-type announces it, so a 204 (or any empty 2xx)
+        // reached `buildResponseError` and came back as a 502 `invalid_response` — the
+        // panel reporting failure for a DELETE that had already gone through, leaving the
+        // row on screen and the user retrying into a 404. Cloudflare answers 200+JSON on
+        // DELETE today; this keeps a change there from becoming a data-desync bug.
+        if (res.ok && !parsed.isJson && (res.status === 204 || parsed.body === '')) {
+          return { success: true, result: null };
+        }
 
         const okHttpAndApi = res.ok && parsed.body?.success !== false;
         const validJsonObject = parsed.isJson
           && typeof parsed.body === 'object'
           && parsed.body !== null;
         if (!okHttpAndApi || !validJsonObject) {
-          throw buildResponseError({ res, parsed, requestPath, method });
+          throw buildResponseError({
+            res,
+            parsed,
+            requestPath,
+            method,
+            retryAfterMs: parseRetryAfter(res.headers.get('retry-after')),
+          });
         }
 
         return parsed.body;
@@ -196,10 +263,17 @@ export function createCloudflareClient({ env = process.env } = {}) {
           throw normalizedError;
         }
 
-        await sleep(200 * (attempt + 1));
+        // Cloudflare's own `Retry-After` wins over the linear backoff when it asks for
+        // longer: retrying a 429 after 200ms just spends another slice of the same quota.
+        // Capped so a large header value cannot stall the request past its own budget.
+        retryDelayMs = Math.max(200 * (attempt + 1), normalizedError.retryAfterMs || 0);
         attempt += 1;
       } finally {
         clearTimeout(timeoutId);
+      }
+
+      if (retryDelayMs > 0) {
+        await sleep(retryDelayMs);
       }
     }
 
@@ -246,7 +320,7 @@ export function createCloudflareClient({ env = process.env } = {}) {
         allResults = allResults.concat(pageResult);
       }
 
-      if (allResults.length > MAX_LIST_ITEMS) {
+      if (allResults.length >= MAX_LIST_ITEMS) {
         throw new CloudflareApiError(
           'Item limit exceeded while listing Cloudflare resources.',
           {

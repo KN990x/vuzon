@@ -31,7 +31,7 @@ pnpm start        # production-like preview: build + Express on :8001
 pnpm dev          # local development: API + Vite (hot reload) on :5173
 ```
 
-Copy `.env.example` to `.env` at the **repo root** and fill in the required values. The server always loads that file (resolved from `server.js`, not from the process cwd), so `pnpm start` / `pnpm dev` work without symlinks.
+Copy `.env.example` to `.env` at the **repo root** and fill in the required values. The server loads that file when it exists, resolving the path from `server.js` rather than from the process cwd, so `pnpm start` / `pnpm dev` work without symlinks. It is skipped entirely when there is no repo root to resolve — which is the case inside the Docker image, where `server.js` sits at `/app/` and configuration arrives through `env_file` instead.
 
 `pnpm start` runs `pnpm run build` first (`pnpm --filter @vuzon/web run build`, which produces `src/web/dist`), then starts the backend (`pnpm --filter @vuzon/server run start`). Use it to smoke-test with real credentials the same way Docker serves the built SPA.
 
@@ -131,10 +131,11 @@ pnpm start   # production-like preview → http://localhost:8001
 pnpm dev     # hot-reload development → http://localhost:5173
 ```
 
-Put credentials in a repo-root `.env` (see `.env.example`). The server loads that file automatically.
+Put credentials in a repo-root `.env` (see `.env.example`). The server loads it automatically when it is there.
 ### Validation details
 
 - `pnpm run check` executes the frontend build (TypeScript + Vite), syntax checks, ESLint + oxlint, `node --test`, and Vitest.
+- `pnpm --filter @vuzon/web run test:coverage` reports frontend coverage (v8) over `src/lib` and `src/i18n` — the modules the suites actually target. Screens and components are excluded on purpose: nothing tests them, and including them would report a number that describes the missing infrastructure rather than the covered code.
 - Container validation stays aligned with the same layout assumptions via `docker build -t vuzon-local .`.
 - Integration tests under `src/server/tests/integration/server/` open a temporary local server. In restricted sandboxes you may see `listen EPERM` even when the assertions are correct.
 
@@ -162,7 +163,7 @@ All three are **vectors on purpose**: an architecture test asserts they share th
 Colours come from the theme, never hardcoded twice: `VuzonMark` uses `currentColor` on `text-accent` plus `var(--color-ink)`, both defined in the `@theme` block of `src/web/src/index.css`.
 - `src/server/shared/`: small cross-layer modules (for example Zod schemas consumed by both `config/` and `features/`). Keep it focused; avoid using it as a general dumping ground.
 - `src/server/tests/unit/` and `src/server/tests/integration/`: primary backend coverage. `src/server/tests/integration/server/app.test.js` doubles as the HTTP contract — it exercises every route, so update it whenever a route or payload changes.
-- `src/server/tests/architecture/`: lightweight smoke checks (expected repository layout, version alignment, forbidden dependencies).
+- `src/server/tests/architecture/`: invariants **no runtime test can observe**, not smoke checks. Alongside repository layout and version alignment it holds the guards for the four CSRF pillars, the KDF ordering in the credential routes, the setup revocation, the route-registration order for the catch-all, the server-side session age check, the password-policy mirror and the error-code/i18n pairing. A failure here is a real regression in something that cannot be caught by making a request — treat it as such, never as cosmetic.
 
 #### About the `node_modules` directories
 

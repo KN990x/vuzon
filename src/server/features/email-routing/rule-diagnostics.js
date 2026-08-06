@@ -183,6 +183,23 @@ export function duplicateAliasError(aliasEmail) {
 }
 
 /**
+ * Adding a destination the account already holds.
+ *
+ * Cloudflare answers a generic 4xx for this, which reached the user as
+ * `cloudflare.generic` ("Could not complete the operation…") — technically true and
+ * completely unhelpful, since the fix is simply "it is already there".
+ *
+ * @param {string} destEmail
+ * @returns {PanelRequestError}
+ */
+export function duplicateDestinationError(destEmail) {
+  return new PanelRequestError(
+    `${destEmail} is already one of the account's destinations.`,
+    { code: ERROR_CODES.DEST_DUPLICATE, params: { email: destEmail } },
+  );
+}
+
+/**
  * @param {string} destEmail
  * @returns {PanelRequestError}
  */

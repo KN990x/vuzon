@@ -26,6 +26,10 @@ export const ERROR_CODES = Object.freeze({
   AUTH_UNAUTHORIZED: 'auth.unauthorized',
   SETUP_ALREADY_DONE: 'setup.already_done',
   RATE_LIMIT_LOGIN: 'rate_limit.login',
+  // Setup and the two /api/account/* routes. They are not login, and rendering the login
+  // copy ("too many sign-in attempts") for a throttled password change misdescribed what
+  // the user had just done.
+  RATE_LIMIT_CREDENTIAL: 'rate_limit.credential',
   RATE_LIMIT_API: 'rate_limit.api',
   VALIDATION_INVALID: 'validation.invalid',
   REQUEST_MALFORMED: 'request.malformed',
@@ -37,6 +41,7 @@ export const ERROR_CODES = Object.freeze({
   DEST_UNVERIFIED: 'dest.unverified',
   DEST_IN_USE: 'dest.in_use',
   DEST_NOT_FOUND: 'dest.not_found',
+  DEST_DUPLICATE: 'dest.duplicate',
   DEST_USAGE_CHECK_FAILED: 'dest.usage_check_failed',
   CSRF_BLOCKED: 'csrf.blocked',
   CLOUDFLARE_GENERIC: 'cloudflare.generic',

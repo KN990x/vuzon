@@ -123,7 +123,7 @@ export function Setup({ onSuccess, onAlreadyConfigured }: SetupProps) {
               required
               className={authFieldClass}
             />
-            <span className="font-mono text-[11px] text-cream/45">{t('setup.passwordHint')}</span>
+            <span className="font-mono text-[11px] text-cream/60">{t('setup.passwordHint')}</span>
           </label>
           <label className="flex flex-col gap-1.5">
             <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-cream/65">
@@ -150,7 +150,10 @@ export function Setup({ onSuccess, onAlreadyConfigured }: SetupProps) {
           </button>
         </form>
 
-        <p className="m-0 mt-5 text-[11.5px] leading-relaxed text-cream/45">
+        {/* Brighter than the rest of the fine print on purpose: this is the only place the
+            user is told the password cannot be recovered, and it was the faintest text on
+            the screen. */}
+        <p className="m-0 mt-5 text-[11.5px] leading-relaxed text-cream/75">
           {t('setup.warning')}
         </p>
       </div>

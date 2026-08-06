@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { Check, Clock, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import type { Destination } from '../lib/types';
 import { isVerifiedStatus } from '../lib/verification';
@@ -30,21 +31,26 @@ export function DestinationsCard({
   dests, loaded, newDestInput, onInputChange, onAdd, onDelete, loading, isDestPending, error,
 }: DestinationsCardProps) {
   const { t } = useI18n();
+  const titleId = useId();
+  const errorId = useId();
 
   return (
-    <section className="overflow-hidden rounded-card bg-surface">
+    // Named landmark + real heading: see the comment in AliasesCard.
+    <section aria-labelledby={titleId} className="overflow-hidden rounded-card bg-surface">
       <div className="flex items-center gap-2.5 px-[18px] py-3.5 shadow-[inset_0_-1px_0_rgba(255,255,255,0.06)]">
         <CardIcon>
           <ShieldCheck size={14} />
         </CardIcon>
-        <span className={cardTitleClass}>{t('dests.title')}</span>
+        <h2 id={titleId} className={`m-0 ${cardTitleClass}`}>{t('dests.title')}</h2>
       </div>
 
-      {dests.map((dest) => {
+      {/* Same reasoning as AliasesCard: a real list so item counts and position are announced. */}
+      <ul role="list" className="m-0 list-none p-0">
+        {dests.map((dest) => {
         const verified = isVerifiedStatus(dest.verified);
         const pending = isDestPending(dest.id);
         return (
-          <div key={dest.id} className={`flex items-center gap-2.5 ${rowPaddingClass} ${rowDividerClass}`}>
+          <li key={dest.id} className={`flex items-center gap-2.5 ${rowPaddingClass} ${rowDividerClass}`}>
             <span className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-cream/75">
               {dest.email}
             </span>
@@ -69,9 +75,10 @@ export function DestinationsCard({
             >
               <Trash2 size={13} />
             </button>
-          </div>
+          </li>
         );
-      })}
+        })}
+      </ul>
 
       {dests.length === 0 && (
         <div className={`${rowPaddingClass} font-mono text-xs text-cream/60 ${rowDividerClass}`}>
@@ -81,6 +88,11 @@ export function DestinationsCard({
 
       <form
         className={rowPaddingClass}
+        // `noValidate` with type="text" below: a type="email" input inside a form pops the
+        // browser's own validation bubble, rendered in the BROWSER's language rather than
+        // the panel's — the same objection that rules out window.confirm here. The server
+        // answers `email.invalid`, which both catalogues translate.
+        noValidate
         onSubmit={(e) => {
           e.preventDefault();
           onAdd();
@@ -91,18 +103,24 @@ export function DestinationsCard({
             <Plus size={15} />
           </span>
           <input
-            type="email"
+            type="text"
+            inputMode="email"
+            autoComplete="email"
             value={newDestInput}
             onChange={(e) => onInputChange(e.target.value)}
             placeholder={t('dests.new.placeholder')}
             aria-label={t('dests.new.label')}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? errorId : undefined}
             className={`${textFieldClass} min-w-0 flex-1 text-[13px]`}
           />
           <button type="submit" className={pillButtonClass} disabled={!newDestInput || loading}>
             {t('dests.new.submit')}
           </button>
         </div>
-        {error && <p className={`${formErrorClass} mt-2`}>{error}</p>}
+        {/* role="alert": these errors go to card state, not the toast, so without a live
+            region a screen-reader user got no feedback at all on a rejected submit. */}
+        {error && <p id={errorId} role="alert" className={`${formErrorClass} mt-2`}>{error}</p>}
       </form>
     </section>
   );

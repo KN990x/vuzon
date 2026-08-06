@@ -146,3 +146,53 @@ test('credential-store: updateUsername() on an empty store throws', (t) => {
   const store = createCredentialStore({ dataDir: tempDataDir(t) });
   assert.throws(() => store.updateUsername('owner'), /before the panel has credentials/i);
 });
+
+/**
+ * The unique temp name in `writeRecordAtomically` is documented as fixing a real crash: a
+ * shared `${filePath}.tmp` let a second writer `rmSync` the file the first had just
+ * written, so its `renameSync` threw ENOENT. Nothing asserted it, so the reasoning could
+ * have been undone without any test noticing.
+ *
+ * Concurrency here is genuinely reachable: `POST /api/account/password` and
+ * `/api/account/username` are separate routes with no lock between them.
+ */
+test('credential-store: concurrent writes never corrupt auth.json or throw ENOENT', async (t) => {
+  const dataDir = tempDataDir(t);
+  const store = createCredentialStore({ dataDir });
+  await store.save({ username: 'kn', password: PASSWORD });
+
+  // Enough overlapping writers that a shared temp name would collide.
+  const writes = [];
+  for (let i = 0; i < 12; i += 1) {
+    writes.push(store.save({ username: `user${i}`, password: `${PASSWORD}-${i}` }));
+    writes.push(Promise.resolve().then(() => store.updateUsername(`renamed${i}`)));
+  }
+  // Any ENOENT from the rename would surface here.
+  await Promise.all(writes);
+
+  // Whatever won, the file must be ONE valid record — never truncated or interleaved.
+  const raw = fs.readFileSync(path.join(dataDir, 'auth.json'), 'utf8');
+  const parsed = JSON.parse(raw);
+  assert.equal(typeof parsed.username, 'string');
+  assert.ok(parsed.username.length > 0);
+  assert.equal(typeof parsed.password.hash, 'string');
+  assert.equal(typeof parsed.password.salt, 'string');
+
+  // And no temp files may be left lying around with their 0600 content.
+  const leftovers = fs.readdirSync(dataDir).filter((name) => name.endsWith('.tmp'));
+  assert.deepEqual(leftovers, [], 'atomic writes must clean up their temp files');
+
+  // A fresh store reading from disk agrees with the one in memory.
+  const reopened = createCredentialStore({ dataDir });
+  assert.equal(reopened.getUsername(), parsed.username);
+});
+
+test('credential-store: auth.json is written owner-only (0600)', async (t) => {
+  const dataDir = tempDataDir(t);
+  const store = createCredentialStore({ dataDir });
+  await store.save({ username: 'kn', password: PASSWORD });
+
+  // Whoever can read this file can mount an offline attack on the hash at their leisure.
+  const mode = fs.statSync(path.join(dataDir, 'auth.json')).mode & 0o777;
+  assert.equal(mode, 0o600, `expected 0600, got ${mode.toString(8)}`);
+});

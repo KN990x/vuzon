@@ -10,7 +10,13 @@ ENV CI=true
 RUN corepack enable && corepack prepare pnpm@11.14.0 --activate
 
 # ---- build: install the WHOLE workspace (one lockfile) and compile the SPA ----
-FROM base AS build
+# --platform=$BUILDPLATFORM pins this stage to the NATIVE architecture of the builder. It
+# is safe because everything it produces is architecture-independent — JS plus static
+# assets — and none of the five runtime dependencies (cookie-session, dotenv, express,
+# express-rate-limit, zod) is a native module. Without it the arm64 half of the release
+# ran `pnpm install`, `tsc -b && vite build` and `pnpm deploy` under QEMU emulation, at
+# roughly 10-30x the native cost. Only the runtime stage below needs $TARGETPLATFORM.
+FROM --platform=$BUILDPLATFORM base AS build
 
 WORKDIR /app
 
@@ -22,9 +28,14 @@ COPY src/web/package.json ./src/web/package.json
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile
 
-# Source code + SPA build (produces src/web/dist).
-COPY src ./src
+# The SPA sources ONLY, so that editing the backend (or a test) does not invalidate the
+# Vite build layer. `COPY src ./src` put both packages in one layer, and a one-line change
+# in features/auth/routes.js forced a full `tsc -b && vite build` on every build.
+COPY src/web ./src/web
 RUN pnpm --filter @vuzon/web run build
+
+# Backend sources, after the SPA build for the same cache reason.
+COPY src/server ./src/server
 
 # Self-contained backend bundle: code + production deps, with no workspace symlinks.
 # --legacy: the backend uses no injected workspace dependencies (external packages only).
@@ -32,10 +43,15 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm --filter @vuzon/server deploy --prod --legacy /prod
 
 # ---- runtime: minimal ----
+# No --platform here on purpose: this stage IS the target architecture.
 FROM node:24-slim AS runtime
 
 WORKDIR /app
 
+# Kept explicitly even though node:24-slim is believed to ship these already: every
+# Cloudflare call is HTTPS, so an empty trust store does not degrade the panel, it stops it
+# working entirely. Not worth the layer saved on an assumption about a base image that can
+# change under us.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates && \
     rm -rf /var/lib/apt/lists/*

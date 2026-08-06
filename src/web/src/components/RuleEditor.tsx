@@ -54,7 +54,9 @@ export function RuleEditor({ summary, verifiedDests, busy, name, onSave, onCance
   // Cloudflare holds. With nothing configured, fall back to the first verified one.
   const [dest, setDest] = useState(() => (
     summary.kind === 'forward'
-      ? summary.destinations[0]
+      // `?? ''` for the same reason as currentForwardDestination: 'forward' implies one
+      // destination by construction, but that is a module invariant, not a type.
+      ? summary.destinations[0] ?? ''
       : getDestSelectionState(verifiedDests, '').selectedValue
   ));
   const [nameDraft, setNameDraft] = useState(name ?? '');

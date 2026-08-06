@@ -13,6 +13,7 @@ export const en = {
   'app.loading': 'Loading…',
   'app.sessionCheckFailed': 'Could not check the session. Check the connection to the server.',
   'app.retry': 'Retry',
+  'app.skipToContent': 'Skip to content',
 
   'header.refresh': 'Refresh',
   'header.account': 'Account',
@@ -24,6 +25,7 @@ export const en = {
   'language.en': 'English',
   'language.es': 'Español',
 
+  'login.title': 'Sign in to the panel',
   'login.username': 'Username',
   'login.password': 'Password',
   'login.submit': 'Sign in',
@@ -80,7 +82,9 @@ export const en = {
   'confirm.replaceAction.title': 'Replace the current action',
 
   'dashboard.eyebrow': 'Routing panel',
-  'dashboard.activeAliases': 'active aliases',
+  // No {count}: the figure is rendered as its own element beside the label.
+  'dashboard.activeAliases.one': 'active alias',
+  'dashboard.activeAliases.other': 'active aliases',
   'dashboard.catchAll': 'catch-all',
   'dashboard.resource.rules': 'rules',
   'dashboard.resource.addresses': 'destinations',
@@ -96,12 +100,15 @@ export const en = {
   'dashboard.status.destAdded': 'Added. Check your inbox to verify it.',
   'dashboard.status.destDeleted': 'Destination deleted',
   'dashboard.status.copyFailed': 'Could not copy (are you using HTTPS?)',
+  'dashboard.status.noChanges': 'No changes to save',
   'dashboard.confirm.deleteAlias': 'Delete this alias permanently?',
+  'dashboard.confirm.deleteAliasUnknown':
+    'This rule uses an action the panel cannot read, so it cannot show you what it currently does. '
+    + 'Delete it permanently anyway?',
   'dashboard.confirm.deleteDest':
     'Delete this destination? Any rules using it will stop working.',
   'dashboard.confirm.deleteDestInUse':
     'This destination is used by: {aliases}. Remove or re-point those rules before deleting it.',
-  'dashboard.copyPrompt': 'Copy your alias manually:',
 
   'aliases.title': 'Aliases',
   'aliases.search.placeholder': 'search alias',
@@ -205,7 +212,8 @@ export const en = {
   'error.auth.unauthorized': 'Session expired',
   'error.setup.already_done':
     'This panel is already set up. Sign in with the credentials you chose.',
-  'error.rate_limit.login': 'Too many attempts. Wait a moment and try again.',
+  'error.rate_limit.login': 'Too many sign-in attempts. Wait a moment and try again.',
+  'error.rate_limit.credential': 'Too many attempts. Wait a moment and try again.',
   'error.rate_limit.api': 'Too many requests. Wait a moment and try again.',
   'error.validation.invalid': 'Invalid data',
   'error.request.malformed': 'The request body is not valid JSON.',
@@ -224,6 +232,7 @@ export const en = {
     'Cannot delete {email}: it is still used by {aliases}. '
     + 'Remove or re-point those rules first.',
   'error.dest.not_found': 'That destination no longer exists. Refresh the panel.',
+  'error.dest.duplicate': '{email} is already one of your destinations.',
   'error.dest.usage_check_failed':
     'Could not verify whether this destination is still in use. Try again later.',
   'error.csrf.blocked': 'Cross-origin request blocked.',
@@ -256,6 +265,8 @@ export const en = {
   'error.issue.action.type': 'the action must be "forward" or "drop"',
   'error.issue.action.forward_single': 'a forward action takes exactly one destination address',
   'error.issue.rule_name.too_long': 'the name is too long',
+  'error.issue.rule_name.invalid': 'the name must be text',
+  'error.issue.enabled.invalid': 'the enabled flag must be true or false',
   'error.issue.rule_update.empty': 'nothing to update',
   'error.issue.username.required': 'username required',
   'error.issue.username.invalid': 'invalid username',
@@ -268,6 +279,7 @@ export const en = {
   // keeps it in step with MIN_PASSWORD_LENGTH.
   'error.issue.password.too_short': 'the password must be at least 12 characters long',
   'error.issue.password.mismatch': 'the two passwords do not match',
+  'error.issue.password.unchanged': 'the new password must be different from the current one',
   'error.issue.password.current_required': 'current password required',
   'error.issue.id.empty': 'invalid identifier',
   'error.issue.id.too_long': 'identifier too long',

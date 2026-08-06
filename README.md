@@ -98,7 +98,7 @@ Give every service its own address (`netflix@yourdomain.com`, `shop@yourdomain.c
 **Operations**
 
 - **Single Docker image**, multi-arch **amd64 / arm64**, published to GHCR on every release.
-- **No database.** The only thing on disk is one small file with your panel credentials (hashed) and the session signing key.
+- **No database.** All that lives on disk is three small files in the data volume: your panel credentials (hashed), the cookie signing key, and the session revocation mark. Back that volume up and treat it as secret.
 - **Plain HTTP keeps working** for a homelab LAN; TLS-specific hardening (`COOKIE_SECURE`, HSTS) is opt-in.
 - **Zone/account autodetection** from `DOMAIN`, so there are usually only two variables to set.
 - **Credentials are set in the browser**, the first time you open the panel — not in a configuration file, and never in plain text. You can **change the username or the password** later from the account menu in the header; either change signs out every other session.
@@ -144,7 +144,7 @@ Open **http://localhost:8001** (or `http://<server-ip>:<port>` on your LAN). Ano
 
 Problems: **`docker compose logs -f vuzon`** — startup errors name the exact variable to fix.
 
-Login uses a signed **`vuzon_session`** cookie; the panel's own state (credential hash + signing key) lives in the **`vuzon-data`** volume. **Back that volume up** — losing it means losing the password, and the setup wizard reopens. To change your username or password later, use the key icon in the header. For local image builds, pinning, and HTTP details, see **[CONTRIBUTING.md](CONTRIBUTING.md)**.
+Login uses a signed **`vuzon_session`** cookie; the panel's own state (credential hash + signing key) lives in the **`vuzon-data`** volume. **Back that volume up** — losing it means losing the password, and the setup wizard reopens. To change your username or password later, use the account (person) icon in the header. For local image builds, pinning, and HTTP details, see **[CONTRIBUTING.md](CONTRIBUTING.md)**.
 
 ### Updating
 
@@ -153,6 +153,8 @@ docker compose pull && docker compose up -d
 ```
 
 The image is rebuilt and published to GHCR on every release. Your `.env` is untouched; sessions survive the restart.
+
+The shipped `docker-compose.yml` pins the **major** version (`ghcr.io/kn990x/vuzon:2`), so `docker compose pull` only ever brings you fixes and features within that major. Moving to the next major is a deliberate edit of the `image:` line — read the release notes first, because a major is where breaking changes live (see the 1.x note below for what that can mean).
 
 > **Updating from 1.x:** the panel credentials moved out of `.env`. `AUTH_USER` and `AUTH_PASS` are **ignored** from 2.0 on, so the first time you open the updated panel it shows the setup wizard and asks you to choose them again — this time stored hashed in the `vuzon-data` volume. Add that volume to your `docker-compose.yml` if you are reusing an older copy of the file, then delete `AUTH_USER`, `AUTH_PASS` and `SESSION_SECRET` from your `.env` — all three are ignored now. The panel generates its own signing key, so you get signed out once on the upgrade and then never again for this reason.
 
@@ -204,6 +206,8 @@ Minimum: **`CF_API_TOKEN`** and **`DOMAIN`** — the panel login is not an envir
 
 **Behind a reverse proxy (nginx, Traefik, etc.):** set **`TRUST_PROXY`** so Express trusts `X-Forwarded-*`, sees the real client IP, and login rate limiting works correctly. Accepted values: a **hop count** (`1`, `2`, …), one of **`loopback`** / **`linklocal`** / **`uniquelocal`**, or an **IP/CIDR list** (`10.0.0.0/8`, `127.0.0.1, 192.168.1.0/24`). An unrecognised value leaves it **off** and logs a warning at startup. With TLS termination, also set **`COOKIE_SECURE=1`**. **Both off by default.**
 
+> **Leave `TRUST_PROXY` off unless a trusted proxy is the only way to reach the panel.** With it on, anything that can connect directly can forge `X-Forwarded-For` and get a fresh login rate-limit quota per fake IP — which is the opposite of what you turned it on for.
+
 **Local `pnpm start`:** **`PORT`** overrides **`VUZON_PORT`** for the listen port. The Docker image sets **`NODE_ENV=production`**; cookies stay usable over HTTP unless you set **`COOKIE_SECURE=1`**.
 
 Other developer-oriented variables (`VUZON_PUBLIC_DIR`): **[CONTRIBUTING.md](CONTRIBUTING.md)**.
@@ -234,6 +238,7 @@ vuzon only writes actions it fully understands — forward to one verified addre
 - **Refuses to start** with an unwritable data directory or a template `CF_API_TOKEN` / `DOMAIN`.
 - Panel credentials are compared in **constant time**; login is rate-limited to **10 attempts / 15 min**.
 - **Logging out from a live session invalidates the cookie**, not just the browser copy — a cookie captured earlier stops working. (A logout sent without a valid session only clears the caller's own cookie, so it cannot be used to sign everyone else out.)
+- **Sessions expire 7 days after sign-in, enforced by the server.** The cookie's own `maxAge` only asks the browser to forget it; the panel checks the age of every session on every request, so a cookie copied off the wire stops working on its own even if you never log out.
 - Cloudflare's error text is **logged server-side and never returned to the browser**; upstream 401/403 are normalised to 502 so they can't be mistaken for your own session expiring.
 - Strict **CSP**, `nosniff`, `Referrer-Policy`, and `Cache-Control: no-store` on every API response.
 - The published **API token is never logged or returned**, and the container runs as a **non-root** user, read-only, with all capabilities dropped.
@@ -288,9 +293,9 @@ Da a cada servicio su propia dirección (`netflix@tudominio.com`, `tienda@tudomi
 **Operación**
 
 - **Una sola imagen Docker**, multiarquitectura **amd64 / arm64**, publicada en GHCR con cada release.
-- **Sin base de datos, nada en disco** — la sesión vive en una cookie firmada.
+- **Sin base de datos.** En disco solo hay tres ficheros pequeños en el volumen de datos: tus credenciales del panel (con hash), la clave de firma de la cookie y la marca de revocación de sesiones. Haz copia de ese volumen y trátalo como material secreto.
 - **El HTTP plano sigue funcionando** en una LAN de homelab; lo específico de TLS (`COOKIE_SECURE`, HSTS) es opcional.
-- **Autodetección de zona y cuenta** a partir de `DOMAIN`, así que normalmente solo hay cuatro variables que definir.
+- **Autodetección de zona y cuenta** a partir de `DOMAIN`, así que normalmente solo hay dos variables que definir.
 - **Las credenciales se eligen en el navegador**, la primera vez que abres el panel: ni en un fichero de configuración, ni nunca en texto plano. Después puedes **cambiar el usuario o la contraseña** desde el menú de cuenta de la cabecera; cualquiera de los dos cambios cierra el resto de sesiones.
 - Se niega a arrancar con una configuración claramente insegura (`CF_API_TOKEN` de plantilla, directorio de datos no escribible) en vez de levantarse en un estado roto.
 
@@ -332,7 +337,7 @@ Abre **http://localhost:8001** (o `http://<server-ip>:<port>` en tu LAN). Otro p
 
 Problemas: **`docker compose logs -f vuzon`** — los errores de arranque nombran la variable exacta que hay que corregir.
 
-El inicio de sesión usa una cookie firmada **`vuzon_session`**; el estado propio del panel (hash de la credencial + clave de firma) vive en el volumen **`vuzon-data`**. **Haz copia de ese volumen**: perderlo es perder la contraseña, y el asistente de instalación se vuelve a abrir. Para cambiar el usuario o la contraseña más adelante, usa el icono de llave de la cabecera. Para build local de imagen, pinning y detalles HTTP, ver **[CONTRIBUTING.md](CONTRIBUTING.md)**.
+El inicio de sesión usa una cookie firmada **`vuzon_session`**; el estado propio del panel (hash de la credencial + clave de firma) vive en el volumen **`vuzon-data`**. **Haz copia de ese volumen**: perderlo es perder la contraseña, y el asistente de instalación se vuelve a abrir. Para cambiar el usuario o la contraseña más adelante, usa el icono de cuenta (la silueta de persona) de la cabecera. Para build local de imagen, pinning y detalles HTTP, ver **[CONTRIBUTING.md](CONTRIBUTING.md)**.
 
 ### Actualizar
 
@@ -341,6 +346,8 @@ docker compose pull && docker compose up -d
 ```
 
 La imagen se reconstruye y publica en GHCR con cada release. Tu `.env` no se toca; las sesiones sobreviven al reinicio.
+
+El `docker-compose.yml` que se distribuye fija la versión **mayor** (`ghcr.io/kn990x/vuzon:2`), así que `docker compose pull` solo te trae correcciones y novedades dentro de esa mayor. Pasar a la siguiente mayor es una edición deliberada de la línea `image:` — lee antes las notas de la release, porque una mayor es donde viven los cambios incompatibles (mira la nota sobre 1.x más abajo para ver hasta dónde puede llegar eso).
 
 > **Actualizar desde 1.x:** las credenciales del panel han salido del `.env`. `AUTH_USER` y `AUTH_PASS` se **ignoran** a partir de 2.0, así que la primera vez que abras el panel actualizado verás el asistente de instalación pidiéndote elegirlas de nuevo — esta vez guardadas con hash en el volumen `vuzon-data`. Añade ese volumen a tu `docker-compose.yml` si reutilizas una copia antigua del fichero, y borra `AUTH_USER`, `AUTH_PASS` y `SESSION_SECRET` de tu `.env`: los tres se ignoran ahora. El panel genera su propia clave de firma, así que te desconectará una vez al actualizar y nunca más por este motivo.
 
@@ -392,6 +399,8 @@ Mínimo: **`CF_API_TOKEN`** y **`DOMAIN`** — el acceso al panel no es una vari
 
 **Detrás de un proxy inverso (nginx, Traefik, etc.):** define **`TRUST_PROXY`** para que Express confíe en `X-Forwarded-*`, vea la IP real del cliente y el rate limit de login sea correcto. Valores aceptados: un **número de saltos** (`1`, `2`, …), **`loopback`** / **`linklocal`** / **`uniquelocal`**, o una **lista de IP/CIDR** (`10.0.0.0/8`, `127.0.0.1, 192.168.1.0/24`). Un valor no reconocido lo deja **desactivado** y deja un aviso en el arranque. Con terminación TLS, también **`COOKIE_SECURE=1`**. **Ambos desactivados por defecto.**
 
+> **Deja `TRUST_PROXY` desactivado salvo que el proxy de confianza sea la única vía de llegar al panel.** Con él activado, cualquiera que pueda conectarse directamente puede falsificar `X-Forwarded-For` y obtener una cuota nueva de rate limit de login por cada IP inventada, que es justo lo contrario de para lo que lo activaste.
+
 **`pnpm start` en local:** **`PORT`** tiene prioridad sobre **`VUZON_PORT`** para el puerto de escucha. La imagen Docker fija **`NODE_ENV=production`**; las cookies siguen siendo usables por HTTP salvo que actives **`COOKIE_SECURE=1`**.
 
 Otras variables orientadas a desarrollo (`VUZON_PUBLIC_DIR`): **[CONTRIBUTING.md](CONTRIBUTING.md)**.
@@ -422,6 +431,7 @@ vuzon solo escribe acciones que entiende del todo: reenviar a una dirección ver
 - **Se niega a arrancar** con un directorio de datos no escribible o un `CF_API_TOKEN` / `DOMAIN` de plantilla.
 - Las credenciales del panel se comparan en **tiempo constante**; el login está limitado a **10 intentos / 15 min**.
 - **Cerrar sesión con una sesión válida invalida la cookie**, no solo la copia del navegador: una cookie capturada antes deja de funcionar. (Un logout sin sesión válida solo borra la cookie de quien lo envía, así que no sirve para cerrar la sesión de nadie más.)
+- **Las sesiones caducan a los 7 días del inicio de sesión, y lo comprueba el servidor.** El `maxAge` de la cookie solo le pide al navegador que la olvide; el panel verifica la antigüedad de cada sesión en cada petición, así que una cookie capturada deja de servir por sí sola aunque nunca cierres sesión.
 - El texto de error de Cloudflare se **registra en el servidor y nunca se devuelve al navegador**; los 401/403 upstream se normalizan a 502 para que no se confundan con la caducidad de tu propia sesión.
 - **CSP** estricta, `nosniff`, `Referrer-Policy` y `Cache-Control: no-store` en todas las respuestas de la API.
 - El **token de API nunca se registra ni se devuelve**, y el contenedor se ejecuta como usuario **no root**, en solo lectura y sin capabilities.

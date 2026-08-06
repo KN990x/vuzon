@@ -4,8 +4,10 @@ on:
   release:
     types: [published]
 
+# `contents` stays read at the workflow level; only the asset-upload step needs write, and
+# it is granted there. Everything before it runs without the ability to alter the release.
 permissions:
-  contents: write
+  contents: read
   packages: write
 
 # Never cancelled mid-flight: a half-pushed multi-arch manifest is worse than a duplicate
@@ -18,6 +20,9 @@ jobs:
   build-and-push:
     if: ${{ !github.event.release.prerelease }}
     runs-on: ubuntu-latest
+    # Emulated arm64 is slow enough to be worth bounding explicitly; without this a hung
+    # QEMU build sits on the runner for the 6h default.
+    timeout-minutes: 90
 
     steps:
       - name: Checkout tag
@@ -42,50 +47,65 @@ jobs:
       - name: Validate repository
         run: pnpm run check
 
-      # Prove the tagged image boots before pushing multi-arch to GHCR. Same hardening
-      # and checks as ci.yml (read_only, cap_drop, healthz, SPA, setup_required).
-      - name: Build smoke image (amd64)
-        run: docker build -t vuzon-release-smoke .
-
-      - name: Smoke test the image (boots, hardened, serves the SPA)
+      # The image tag comes from the release tag, but the bundle inside comes from the
+      # commit. Publishing v2.1.0 from a tree that still says 2.0.0 produced an image
+      # labelled 2.1.0 containing 2.0.0, and every bug report from it quoted the wrong
+      # version. repository-guard.test.js checks the three manifests agree with each other;
+      # only the release tag can be checked here.
+      - name: Verify the release tag matches package.json
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           set -euo pipefail
-          docker run -d --name vuzon-release-smoke \
-            --read-only --tmpfs /tmp \
-            --cap-drop ALL --security-opt no-new-privileges:true \
-            -v vuzon-release-smoke-data:/app/data \
-            -e DOMAIN=ci-smoke-test.invalid \
-            -e CF_API_TOKEN=ci-smoke-test-token \
-            -e CF_ZONE_ID=ci_smoke_zone \
-            -e CF_ACCOUNT_ID=ci_smoke_account \
-            -p 8001:8001 vuzon-release-smoke
+          manifest="$(jq -r .version package.json)"
+          tag="${RELEASE_TAG#v}"
+          if [ "$manifest" != "$tag" ]; then
+            echo "Release tag ${RELEASE_TAG} does not match package.json version ${manifest}." >&2
+            exit 1
+          fi
+          echo "Version ${manifest} matches the release tag."
 
-          for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:8001/healthz > /dev/null 2>&1; then
-              echo "healthz OK after ${i}s"; break
-            fi
-            if [ "$i" -eq 30 ]; then
-              echo "The container never answered /healthz:"; docker logs vuzon-release-smoke; exit 1
-            fi
-            sleep 1
-          done
-
-          curl -fsS http://127.0.0.1:8001/ | grep -q '<div id="root">'
-          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8001/api/me)" = "401"
-          curl -sS http://127.0.0.1:8001/api/me | grep -q '"code":"auth.setup_required"'
-
-      - name: Tear down smoke test
-        if: always()
-        run: |
-          docker rm -f vuzon-release-smoke 2>/dev/null || true
-          docker volume rm vuzon-release-smoke-data 2>/dev/null || true
-          docker rmi vuzon-release-smoke 2>/dev/null || true
-
+      # QEMU and Buildx come BEFORE the smoke test now, because the smoke test needs them:
+      # the arm64 image used to be pushed to GHCR without ever having been executed.
       - name: Set up QEMU
         uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+
+      # Build → test → push. Each architecture is loaded into the local daemon and booted
+      # before anything is published; the multi-arch push below then reuses the same GHA
+      # cache, so the bytes that reach GHCR are the ones that passed.
+      # `load: true` takes a single platform at a time, hence two build steps.
+      - name: Build amd64 image for testing
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          tags: vuzon-release-smoke:amd64
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test amd64
+        run: .github/scripts/smoke-test.sh vuzon-release-smoke:amd64 vuzon-smoke-amd64 linux/amd64
+
+      - name: Build arm64 image for testing
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/arm64
+          tags: vuzon-release-smoke:arm64
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Runs under QEMU emulation. Slower, but it is the only thing standing between an
+      # arm64-only regression and a silent crash-loop on every Raspberry Pi homelab.
+      - name: Smoke test arm64
+        run: .github/scripts/smoke-test.sh vuzon-release-smoke:arm64 vuzon-smoke-arm64 linux/arm64
 
       - name: Log in to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
@@ -103,7 +123,13 @@ jobs:
             type=raw,value=latest
             type=semver,pattern={{version}},value=${{ github.event.release.tag_name }}
             type=semver,pattern={{major}}.{{minor}},value=${{ github.event.release.tag_name }}
+            # Major-only tag so docker-compose.yml can pin to it. `latest` moves across
+            # major versions, and the README's update procedure is `docker compose pull` —
+            # which walked a 1.x user straight into 2.0's public setup wizard.
+            type=semver,pattern={{major}},value=${{ github.event.release.tag_name }}
 
+      # Rebuilds nothing: every layer for both platforms is already in the GHA cache from
+      # the two test builds above.
       - name: Build & push
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
@@ -115,6 +141,22 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Split out so `contents: write` is scoped to the one thing that needs it. The build job
+  # runs the whole toolchain — install, check, Docker — with no ability to alter the release.
+  publish-assets:
+    needs: build-and-push
+    if: ${{ !github.event.release.prerelease }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.release.tag_name }}
 
       - name: Upload release assets (Compose + env template)
         env:

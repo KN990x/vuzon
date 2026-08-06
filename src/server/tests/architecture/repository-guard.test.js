@@ -47,6 +47,20 @@ test('package: the version does not drift between the root and the two workspace
   assert.equal(web.version, root.version);
 });
 
+test('package: the Node engine constraint does not drift between the three manifests', () => {
+  const root = readJsonFile(repoRoot, 'package.json');
+  const server = readJsonFile(serverDir, 'package.json');
+  const web = readJsonFile(repoRoot, 'src', 'web', 'package.json');
+
+  // The server manifest is the one that matters most: `pnpm --filter @vuzon/server deploy`
+  // copies it into /prod as the ENTIRE manifest of the runtime bundle. Declared only at the
+  // root, the constraint was checked at install time in this workspace and then vanished —
+  // a derived image on node:20 crashed at runtime instead of refusing to install.
+  assert.equal(server.engines?.node, root.engines?.node);
+  assert.equal(web.engines?.node, root.engines?.node);
+  assert.match(String(root.engines?.node), /^>=\d+$/);
+});
+
 test('tree: no leftovers from the workspace migration', () => {
   // The HTTP contract lives in tests/integration/server/app.test.js, not in a separate .md.
   assert.equal(fs.existsSync(path.join(repoRoot, 'API_CONTRACT.md')), false);

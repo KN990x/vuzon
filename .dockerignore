@@ -6,6 +6,11 @@
 **/node_modules
 **/dist
 
+# The backend test suite is never run inside the image, and `pnpm deploy` already excludes
+# it from /prod via the `files` field. It was still being copied into the build context and
+# into the build layer on every build — several thousand lines of it.
+src/server/tests
+
 npm-debug.log*
 pnpm-debug.log*
 yarn-error.log*

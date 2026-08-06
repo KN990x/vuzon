@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { apiRequest, UnauthorizedError } from '../lib/api';
 import { buildAuthErrorMessage } from '../lib/login-error';
@@ -52,20 +52,30 @@ export function AccountDialog({
 
   const firstFieldRef = useRef<HTMLInputElement>(null);
   const onUnauthorizedRef = useRef(onUnauthorized);
-  onUnauthorizedRef.current = onUnauthorized;
+  // Synced in an effect, not during render: a render React throws away must not leave a
+  // mutated ref behind. Same rule as Dashboard.tsx and use-dialog.ts.
+  useEffect(() => {
+    onUnauthorizedRef.current = onUnauthorized;
+  }, [onUnauthorized]);
 
   const titleKey = mode === 'username' ? 'account.username.title' : 'account.password.title';
+  const titleId = useId();
 
   // Escape while a submit is in flight would unmount the dialog mid-request: the change
   // still lands server-side (other sessions really are revoked) but onChanged never fires,
   // so there is no toast and no profile refresh. The request owns the dialog until it ends.
   const submitting = usernameSubmitting || passwordSubmitting;
+  // Every way out of this dialog goes through here — Escape, the backdrop AND the Cancel
+  // button. Cancel used to call `onClose` directly, so it was the one exit that ignored
+  // the rule above: clicking it mid-request closed the dialog while the change went on to
+  // land, revoking every other session with no toast and no profile refresh to show for it.
+  const requestClose = () => {
+    if (!submitting) {
+      onClose();
+    }
+  };
   const { overlayRef, dialogRef, trapTab, onBackdropMouseDown } = useDialog({
-    onClose: () => {
-      if (!submitting) {
-        onClose();
-      }
-    },
+    onClose: requestClose,
     initialFocusRef: firstFieldRef,
   });
 
@@ -141,8 +151,9 @@ export function AccountDialog({
   const cancelButton = (
     <button
       type="button"
-      onClick={onClose}
-      className="cursor-pointer text-[12.5px] text-cream/65 transition-colors duration-200 hover:text-cream"
+      onClick={requestClose}
+      disabled={submitting}
+      className="cursor-pointer text-[12.5px] text-cream/65 transition-colors duration-200 hover:text-cream disabled:cursor-not-allowed disabled:opacity-50"
     >
       {t('account.cancel')}
     </button>
@@ -162,11 +173,13 @@ export function AccountDialog({
           ref={dialogRef}
           role="dialog"
           aria-modal="true"
-          aria-label={t(titleKey)}
+          // Points at the heading rather than repeating it in an aria-label: the two could
+          // drift, and ConfirmDialog already names itself this way.
+          aria-labelledby={titleId}
           className="fade-in glass glass-dialog relative w-full max-w-sm rounded-panel p-7"
           onKeyDown={trapTab}
         >
-          <h2 className="m-0 mb-1.5 text-[15px] font-semibold tracking-[-0.02em] text-cream">
+          <h2 id={titleId} className="m-0 mb-1.5 text-[15px] font-semibold tracking-[-0.02em] text-cream">
             {t(titleKey)}
           </h2>
           <p className="m-0 mb-5 text-[12.5px] leading-relaxed text-cream/60">
@@ -175,7 +188,7 @@ export function AccountDialog({
 
           {mode === 'username' ? (
             <form className="flex flex-col gap-4" onSubmit={handleUsernameSubmit}>
-              <p className="m-0 font-mono text-[11px] text-cream/45">
+              <p className="m-0 font-mono text-[11px] text-cream/60">
                 {t('account.username.current', { username: currentUsername })}
               </p>
               <label className="flex flex-col gap-1.5">
@@ -247,7 +260,7 @@ export function AccountDialog({
                   required
                   className={authFieldClass}
                 />
-                <span className="font-mono text-[11px] text-cream/45">{t('setup.passwordHint')}</span>
+                <span className="font-mono text-[11px] text-cream/60">{t('setup.passwordHint')}</span>
               </label>
               <label className="flex flex-col gap-1.5">
                 <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-cream/65">

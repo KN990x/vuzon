@@ -4,9 +4,16 @@ import { ERROR_CODES } from './error-codes.js';
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
 
 // English fallbacks; the panel renders the `code` in the language the user picked.
-const TOO_MANY_ATTEMPTS = {
-  error: 'Too many attempts. Wait a moment and try again.',
+const TOO_MANY_LOGIN_ATTEMPTS = {
+  error: 'Too many sign-in attempts. Wait a moment and try again.',
   code: ERROR_CODES.RATE_LIMIT_LOGIN,
+};
+
+// Setup and the credential-change routes. Same shape as login, different code: they run
+// the same slow KDF but the user is not signing in, and the login copy said they were.
+const TOO_MANY_CREDENTIAL_ATTEMPTS = {
+  error: 'Too many attempts. Wait a moment and try again.',
+  code: ERROR_CODES.RATE_LIMIT_CREDENTIAL,
 };
 
 const TOO_MANY_REQUESTS = {
@@ -34,7 +41,7 @@ export function createLoginRateLimiter(options = {}) {
     windowMs: FIFTEEN_MINUTES_MS,
     max: 10,
     skipSuccessfulRequests: true,
-    message: TOO_MANY_ATTEMPTS,
+    message: TOO_MANY_LOGIN_ATTEMPTS,
     ...options,
   });
 }
@@ -51,7 +58,7 @@ export function createSetupRateLimiter(options = {}) {
     ...sharedRateLimitOptions,
     windowMs: FIFTEEN_MINUTES_MS,
     max: 10,
-    message: TOO_MANY_ATTEMPTS,
+    message: TOO_MANY_CREDENTIAL_ATTEMPTS,
     ...options,
   });
 }
@@ -69,7 +76,7 @@ export function createCredentialVerifyRateLimiter(options = {}) {
     windowMs: FIFTEEN_MINUTES_MS,
     max: 10,
     skipSuccessfulRequests: true,
-    message: TOO_MANY_ATTEMPTS,
+    message: TOO_MANY_CREDENTIAL_ATTEMPTS,
     ...options,
   });
 }
@@ -111,13 +118,23 @@ export function createApiRateLimiter(options = {}) {
 
 /**
  * Soft limit for the panel SPA (served without authentication).
+ *
+ * It covers the static asset directory as well as the two HTML routes, so the quota is
+ * sized per page LOAD rather than per request: index.html plus the JS chunk, the
+ * stylesheet and the favicon is ~4-5 requests, and a hard refresh re-fetches all of them.
+ * 500 leaves room for ~100 cold loads per window while still bounding an anonymous
+ * flood — the reason the directory is behind a limiter at all.
+ *
+ * `message` is set explicitly: without it express-rate-limit emits its default text/plain
+ * body, which would make this the one limiter in the panel not answering `{ error, code }`.
  * @param {import('express-rate-limit').Options} [options]
  */
 export function createPagesRateLimiter(options = {}) {
   return rateLimit({
     ...sharedRateLimitOptions,
     windowMs: FIFTEEN_MINUTES_MS,
-    max: 100,
+    max: 500,
+    message: TOO_MANY_REQUESTS,
     ...options,
   });
 }

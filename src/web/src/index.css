@@ -167,9 +167,18 @@ textarea:focus-visible {
     scroll-behavior: auto !important;
   }
 
-  /* The hover/active scales are the one thing worth removing outright. */
   .fade-in {
     animation: none;
+  }
+
+  /* The hover/active scales are the one thing worth removing OUTRIGHT, and the comment
+     here used to claim that while only disabling the fade above. Left alone, the rule at
+     the top of this block does not remove `hover:scale-105` — it collapses its transition
+     to 0.01ms, so the element snaps to the larger size instead of easing into it. For
+     someone who asked for less motion that is worse than the animation, not better. */
+  .hover\:scale-105:hover,
+  .hover\:scale-105:active {
+    transform: none;
   }
 }
 

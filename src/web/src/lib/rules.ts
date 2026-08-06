@@ -31,7 +31,10 @@ export type RuleActionKind = 'forward' | 'drop' | 'worker' | 'fanout' | 'unknown
 
 export interface RuleActionSummary {
   kind: RuleActionKind;
-  destinations: string[];
+  // `readonly`: UNKNOWN_SUMMARY is a single frozen object handed to every caller, so a
+  // `.push` on it would corrupt the shared instance. Typed as a mutable array, that call
+  // compiled fine and threw at runtime; typed like this the compiler refuses it.
+  readonly destinations: readonly string[];
   workerName: string | null;
 }
 
@@ -39,7 +42,7 @@ export interface RuleActionSummary {
 // caller, so an accidental mutation of `destinations` would corrupt it globally.
 const UNKNOWN_SUMMARY: RuleActionSummary = Object.freeze({
   kind: 'unknown',
-  destinations: Object.freeze([]) as unknown as string[],
+  destinations: Object.freeze([]),
   workerName: null,
 });
 
@@ -121,7 +124,10 @@ export function getRuleDest(
  */
 export function getSingleForwardDestination(rule: Rule | null | undefined): string | null {
   const summary = describeRuleActions(rule);
-  return summary.kind === 'forward' ? summary.destinations[0] : null;
+  // `?? null` rather than a non-null assertion: `kind === 'forward'` is only ever produced
+  // from a length-1 array a few lines above, but that is an invariant of this module, not
+  // something the type carries. Coercing here keeps the guarantee at the boundary.
+  return summary.kind === 'forward' ? summary.destinations[0] ?? null : null;
 }
 
 /**
@@ -129,6 +135,17 @@ export function getSingleForwardDestination(rule: Rule | null | undefined): stri
  * Mirror of `ruleAliasLabel` in destination-usage.js — returns '' instead of 'unknown'
  * so the component can translate the fallback.
  */
+/**
+ * Identity token for the catch-all, NOT user-facing copy.
+ *
+ * `getRuleAlias` is a matching function as much as a labelling one (the search box
+ * lowercases its result and compares), so it has to return something stable rather than a
+ * translated string. Callers that put the value on screen translate it — see
+ * `findAliasesUsingDestination` and AliasesCard. Both catalogues happen to say "catch-all"
+ * today, which is exactly why the raw literal went unnoticed here.
+ */
+export const CATCH_ALL_ALIAS = 'catch-all';
+
 export function getRuleAlias(rule: Rule | null | undefined): string {
   if (!rule) {
     return '';
@@ -141,7 +158,7 @@ export function getRuleAlias(rule: Rule | null | undefined): string {
         continue;
       }
       if (matcher.type === 'all') {
-        return 'catch-all';
+        return CATCH_ALL_ALIAS;
       }
       if (
         matcher.type === 'literal'
@@ -228,7 +245,14 @@ export function findAliasesUsingDestination(
       continue;
     }
 
-    const label = getRuleAlias(rule) || t('aliases.row.unknownAlias');
+    const alias = getRuleAlias(rule);
+    // The catch-all's identity token becomes copy the moment it is read out to the user,
+    // so it goes through the translator here rather than being rendered as the raw
+    // constant — the same treatment `aliases.row.unknownAlias` already gets.
+    let label = alias || t('aliases.row.unknownAlias');
+    if (alias === CATCH_ALL_ALIAS) {
+      label = t('dashboard.catchAll');
+    }
     if (!labels.includes(label)) {
       labels.push(label);
     }

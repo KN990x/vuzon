@@ -2,6 +2,8 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { SESSION_MAX_AGE_MS } from '../../platform/session/middleware.js';
+
 /**
  * Session revocation mark.
  *
@@ -100,10 +102,18 @@ export function configureSessionEpochPersistence({ dataDir }) {
  * alive. Taking the max keeps the mark at or above every stamp issued so far.
  */
 export function revokeSessionsIssuedUntilNow(now = Date.now()) {
-  revokedBefore = Math.max(now, revokedBefore + 1);
+  const next = Math.max(now, revokedBefore + 1);
+  // Persist BEFORE moving the in-memory mark. The other order left the two out of sync
+  // whenever the write failed (a full or read-only volume): `POST /api/account/password`
+  // had already saved the new hash, so the caller saw a 500 for a change that succeeded,
+  // their own tab was logged out by the raised in-memory mark, and the next restart
+  // reloaded the OLD on-disk value — reviving every cookie the change meant to kill.
+  // Writing first means a failure leaves both marks at their previous value and the route
+  // reports an error for a revocation that genuinely did not happen.
   if (epochFilePath) {
-    writeEpochFile(epochFilePath, revokedBefore);
+    writeEpochFile(epochFilePath, next);
   }
+  revokedBefore = next;
 }
 
 /**
@@ -121,14 +131,28 @@ export function nextIssuedAt(now = Date.now()) {
 }
 
 /**
+ * Two independent reasons to reject a session stamp.
+ *
+ * The revocation mark is the explicit one: a logout or credential change moves it above
+ * every stamp issued so far.
+ *
+ * The age check is the one the cookie cannot enforce by itself. `cookie-session` is
+ * stateless — it serialises only what the route assigns (`{ authenticated, issuedAt }`)
+ * and embeds no expiry — so the 7-day `maxAge` is nothing but a browser-side attribute.
+ * A cookie captured off the wire (the panel supports plain HTTP by design) kept
+ * authenticating indefinitely as long as the user never logged out or changed their
+ * password. Comparing against the same `SESSION_MAX_AGE_MS` the cookie advertises is what
+ * makes that window real, and importing the constant keeps the two from drifting apart.
+ *
  * @param {unknown} issuedAt The `issuedAt` mark stored in the session at login time.
+ * @param {number} [now]
  * @returns {boolean}
  */
-export function isSessionIssuanceValid(issuedAt) {
+export function isSessionIssuanceValid(issuedAt, now = Date.now()) {
   if (typeof issuedAt !== 'number' || !Number.isFinite(issuedAt)) {
     return false;
   }
-  return issuedAt > revokedBefore;
+  return issuedAt > revokedBefore && issuedAt > now - SESSION_MAX_AGE_MS;
 }
 
 /**

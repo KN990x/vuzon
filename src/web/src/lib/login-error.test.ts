@@ -13,7 +13,7 @@ test('server errors are translated by code, in both languages', () => {
 
   const limited = new ApiError('Too many attempts.', 429, { code: 'rate_limit.login' });
   expect(buildLoginErrorMessage(es, limited)).toBe(
-    'Demasiados intentos. Espera un momento e inténtalo de nuevo.',
+    'Demasiados intentos de acceso. Espera un momento e inténtalo de nuevo.',
   );
 });
 

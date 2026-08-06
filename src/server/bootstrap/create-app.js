@@ -13,7 +13,7 @@ import { registerAuthRoutes } from '../features/auth/routes.js';
 import { registerApiRoutes } from '../features/email-routing/routes.js';
 import { registerPageRoutes } from '../features/pages/routes.js';
 import { createCloudflareClient } from '../platform/cloudflare/client.js';
-import { createApiErrorHandler } from '../platform/http/api-route-error.js';
+import { createApiErrorHandler, createFallbackErrorHandler } from '../platform/http/api-route-error.js';
 import { ERROR_CODES } from '../platform/http/error-codes.js';
 import {
   createApiRateLimiter,
@@ -36,7 +36,12 @@ const CONTENT_SECURITY_POLICY = [
   "form-action 'self'",
   "frame-ancestors 'none'",
   "script-src 'self'",
-  "style-src 'self' 'unsafe-inline'",
+  // No 'unsafe-inline': the production build ships a real stylesheet and emits neither
+  // <style> blocks nor literal style="" attributes (Vite only injects those in dev).
+  // The panel's handful of inline styles — Switch's knob offset, use-dialog's scroll lock,
+  // clipboard's off-screen textarea — are all CSSOM assignments, which CSP does not govern
+  // in the first place, so allowing 'unsafe-inline' bought nothing and weakened the policy.
+  "style-src 'self'",
   "img-src 'self' data:",
   "connect-src 'self'",
   "font-src 'self'",
@@ -118,6 +123,13 @@ export function createApp({
   //      allows curl (no Origin / no Sec-Fetch-Site).
   // Changing any of these means revisiting this decision.
   //
+  // Pillar 2 covers only the routes that REQUIRE a body. `POST /api/rules/:id/enable`,
+  // `/disable` and `/api/logout` read nothing from `req.body`, so a cross-site
+  // `<form enctype="text/plain">` targeting them is a simple request: no preflight, body
+  // irrelevant. They are still stopped, by pillars 1 and 4 — but they rest on two of the
+  // four, which is what makes the same-origin guard load-bearing rather than defence in
+  // depth. Weakening the guard's curl allowance is not a free change for those three.
+  //
   // The guard runs BEFORE express.json on purpose: it only reads headers, so parsing up to
   // 256kb of a request that is about to be rejected with 403 is wasted work — and a
   // malformed cross-origin body used to fail in the parser before the guard ever saw it.
@@ -148,6 +160,10 @@ export function createApp({
   });
   registerPageRoutes(app, { publicDir, pagesLimiter });
   app.use(createApiErrorHandler());
+  // Terminal: catches what the API handler forwards (SPA/static paths). Without it those
+  // errors reached Express's finalhandler, which prints the stack trace into the response
+  // whenever NODE_ENV is not 'production' — which is every non-Docker run.
+  app.use(createFallbackErrorHandler());
 
   return {
     app,

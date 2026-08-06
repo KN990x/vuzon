@@ -11,13 +11,13 @@ export const pillButtonClass =
 /** Text field: translucent fill + visible border so the control reads as an input. */
 export const textFieldClass =
   'rounded-[8px] border border-cream/20 bg-white/[0.04] px-2.5 py-[7px] font-mono text-cream ' +
-  'placeholder:text-cream/45 transition-colors duration-200 ' +
+  'placeholder:text-cream/60 transition-colors duration-200 ' +
   'focus:border-cream/40 focus:bg-white/[0.07]';
 
 /** Auth / dialog fields: same border language, slightly larger padding and radius. */
 export const authFieldClass =
   'rounded-[10px] border border-cream/20 bg-white/[0.04] px-3 py-2.5 font-mono text-[13px] ' +
-  'text-cream placeholder:text-cream/45 transition-colors duration-200 ' +
+  'text-cream placeholder:text-cream/60 transition-colors duration-200 ' +
   'focus:border-cream/40 focus:bg-white/[0.07]';
 
 /** Native select sharing the text-field border so destinations look editable too. */

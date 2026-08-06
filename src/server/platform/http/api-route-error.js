@@ -129,3 +129,26 @@ export function createApiErrorHandler() {
     sendApiRouteError(res, err);
   };
 }
+
+/**
+ * Terminal handler for everything the API handler passes on (the SPA and static routes).
+ *
+ * Those errors used to reach Express's own `finalhandler`, which renders the stack trace
+ * into the HTML response unless `NODE_ENV=production`. Only the Docker image sets that —
+ * a local `pnpm start` did not — so an unreadable `index.html` (EACCES, EISDIR: anything
+ * `sendIndexHtml` forwards that is not ENOENT) answered the browser with panel internals.
+ *
+ * Registered last, after `createApiErrorHandler`, and deliberately mute: there is no
+ * envelope to honour outside `/api`, and the detail belongs in the server log.
+ */
+export function createFallbackErrorHandler() {
+  // The unused `_next` is load-bearing: Express identifies error handlers by arity (4).
+  return function fallbackErrorHandler(err, req, res, _next) {
+    console.error('Unhandled error:', err);
+    if (res.headersSent) {
+      res.destroy();
+      return;
+    }
+    res.status(500).type('text/plain').send('Internal server error');
+  };
+}

@@ -4,7 +4,10 @@ import { z } from 'zod';
  * Cloudflare resource ids (zones, accounts, rules, addresses in paths).
  * The issue messages are slugs, not prose: see platform/http/format-zod-error.js.
  */
-export const cloudflareResourceIdSchema = z.string()
+export const cloudflareResourceIdSchema = z.string({
+  required_error: 'id.empty',
+  invalid_type_error: 'id.charset',
+})
   .min(1, 'id.empty')
   .max(64, 'id.too_long')
   .regex(/^[A-Za-z0-9_-]+$/, 'id.charset');

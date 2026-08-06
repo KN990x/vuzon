@@ -34,6 +34,7 @@ export function CatchAllCard({ catchAll, loaded, verifiedDests, busy, onToggle, 
   const { t } = i18n;
   const [editing, setEditing] = useState(false);
   const editorId = useId();
+  const titleId = useId();
 
   const enabled = Boolean(catchAll?.enabled);
   const summary = describeRuleActions(catchAll);
@@ -55,13 +56,14 @@ export function CatchAllCard({ catchAll, loaded, verifiedDests, busy, onToggle, 
   }
 
   return (
-    <section className="glass relative rounded-card p-5">
+    // Named landmark + real heading: see the comment in AliasesCard.
+    <section aria-labelledby={titleId} className="glass relative rounded-card p-5">
       <div className="mb-2.5 flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2.5">
           <CardIcon>
             <Activity size={14} />
           </CardIcon>
-          <span className={`truncate ${cardTitleClass}`}>{t('catchAll.title')}</span>
+          <h2 id={titleId} className={`m-0 truncate ${cardTitleClass}`}>{t('catchAll.title')}</h2>
         </div>
         <div className="flex flex-none items-center gap-2.5">
           <span

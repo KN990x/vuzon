@@ -133,3 +133,36 @@ test('claiming the panel revokes every session issued before it', () => {
       + 'stay valid for its full maxAge against the new credentials.',
   );
 });
+
+test('the catch-all route is registered before the parametrised rule route', () => {
+  const routes = readServerFile('features', 'email-routing', 'routes.js');
+  const dedicated = routes.indexOf("app.put('/api/rules/catch-all'");
+  const parametrised = routes.indexOf("app.put('/api/rules/:id'");
+
+  assert.notEqual(dedicated, -1, 'PUT /api/rules/catch-all is missing');
+  assert.notEqual(parametrised, -1, 'PUT /api/rules/:id is missing');
+  assert.ok(
+    dedicated < parametrised,
+    'cloudflareResourceIdSchema accepts hyphens, so PUT /api/rules/catch-all matches '
+      + '/api/rules/:id. Registered the other way round, the panel\'s own catch-all URL is '
+      + 'swallowed by the generic handler — Express matches in registration order and there '
+      + 'is no runtime test that can tell the two apart once the order is wrong.',
+  );
+});
+
+test('the session stamp is checked against a maximum age, not only the revocation mark', () => {
+  const epoch = readServerFile('features', 'auth', 'session-epoch.js');
+  assert.match(
+    epoch,
+    /SESSION_MAX_AGE_MS/,
+    'cookie-session serialises no expiry, so the cookie maxAge is a browser-side hint: '
+      + 'without an age check here a captured cookie authenticates forever unless someone '
+      + 'happens to log out or change their password.',
+  );
+  assert.match(
+    epoch,
+    /from '\.\.\/\.\.\/platform\/session\/middleware\.js'/,
+    'The maximum age must be imported from the module that sets the cookie attribute, so '
+      + 'the advertised lifetime and the enforced one cannot drift apart.',
+  );
+});

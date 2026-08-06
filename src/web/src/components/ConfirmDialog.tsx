@@ -1,4 +1,5 @@
 import { useId, useRef } from 'react';
+import type { RefObject } from 'react';
 import { useDialog } from '../lib/use-dialog';
 import { useI18n } from '../i18n/context';
 import { pillButtonClass } from './primitives';
@@ -22,6 +23,11 @@ export interface ConfirmRequest {
 interface ConfirmDialogProps extends ConfirmRequest {
   onConfirm: () => void;
   onCancel: () => void;
+  /**
+   * Where focus goes when the element that opened the dialog is gone by the time it
+   * closes — which is the normal outcome of confirming a delete.
+   */
+  fallbackFocusRef?: RefObject<HTMLElement | null>;
 }
 
 /**
@@ -45,6 +51,7 @@ export function ConfirmDialog({
   informational = false,
   onConfirm,
   onCancel,
+  fallbackFocusRef,
 }: ConfirmDialogProps) {
   const { t } = useI18n();
   const titleId = useId();
@@ -55,6 +62,7 @@ export function ConfirmDialog({
   const { overlayRef, dialogRef, trapTab, onBackdropMouseDown } = useDialog({
     onClose: onCancel,
     initialFocusRef: safeButtonRef,
+    fallbackFocusRef,
   });
 
   return (

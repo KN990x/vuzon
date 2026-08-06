@@ -26,7 +26,9 @@ export interface RulePatchDraft {
 
 /** The action currently configured, when it is a single forward the panel can compare against. */
 export function currentForwardDestination(summary: RuleActionSummary): string | null {
-  return summary.kind === 'forward' ? summary.destinations[0] : null;
+  // See getSingleForwardDestination: 'forward' implies exactly one destination, but that
+  // is a module invariant rather than something the type expresses.
+  return summary.kind === 'forward' ? summary.destinations[0] ?? null : null;
 }
 
 /**

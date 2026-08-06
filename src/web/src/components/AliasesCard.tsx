@@ -64,15 +64,21 @@ export function AliasesCard(props: AliasesCardProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   // Prefix for the per-row editor ids that `aria-controls` points at.
   const editorIdPrefix = useId();
+  const titleId = useId();
+  const aliasErrorId = useId();
 
   return (
-    <section className="overflow-hidden rounded-card bg-surface">
+    // A <section> with no accessible name is not a landmark, and a <span> title is not a
+    // heading — the whole dashboard exposed exactly one heading (the domain <h1>) and three
+    // anonymous regions, which makes heading navigation useless. Naming the section from a
+    // real <h2> fixes both at once.
+    <section aria-labelledby={titleId} className="overflow-hidden rounded-card bg-surface">
       <div className="flex items-center justify-between gap-3 px-[18px] py-3.5 shadow-[inset_0_-1px_0_rgba(255,255,255,0.06)]">
         <div className="flex items-center gap-2.5">
           <CardIcon>
             <Mail size={14} />
           </CardIcon>
-          <span className={cardTitleClass}>{t('aliases.title')}</span>
+          <h2 id={titleId} className={`m-0 ${cardTitleClass}`}>{t('aliases.title')}</h2>
         </div>
         <div className="flex min-w-0 items-center gap-3">
           <label className="flex min-w-0 items-center gap-2 text-cream/65">
@@ -95,7 +101,11 @@ export function AliasesCard(props: AliasesCardProps) {
         </div>
       </div>
 
-      {rules.map((rule) => {
+      {/* A real list, not a stack of divs: without it nothing announces "list, 12 items" or
+          "item 3 of 12", so a screen-reader user had no idea how many aliases there were or
+          where they were in them. `list-none`/`m-0`/`p-0` keep the visual result identical. */}
+      <ul role="list" className="m-0 list-none p-0">
+        {rules.map((rule) => {
         const pending = isRulePending(rule.id);
         const enabled = Boolean(rule.enabled);
         const summary = describeRuleActions(rule);
@@ -104,7 +114,7 @@ export function AliasesCard(props: AliasesCardProps) {
         // out — and a rule whose action the panel cannot describe is not editable at all,
         // because a PUT would replace what we failed to understand.
         const quickSwap = summary.kind === 'forward' && verifiedDests.length > 0;
-        const currentDest = summary.destinations[0];
+        const currentDest = summary.destinations[0] ?? '';
         const editable = summary.kind !== 'unknown';
         const editing = editingId === rule.id;
         const editorId = `${editorIdPrefix}-${rule.id}`;
@@ -124,18 +134,18 @@ export function AliasesCard(props: AliasesCardProps) {
                   }
                 : null;
         return (
-          <div key={rule.id} className={rowDividerClass}>
-            <div
-              className={`flex items-center gap-3.5 ${rowPaddingClass} transition-opacity duration-[250ms] ${
-                enabled ? '' : 'opacity-45'
-              }`}
-            >
+          <li key={rule.id} className={rowDividerClass}>
+            {/* A paused row is NOT dimmed. `opacity-45` over the row took the alias itself
+                (13px, text-accent-soft) down to ~3.1:1, below AA, and paused aliases are
+                exactly the ones a user scans for. The state is already carried by the
+                active/paused label and the switch beside it. */}
+            <div className={`flex items-center gap-3.5 ${rowPaddingClass}`}>
               <span className="min-w-0 flex-1 truncate">
                 <span className="block truncate font-mono text-[13px] text-accent-soft">
                   {aliasName}
                 </span>
                 {showFreeName && (
-                  <span className="block truncate font-mono text-[10px] text-cream/45">
+                  <span className="block truncate font-mono text-[10px] text-cream/60">
                     {t('aliases.row.nameLabel', { name: freeName })}
                   </span>
                 )}
@@ -165,6 +175,11 @@ export function AliasesCard(props: AliasesCardProps) {
                 <span className="flex min-w-0 flex-1 items-center gap-2 truncate">
                   {kindBadge && (
                     <span
+                      // The read-only badge's explanation used to live ONLY in a `title`,
+                      // which never appears for a keyboard or touch user — and it is the
+                      // one badge that explains why the row has no controls. It is exposed
+                      // to assistive tech here and rendered visibly below the row too.
+                      aria-label={kindBadge.title ? `${t(kindBadge.key)}: ${kindBadge.title}` : undefined}
                       title={kindBadge.title}
                       className="flex-none font-mono text-[10px] uppercase tracking-[0.08em] text-cream/55"
                     >
@@ -209,19 +224,29 @@ export function AliasesCard(props: AliasesCardProps) {
                   <Pencil size={14} />
                 </button>
               )}
-              {editable && (
-                <button
-                  type="button"
-                  onClick={() => onDeleteRule(rule.id)}
-                  disabled={pending}
-                  title={t('aliases.row.delete')}
-                  aria-label={t('aliases.row.deleteNamed', { alias: aliasName })}
-                  className={rowDeleteButtonClass}
-                >
-                  <Trash2 size={14} />
-                </button>
-              )}
+              {/* Delete is offered even when the action is not describable: only EDITING is
+                  unsafe there (a PUT would rewrite what the panel failed to read), and
+                  hiding delete too left a corrupt rule removable only from Cloudflare's own
+                  dashboard. The confirmation spells out what is unknown. */}
+              <button
+                type="button"
+                onClick={() => onDeleteRule(rule.id)}
+                disabled={pending}
+                title={t('aliases.row.delete')}
+                aria-label={t('aliases.row.deleteNamed', { alias: aliasName })}
+                className={rowDeleteButtonClass}
+              >
+                <Trash2 size={14} />
+              </button>
             </div>
+            {/* An unknown-action row has no switch and no edit (a PUT would rewrite what the
+                panel failed to read), and nothing on screen said why — the explanation was
+                hidden in a `title`. Deleting it IS allowed; the confirmation says so. */}
+            {summary.kind === 'unknown' && (
+              <p className={`m-0 pb-3 font-mono text-[10.5px] leading-relaxed text-cream/60 ${rowPaddingClass} pt-0`}>
+                {t('rules.editor.unknownNotice')}
+              </p>
+            )}
             {editing && (
               <div className="fade-in" id={editorId}>
                 <RuleEditor
@@ -242,9 +267,10 @@ export function AliasesCard(props: AliasesCardProps) {
                 />
               </div>
             )}
-          </div>
+          </li>
         );
-      })}
+        })}
+      </ul>
 
       {rules.length === 0 && (
         <div className={`${rowPaddingClass} font-mono text-xs text-cream/60 ${rowDividerClass}`}>
@@ -268,9 +294,11 @@ export function AliasesCard(props: AliasesCardProps) {
             onChange={(e) => onLocalChange(e.target.value)}
             placeholder={t('aliases.new.placeholder')}
             aria-label={t('aliases.new.label')}
+            aria-invalid={aliasError ? true : undefined}
+            aria-describedby={aliasError ? aliasErrorId : undefined}
             className={`${textFieldClass} min-w-0 flex-1 text-[13px] sm:w-[130px] sm:flex-none`}
           />
-          <span className="font-mono text-[13px] text-cream/60">@{domain || '...'}</span>
+          <span className="font-mono text-[13px] text-cream/60">@{domain || '…'}</span>
           <button
             type="button"
             onClick={onGenerate}
@@ -320,7 +348,10 @@ export function AliasesCard(props: AliasesCardProps) {
             {t('aliases.new.submit')}
           </button>
         </div>
-        {aliasError && <p className={formErrorClass}>{aliasError}</p>}
+        {/* role="alert": alias errors (charset, duplicate, unverified destination) land in
+            card state rather than the toast, so without a live region a screen-reader user
+            was told nothing at all while the submit button quietly re-enabled. */}
+        {aliasError && <p id={aliasErrorId} role="alert" className={formErrorClass}>{aliasError}</p>}
       </form>
     </section>
   );

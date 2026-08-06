@@ -32,9 +32,11 @@ vuzon is a **single-user, self-hosted panel** that talks only to the Cloudflare 
 - **No user management or roles.** There is exactly one account. It is created through the setup wizard on the first visit and stored as a scrypt hash (`auth.json`, mode `0600`) in the data directory.
 - **The setup wizard is public until it is completed.** The panel ships with no credentials, so whoever reaches it first claims it — trust on first use, as in Uptime Kuma or Nextcloud. Once `auth.json` exists, `POST /api/setup` answers `409` for good, and the server warns on every boot while it is still unconfigured. Complete the setup as soon as the container is up. A report showing the wizard can be re-run against a configured panel *is* in scope.
 - **There is no password recovery.** Deleting `auth.json` from the data volume reopens the wizard; that requires filesystem access to the host, which is already out of scope below.
-- **The session cookie is signed, not encrypted.** It carries no secrets — only a login marker and an issue timestamp.
+- **The session cookie is signed, not encrypted.** It carries no secrets — only a login marker and an issue timestamp. That timestamp is checked on every request against a 7-day ceiling AND against the revocation mark below, both server-side: the cookie's `maxAge` attribute is only a request to the browser and does not bind a replay. A report showing a cookie older than that ceiling still authenticating *is* in scope.
 - **Plain HTTP keeps working.** `COOKIE_SECURE` and HSTS are opt-in so the panel can run on a LAN without TLS. Running it exposed to the internet without a TLS-terminating proxy is a deployment choice, not a bug in vuzon.
-- **No CSRF token.** Protection relies on `sameSite: 'lax'` cookies, JSON-only mutations, the absence of CORS, and a same-origin guard on `/api` mutations (mismatched `Origin` → 403; clients without `Origin`/`Sec-Fetch-Site` such as curl still work). A report showing that this combination can be bypassed *is* in scope.
+- **No CSRF token.** Protection relies on `sameSite: 'lax'` cookies, JSON-only mutations, the absence of CORS, and a same-origin guard on `/api` mutations (mismatched `Origin` → 403; clients without `Origin`/`Sec-Fetch-Site` such as curl still work). Note that the JSON-only leg does not apply to the mutations that read no body
+  (`POST /api/rules/:id/enable`, `/disable`, `/api/logout`): those rest on the `sameSite` cookie and the
+  same-origin guard alone. A report showing that this combination can be bypassed *is* in scope.
 - **Session revocation is persisted.** A logout with a live session, or a password/username
   change, writes a revocation mark to the data directory (`session-epoch`). Cookies issued
   at or before that mark stay invalid across process restarts. An anonymous `POST /api/logout`
@@ -55,5 +57,5 @@ Most incidents come from configuration, not code:
 - Give the Cloudflare token only the three scopes listed in the README. It should not be an account-wide token.
 - Nothing to do about the session signing key: the panel generates a 256-bit one into the data directory (mode `0600`) on first boot and reuses it. It is deliberately not configurable — a signing key pasted into a `.env` was the single most damaging thing to get wrong, since the cookie is signed and a known key forges a logged-in session.
 - Back up the data volume, and treat it as secret material: it holds the credential hash and the cookie signing key.
-- Change the panel password from the key icon in the header rather than by editing files. Doing so signs every other session out, including a cookie copied earlier.
+- Change the panel password from the account (person) icon in the header rather than by editing files. Doing so signs every other session out, including a cookie copied earlier.
 - Put the panel behind TLS and set `COOKIE_SECURE=1` if it is reachable from outside your network.

@@ -29,7 +29,9 @@ export function registerPageRoutes(app, {
     sendIndexHtml(publicDir, res, next);
   });
 
-  app.use(express.static(publicDir, { index: false }));
+  // Rate-limited like the two HTML routes around it. Left unthrottled, the asset directory
+  // was the only unauthenticated endpoint with no ceiling at all.
+  app.use(pagesLimiter, express.static(publicDir, { index: false }));
 
   // SPA catch-all: any GET outside /api/* that did not match a static file.
   app.get(/^(?!\/api(?:\/|$)).*/, pagesLimiter, (_req, res, next) => {

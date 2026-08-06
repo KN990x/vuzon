@@ -26,6 +26,10 @@ test('every translation keeps the placeholders of the English source', () => {
 
   for (const [key, source] of Object.entries(en)) {
     const translated = (es as Record<string, string>)[key];
-    expect(placeholders(translated), `es: ${key}`).toEqual(placeholders(source));
+    // Asserted rather than coerced: a key present in `en` and missing from `es` is exactly
+    // what this suite exists to catch, so it must fail loudly here instead of comparing
+    // the placeholders of `undefined`.
+    expect(translated, `es is missing the key ${key}`).toBeTypeOf('string');
+    expect(placeholders(translated as string), `es: ${key}`).toEqual(placeholders(source));
   }
 });

@@ -129,6 +129,11 @@ function writeRecordAtomically(filePath, record) {
   const tmpPath = `${filePath}.${crypto.randomBytes(6).toString('hex')}.tmp`;
   const payload = `${JSON.stringify(record, null, 2)}\n`;
 
+  // Startup validates the data directory, so this only matters if the volume goes away
+  // underneath a running panel. Done here for the same reason session-epoch.js does it:
+  // all three writers into the data dir should fail or succeed the same way.
+  fs.mkdirSync(path.dirname(filePath), { recursive: true, mode: 0o700 });
+
   try {
     fs.writeFileSync(tmpPath, payload, { mode: FILE_MODE });
     fs.chmodSync(tmpPath, FILE_MODE);

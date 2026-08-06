@@ -20,7 +20,9 @@ const menuItemClass =
  */
 export function AccountMenu({ onOpenPassword, onOpenUsername, onLogout }: AccountMenuProps) {
   const { t } = useI18n();
-  const { open, toggle, close, containerRef, triggerRef, menuRef } = useMenu();
+  const {
+    open, toggle, onTriggerKeyDown, close, containerRef, triggerRef, menuRef,
+  } = useMenu();
   const menuId = useId();
 
   function choose(action: () => void) {
@@ -37,6 +39,7 @@ export function AccountMenu({ onOpenPassword, onOpenUsername, onLogout }: Accoun
         type="button"
         className={iconButtonClass}
         onClick={toggle}
+        onKeyDown={onTriggerKeyDown}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
