@@ -6,9 +6,7 @@
 **/node_modules
 **/dist
 
-# The backend test suite is never run inside the image, and `pnpm deploy` already excludes
-# it from /prod via the `files` field. It was still being copied into the build context and
-# into the build layer on every build — several thousand lines of it.
+# Tests are not part of the image (also excluded from /prod by package `files`).
 src/server/tests
 
 npm-debug.log*
@@ -20,14 +18,14 @@ yarn-error.log*
 !.env.example
 .session_secret
 sessions
-# Local panel state (credential hash + session key): never part of the image
+# Local panel state — never part of the image.
 data
 
 .DS_Store
 Thumbs.db
 *.swp
 
-# Documentation and README images: none of this belongs in the image.
+# Docs stay out of the image.
 docs
 README.md
 CONTRIBUTING.md

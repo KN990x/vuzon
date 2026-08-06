@@ -1,39 +1,18 @@
 services:
   vuzon:
     container_name: vuzon
-    # Pinned to the MAJOR version, not `latest`. The documented update procedure is
-    # `docker compose pull && docker compose up -d`, and `latest` moves across major
-    # versions too — so that command used to carry a 1.x install straight into 2.0, where
-    # AUTH_USER/AUTH_PASS stopped being read and the panel came back up as a PUBLIC setup
-    # wizard. Moving to the next major is now a deliberate edit of this line.
-    image: ghcr.io/kn990x/vuzon:2
+    image: ghcr.io/kn990x/vuzon:latest
     env_file:
       - path: .env
         required: false
     environment:
       PORT: "8001"
-    # `unless-stopped` and not `on-failure:N`, deliberately: only `unless-stopped` starts the
-    # container again when the Docker daemon does, which is what makes the panel come back by
-    # itself after a host reboot — the whole point of a homelab service.
-    #
-    # The trade-off: the panel exits 1 on a missing DOMAIN/CF_API_TOKEN (by design, see
-    # start-server.js) and this policy restarts it forever. A container that keeps respawning
-    # a few seconds after `up -d` is that, not a hung panel — `docker compose logs vuzon`
-    # names the exact variable to fix.
     restart: unless-stopped
-    # PID 1 with zombie reaping and signal forwarding: the process receives the SIGTERM
-    # from `docker stop` and shuts down cleanly instead of dying on SIGKILL.
     init: true
-    # The image filesystem stays read-only; the only writable path is the data volume
-    # below, which holds the panel credentials (hashed) and the session signing key.
-    # /tmp on tmpfs is the usual companion to read_only: it covers any temporary write
-    # Node may need without granting write access to the image.
     read_only: true
     tmpfs:
       - /tmp
     volumes:
-      # Losing this volume means losing the panel password: the setup wizard reopens and
-      # the first visitor claims the panel. Back it up like any other homelab state.
       - vuzon-data:/app/data
     cap_drop:
       - ALL
@@ -41,10 +20,7 @@ services:
       - no-new-privileges:true
     ports:
       - "${VUZON_PORT:-8001}:8001"
-    # No `healthcheck:` here on purpose. The image already declares one (see the Dockerfile)
-    # and compose inherits it. Repeating it byte-for-byte meant compose's copy silently won,
-    # so fixing the probe in one place left the other stale and `docker run` users got
-    # different behaviour from `docker compose` users.
+    # Healthcheck is declared in the Dockerfile; compose inherits it.
 
 volumes:
   vuzon-data:

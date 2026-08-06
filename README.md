@@ -154,7 +154,7 @@ docker compose pull && docker compose up -d
 
 The image is rebuilt and published to GHCR on every release. Your `.env` is untouched; sessions survive the restart.
 
-The shipped `docker-compose.yml` pins the **major** version (`ghcr.io/kn990x/vuzon:2`), so `docker compose pull` only ever brings you fixes and features within that major. Moving to the next major is a deliberate edit of the `image:` line — read the release notes first, because a major is where breaking changes live (see the 1.x note below for what that can mean).
+The shipped `docker-compose.yml` uses **`ghcr.io/kn990x/vuzon:latest`**, so `docker compose pull` brings the latest stable release. To stay on a fixed version, edit the `image:` line to a semver or major tag (e.g. `ghcr.io/kn990x/vuzon:2.1.0` or `:2`) — read the release notes before crossing a major (see the 1.x note below).
 
 > **Updating from 1.x:** the panel credentials moved out of `.env`. `AUTH_USER` and `AUTH_PASS` are **ignored** from 2.0 on, so the first time you open the updated panel it shows the setup wizard and asks you to choose them again — this time stored hashed in the `vuzon-data` volume. Add that volume to your `docker-compose.yml` if you are reusing an older copy of the file, then delete `AUTH_USER`, `AUTH_PASS` and `SESSION_SECRET` from your `.env` — all three are ignored now. The panel generates its own signing key, so you get signed out once on the upgrade and then never again for this reason.
 
@@ -347,7 +347,7 @@ docker compose pull && docker compose up -d
 
 La imagen se reconstruye y publica en GHCR con cada release. Tu `.env` no se toca; las sesiones sobreviven al reinicio.
 
-El `docker-compose.yml` que se distribuye fija la versión **mayor** (`ghcr.io/kn990x/vuzon:2`), así que `docker compose pull` solo te trae correcciones y novedades dentro de esa mayor. Pasar a la siguiente mayor es una edición deliberada de la línea `image:` — lee antes las notas de la release, porque una mayor es donde viven los cambios incompatibles (mira la nota sobre 1.x más abajo para ver hasta dónde puede llegar eso).
+El `docker-compose.yml` que se distribuye usa **`ghcr.io/kn990x/vuzon:latest`**, así que `docker compose pull` trae la última release estable. Para fijar una versión, edita la línea `image:` a un tag semver o mayor (p. ej. `ghcr.io/kn990x/vuzon:2.1.0` o `:2`) — lee las notas de la release antes de cruzar una mayor (mira la nota sobre 1.x más abajo).
 
 > **Actualizar desde 1.x:** las credenciales del panel han salido del `.env`. `AUTH_USER` y `AUTH_PASS` se **ignoran** a partir de 2.0, así que la primera vez que abras el panel actualizado verás el asistente de instalación pidiéndote elegirlas de nuevo — esta vez guardadas con hash en el volumen `vuzon-data`. Añade ese volumen a tu `docker-compose.yml` si reutilizas una copia antigua del fichero, y borra `AUTH_USER`, `AUTH_PASS` y `SESSION_SECRET` de tu `.env`: los tres se ignoran ahora. El panel genera su propia clave de firma, así que te desconectará una vez al actualizar y nunca más por este motivo.
 

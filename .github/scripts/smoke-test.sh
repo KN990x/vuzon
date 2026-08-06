@@ -1,20 +1,9 @@
 #!/usr/bin/env bash
 #
-# Proves a built image actually BOOTS. `docker build` succeeding says nothing about that.
-#
-# The container is started with the same hardening the shipped compose file applies
-# (read_only, cap_drop ALL, no-new-privileges, data volume on /app/data), so a regression
-# that only shows up under those constraints — a write outside /app/data, a capability the
-# runtime needs — fails here rather than on a user's homelab.
-#
-# Setting CF_ZONE_ID and CF_ACCOUNT_ID skips Cloudflare auto-detection, so no real
-# credential is needed: the panel never reaches the network.
-#
+# Boots a built image with the same hardening as docker-compose.yml.
+# Fake CF_* IDs skip Cloudflare auto-detection (no network needed).
 # Usage: smoke-test.sh <image> <container-name> [platform]
-#
-# `platform` is what makes this usable for the release build: the multi-arch image used to
-# be pushed to GHCR having only ever been executed on amd64, so an arm64-only failure
-# reached Raspberry Pi users as a silent restart loop (`restart: unless-stopped`).
+# Optional platform runs the image under that arch (release arm64 check).
 set -euo pipefail
 
 IMAGE="${1:?image required}"
@@ -48,8 +37,7 @@ docker run -d --name "$NAME" \
   -p "$PORT":8001 "$IMAGE"
 echo "::endgroup::"
 
-# Emulated arm64 boots several times slower than native, so the budget is generous. It is
-# still a hard bound: an image that never answers must fail, not hang until the job times out.
+# Generous budget for emulated arm64; still a hard fail if /healthz never answers.
 for i in $(seq 1 90); do
   if curl -fsS "http://127.0.0.1:${PORT}/healthz" >/dev/null 2>&1; then
     echo "healthz OK after ${i}s"
@@ -63,10 +51,8 @@ for i in $(seq 1 90); do
   sleep 1
 done
 
-# The SPA is served…
+# SPA is served; unauthenticated /api/me is 401 JSON (API 404 before SPA catch-all).
 curl -fsS "http://127.0.0.1:${PORT}/" | grep -q '<div id="root">'
-# …and without credentials the API answers 401 JSON with setup_required, not the SPA. That
-# pair is what proves the /api 404 is still registered before the SPA catch-all.
 test "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PORT}/api/me")" = "401"
 curl -sS "http://127.0.0.1:${PORT}/api/me" | grep -q '"code":"auth.setup_required"'
 

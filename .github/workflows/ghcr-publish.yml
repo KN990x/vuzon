@@ -123,13 +123,10 @@ jobs:
             type=raw,value=latest
             type=semver,pattern={{version}},value=${{ github.event.release.tag_name }}
             type=semver,pattern={{major}}.{{minor}},value=${{ github.event.release.tag_name }}
-            # Major-only tag so docker-compose.yml can pin to it. `latest` moves across
-            # major versions, and the README's update procedure is `docker compose pull` —
-            # which walked a 1.x user straight into 2.0's public setup wizard.
+            # Also publish major-only (e.g. :2) for users who pin.
             type=semver,pattern={{major}},value=${{ github.event.release.tag_name }}
 
-      # Rebuilds nothing: every layer for both platforms is already in the GHA cache from
-      # the two test builds above.
+      # Layers already cached from the two test builds above.
       - name: Build & push
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
