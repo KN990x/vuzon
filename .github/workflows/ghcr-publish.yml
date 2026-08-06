@@ -3,6 +3,14 @@ name: Release → GHCR
 on:
   release:
     types: [published]
+  # Manual republish of an existing release tag after a transient Actions outage
+  # (e.g. "Failed to resolve action download info"). Not a local-publish path.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to publish (e.g. v2.0.0)
+        required: true
+        type: string
 
 # `contents` stays read at the workflow level; only the asset-upload step needs write, and
 # it is granted there. Everything before it runs without the ability to alter the release.
@@ -18,17 +26,19 @@ concurrency:
 
 jobs:
   build-and-push:
-    if: ${{ !github.event.release.prerelease }}
+    if: ${{ github.event_name == 'workflow_dispatch' || !github.event.release.prerelease }}
     runs-on: ubuntu-latest
     # Emulated arm64 is slow enough to be worth bounding explicitly; without this a hung
     # QEMU build sits on the runner for the 6h default.
     timeout-minutes: 90
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
 
     steps:
       - name: Checkout tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ env.RELEASE_TAG }}
 
       - name: Set up pnpm
         uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
@@ -53,8 +63,6 @@ jobs:
       # version. repository-guard.test.js checks the three manifests agree with each other;
       # only the release tag can be checked here.
       - name: Verify the release tag matches package.json
-        env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           set -euo pipefail
           manifest="$(jq -r .version package.json)"
@@ -121,10 +129,10 @@ jobs:
           images: ghcr.io/kn990x/vuzon
           tags: |
             type=raw,value=latest
-            type=semver,pattern={{version}},value=${{ github.event.release.tag_name }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ github.event.release.tag_name }}
+            type=semver,pattern={{version}},value=${{ env.RELEASE_TAG }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ env.RELEASE_TAG }}
             # Also publish major-only (e.g. :2) for users who pin.
-            type=semver,pattern={{major}},value=${{ github.event.release.tag_name }}
+            type=semver,pattern={{major}},value=${{ env.RELEASE_TAG }}
 
       # Layers already cached from the two test builds above.
       - name: Build & push
@@ -143,17 +151,19 @@ jobs:
   # runs the whole toolchain — install, check, Docker — with no ability to alter the release.
   publish-assets:
     needs: build-and-push
-    if: ${{ !github.event.release.prerelease }}
+    if: ${{ github.event_name == 'workflow_dispatch' || !github.event.release.prerelease }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: write
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
 
     steps:
       - name: Checkout tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ env.RELEASE_TAG }}
 
       - name: Upload release assets (Compose + env template)
         env:
@@ -162,7 +172,7 @@ jobs:
           # GitHub renames assets starting with "." (e.g. .env.example → default.env.example).
           # We publish env.example instead, for a stable name and clean download URLs.
           cp .env.example env.example
-          gh release upload "${{ github.event.release.tag_name }}" \
+          gh release upload "${RELEASE_TAG}" \
             docker-compose.yml \
             env.example \
             --clobber
