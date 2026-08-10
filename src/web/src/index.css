@@ -203,6 +203,13 @@ textarea:focus-visible {
   backdrop-filter: blur(16px);
 }
 
+/* Ko-fi Tip Panel iframe: force a light color-scheme so the embed's #f9f9f9 chrome
+   does not pick up the panel's dark scheme and flash inverted. CSP forbids style=. */
+.kofi-embed {
+  color-scheme: light;
+  height: 712px;
+}
+
 /* Header dropdown menus: same blur + rim as .glass-header, with a denser fill so
    list items stay readable over scrolling dashboard content. */
 .glass-menu {

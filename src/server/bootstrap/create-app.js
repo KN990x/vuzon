@@ -43,6 +43,9 @@ const CONTENT_SECURITY_POLICY = [
   // in the first place, so allowing 'unsafe-inline' bought nothing and weakened the policy.
   "style-src 'self'",
   "img-src 'self' data:",
+  // Ko-fi Tip Panel iframe in the footer support dialog (see KofiDialog.tsx). Only the
+  // frame origin is opened — no third-party scripts (script-src stays 'self').
+  "frame-src https://ko-fi.com",
   "connect-src 'self'",
   "font-src 'self'",
   "object-src 'none'",

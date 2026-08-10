@@ -196,6 +196,10 @@ export const en = {
     'With the catch-all paused, mail sent to an address with no alias will be rejected. Continue?',
 
   'footer.coffee': 'Buy me a coffee',
+  'footer.kofi.title': 'Support on Ko-fi',
+  'footer.kofi.close': 'Close',
+  'footer.kofi.openPage': 'Open on Ko-fi',
+  'footer.kofi.iframeTitle': 'Ko-fi tip panel',
 
   // How a rule's action is rendered in the list (see lib/rules.ts).
   'rule.action.drop': 'Discard',
