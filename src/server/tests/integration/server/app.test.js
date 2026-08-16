@@ -427,7 +427,9 @@ test('HTTP integration: security headers on /healthz', async () => {
     assert.ok((res.headers.get('referrer-policy') || '').length > 0);
     assert.ok((res.headers.get('content-security-policy') || '').includes("default-src 'self'"));
     assert.ok((res.headers.get('content-security-policy') || '').includes("frame-ancestors 'none'"));
-    assert.ok((res.headers.get('content-security-policy') || '').includes('frame-src https://ko-fi.com'));
+    // Footer Ko-fi control is a regular outbound link, not an iframe — do not reopen
+    // frame-src for it. default-src 'self' already covers same-origin frames.
+    assert.equal((res.headers.get('content-security-policy') || '').includes('ko-fi.com'), false);
     assert.ok((res.headers.get('permissions-policy') || '').includes('camera=()'));
     // Express advertises itself by default; nothing useful comes from telling the world.
     assert.equal(res.headers.get('x-powered-by'), null);

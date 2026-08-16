@@ -187,11 +187,7 @@ export const es = {
   'catchAll.confirmDisable':
     'Con el catch-all pausado, el correo enviado a una dirección sin alias se rechazará. ¿Continuar?',
 
-  'footer.coffee': 'Invítame a un café',
-  'footer.kofi.title': 'Apóyame en Ko-fi',
-  'footer.kofi.close': 'Cerrar',
-  'footer.kofi.openPage': 'Abrir en Ko-fi',
-  'footer.kofi.iframeTitle': 'Panel de propinas de Ko-fi',
+  'footer.kofi': 'Apóyame en Ko-fi',
 
   'rule.action.drop': 'Descartar',
   'rule.action.worker': 'Worker: {value}',

@@ -203,11 +203,37 @@ textarea:focus-visible {
   backdrop-filter: blur(16px);
 }
 
-/* Ko-fi Tip Panel iframe: force a light color-scheme so the embed's #f9f9f9 chrome
-   does not pick up the panel's dark scheme and flash inverted. CSP forbids style=. */
-.kofi-embed {
-  color-scheme: light;
-  height: 712px;
+/* Ko-fi Widget_2 badge, local recreation. Official colours/type from their widget CSS;
+   the cup is an inline SVG in Footer.tsx (CSP forbids their CDN image). */
+.kofi-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 7px;
+  background: #29abe0;
+  padding: 6px 12px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #fff;
+  text-decoration: none;
+  text-shadow: 0 1px 1px rgba(34, 34, 34, 0.05);
+  box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.2);
+  transition: opacity 0.2s ease;
+}
+
+.kofi-button:visited {
+  color: #fff;
+}
+
+.kofi-button:hover {
+  opacity: 0.85;
+  color: #f5f5f5;
+}
+
+.kofi-button:focus-visible {
+  border-radius: 7px;
 }
 
 /* Header dropdown menus: same blur + rim as .glass-header, with a denser fill so
