@@ -40,6 +40,28 @@ jobs:
         with:
           ref: ${{ env.RELEASE_TAG }}
 
+      # The image tag comes from the release tag, but the bundle inside comes from the
+      # commit. Publishing v2.1.0 from a tree that still says 2.0.0 produced an image
+      # labelled 2.1.0 containing 2.0.0, and every bug report from it quoted the wrong
+      # version. repository-guard.test.js checks the three manifests agree with each other;
+      # only the release tag can be checked here.
+      #
+      # It runs FIRST on purpose. It needs nothing but jq and package.json, and it is the
+      # step that has actually failed — twice, on v2.0.1 and v2.0.2 — so paying for the
+      # toolchain and the full `pnpm run check` before it just delayed the same verdict by
+      # ~40s. `pnpm run release:prep <version>` is what keeps the tree from getting here
+      # with a stale version.
+      - name: Verify the release tag matches package.json
+        run: |
+          set -euo pipefail
+          manifest="$(jq -r .version package.json)"
+          tag="${RELEASE_TAG#v}"
+          if [ "$manifest" != "$tag" ]; then
+            echo "Release tag ${RELEASE_TAG} does not match package.json version ${manifest}." >&2
+            exit 1
+          fi
+          echo "Version ${manifest} matches the release tag."
+
       - name: Set up pnpm
         uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         # version from package.json#packageManager
@@ -56,22 +78,6 @@ jobs:
 
       - name: Validate repository
         run: pnpm run check
-
-      # The image tag comes from the release tag, but the bundle inside comes from the
-      # commit. Publishing v2.1.0 from a tree that still says 2.0.0 produced an image
-      # labelled 2.1.0 containing 2.0.0, and every bug report from it quoted the wrong
-      # version. repository-guard.test.js checks the three manifests agree with each other;
-      # only the release tag can be checked here.
-      - name: Verify the release tag matches package.json
-        run: |
-          set -euo pipefail
-          manifest="$(jq -r .version package.json)"
-          tag="${RELEASE_TAG#v}"
-          if [ "$manifest" != "$tag" ]; then
-            echo "Release tag ${RELEASE_TAG} does not match package.json version ${manifest}." >&2
-            exit 1
-          fi
-          echo "Version ${manifest} matches the release tag."
 
       # QEMU and Buildx come BEFORE the smoke test now, because the smoke test needs them:
       # the arm64 image used to be pushed to GHCR without ever having been executed.

@@ -91,6 +91,20 @@ End users normally use only [`docker-compose.yml`](docker-compose.yml) with the 
 
 Integration tests under `src/server/tests/integration/server/` start a temporary local server; in heavily restricted environments you may see `listen EPERM` even when the logic is correct.
 
+## Cutting a release (maintainers)
+
+The **version bump comes before the tag, never after**:
+
+```bash
+pnpm run release:prep 2.1.0   # bumps all three manifests at once, no leading "v"
+pnpm run check                # must pass
+# commit the bump, then tag v2.1.0 on that commit and publish the GitHub release
+```
+
+`release:prep` writes the same semver into `package.json`, `src/server/package.json` and `src/web/package.json`; it only edits the working tree — no commit, no tag, no push. The three must move together, and [`repository-guard.test.js`](src/server/tests/architecture/repository-guard.test.js) fails if they drift.
+
+**Why the order matters:** the image tag comes from the release tag, while the bundle inside comes from the commit. `Release → GHCR` verifies the two agree as the *first* step of the job and refuses to publish a mismatch, so a tag cut from an unbumped tree fails the release instead of shipping an image labelled with a version it does not contain. Recovering means moving the tag onto the bump commit and re-running the workflow through its `workflow_dispatch` republish input (it takes the existing tag as `tag`).
+
 ## Pull requests
 
 - Describe in full sentences **what** changes and **why**.

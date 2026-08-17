@@ -31,4 +31,17 @@ export default [
     },
     rules: sharedRules,
   },
+  // Maintainer scripts (`scripts/*.mjs`) are Node too, and `eslint .` picks them up — without
+  // their own globals every `console` and `process` reads as no-undef.
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      ecmaVersion: 2024,
+      sourceType: 'module',
+      globals: {
+        ...globals.node,
+      },
+    },
+    rules: sharedRules,
+  },
 ];
