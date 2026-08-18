@@ -195,7 +195,20 @@ export const en = {
   'catchAll.confirmDisable':
     'With the catch-all paused, mail sent to an address with no alias will be rejected. Continue?',
 
-  'footer.kofi': 'Support me on Ko-fi',
+  // The footer control opens the Ko-fi widget in a modal (KofiDialog.tsx) rather than
+  // navigating away, which is what the aria-label spells out — the visible label is the
+  // invitation, and a button that reads like a link owes a screen reader the difference.
+  'footer.kofi': 'Buy me a coffee',
+  'footer.kofi.aria': 'Buy me a coffee on Ko-fi (opens a dialog)',
+
+  // Ko-fi support dialog.
+  'kofi.title': 'Support vuzon',
+  'kofi.subtitle': 'Ko-fi handles the payment — this panel sends nothing.',
+  'kofi.frameTitle': 'Ko-fi support panel',
+  'kofi.loading': 'Loading Ko-fi…',
+  'kofi.blocked': 'The widget did not load. A content blocker or an offline host will do that.',
+  'kofi.openExternal': 'Open on ko-fi.com',
+  'kofi.close': 'Close',
 
   // How a rule's action is rendered in the list (see lib/rules.ts).
   'rule.action.drop': 'Discard',

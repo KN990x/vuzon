@@ -425,11 +425,19 @@ test('HTTP integration: security headers on /healthz', async () => {
     assert.equal(res.headers.get('cross-origin-opener-policy'), 'same-origin');
     assert.equal(res.headers.get('cross-origin-resource-policy'), 'same-origin');
     assert.ok((res.headers.get('referrer-policy') || '').length > 0);
-    assert.ok((res.headers.get('content-security-policy') || '').includes("default-src 'self'"));
-    assert.ok((res.headers.get('content-security-policy') || '').includes("frame-ancestors 'none'"));
-    // Footer Ko-fi control is a regular outbound link, not an iframe — do not reopen
-    // frame-src for it. default-src 'self' already covers same-origin frames.
-    assert.equal((res.headers.get('content-security-policy') || '').includes('ko-fi.com'), false);
+    const csp = res.headers.get('content-security-policy') || '';
+    assert.ok(csp.includes("default-src 'self'"));
+    assert.ok(csp.includes("frame-ancestors 'none'"));
+    // The footer's support control embeds the Ko-fi widget in a modal (KofiDialog.tsx), so
+    // frame-src is open for that origin — and for that origin only. The assertion used to
+    // read the other way ("do not reopen frame-src for it"); it is inverted rather than
+    // deleted so it keeps guarding the part that still matters: ko-fi.com must not appear
+    // in any OTHER directive, which is what would let their scripts, styles or images run
+    // in the panel's own document.
+    assert.ok(csp.includes('frame-src https://ko-fi.com'));
+    assert.ok(csp.includes("script-src 'self'"));
+    assert.ok(csp.includes("connect-src 'self'"));
+    assert.equal(csp.replaceAll('frame-src https://ko-fi.com', '').includes('ko-fi.com'), false);
     assert.ok((res.headers.get('permissions-policy') || '').includes('camera=()'));
     // Express advertises itself by default; nothing useful comes from telling the world.
     assert.equal(res.headers.get('x-powered-by'), null);

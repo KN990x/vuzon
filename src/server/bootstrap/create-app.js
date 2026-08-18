@@ -35,6 +35,14 @@ const CONTENT_SECURITY_POLICY = [
   "base-uri 'self'",
   "form-action 'self'",
   "frame-ancestors 'none'",
+  // The footer's support control embeds the Ko-fi widget in a modal instead of navigating
+  // out of the panel, and `default-src 'self'` would only cover same-origin frames. This is
+  // the ONLY third-party origin the policy admits, and only for frames: script-src,
+  // connect-src, img-src, style-src and font-src all stay on 'self'. A cross-origin frame
+  // does not inherit this CSP, so the widget's own assets need nothing here. The iframe
+  // additionally carries a `sandbox` attribute (see KofiDialog.tsx) so Ko-fi cannot
+  // navigate the panel away without a user gesture.
+  'frame-src https://ko-fi.com',
   "script-src 'self'",
   // No 'unsafe-inline': the production build ships a real stylesheet and emits neither
   // <style> blocks nor literal style="" attributes (Vite only injects those in dev).

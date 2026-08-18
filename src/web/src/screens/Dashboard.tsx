@@ -21,6 +21,7 @@ import type { AccountChangeKind } from '../components/AccountDialog';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import type { ConfirmRequest } from '../components/ConfirmDialog';
 import { Footer } from '../components/Footer';
+import { KofiDialog } from '../components/KofiDialog';
 import { Toast } from '../components/Toast';
 import { AliasesCard } from '../components/AliasesCard';
 import { CatchAllCard } from '../components/CatchAllCard';
@@ -96,6 +97,7 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
   const [copied, setCopied] = useState(false);
   const [accountMode, setAccountMode] = useState<AccountChangeKind | null>(null);
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
+  const [kofiOpen, setKofiOpen] = useState(false);
 
   const statusTimerRef = useRef<number | null>(null);
   // Current toast text, readable from callbacks without putting `statusMsg` in their deps.
@@ -696,6 +698,7 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
           fallbackFocusRef={mainRef}
         />
       )}
+      {kofiOpen && <KofiDialog onClose={() => setKofiOpen(false)} />}
       {accountMode !== null && (
         <AccountDialog
           mode={accountMode}
@@ -846,7 +849,7 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
           </div>
         </div>
       </main>
-      <Footer />
+      <Footer onOpenSupport={() => setKofiOpen(true)} />
       <Toast message={statusMsg} />
     </div>
   );

@@ -1,7 +1,5 @@
 import { useI18n } from '../i18n/context';
 
-const KOFI_PAGE_URL = 'https://ko-fi.com/kn990x';
-
 /**
  * Ko-fi cup (heart steam + mug). Inlined because CSP is `img-src 'self' data:` —
  * the official CDN badge from storage.ko-fi.com would render broken.
@@ -33,16 +31,29 @@ function KofiCupIcon() {
   );
 }
 
+interface FooterProps {
+  /**
+   * Opens the Ko-fi dialog. The state lives in Dashboard rather than here because
+   * `useDialog` marks the overlay's SIBLINGS inert — the overlay has to sit next to
+   * <header>/<main>/<footer>, not inside one of them.
+   */
+  onOpenSupport: () => void;
+}
+
 /**
- * Discreet footer: authorship and a Ko-fi support link.
+ * Discreet footer: authorship and a Ko-fi support control.
  *
- * The button is a local recreation of Ko-fi's Widget_2 badge (cup + CTA + #29abe0),
- * not their CDN image or overlay script — those would need `img-src` / `script-src`
- * opened to a third party. Clicking goes to the Ko-fi page; no iframe, no extra CSP.
+ * The control used to be a local recreation of Ko-fi's Widget_2 badge (cup + CTA +
+ * #29abe0) linking out to their page. It now opens the widget in a modal (KofiDialog),
+ * and its styling comes from the panel's tokens instead of Ko-fi's brand — the badge was
+ * the loudest element in a footer that is otherwise deliberately quiet.
+ *
+ * The cup stays an inline SVG: `img-src 'self' data:` still rules out their CDN badge,
+ * and only `frame-src` was opened for the embed.
  *
  * The year is computed on every render so nobody has to touch it each January.
  */
-export function Footer() {
+export function Footer({ onOpenSupport }: FooterProps) {
   const { t } = useI18n();
   const year = new Date().getFullYear();
 
@@ -59,15 +70,16 @@ export function Footer() {
           KN990x
         </a>
       </p>
-      <a
-        href={KOFI_PAGE_URL}
-        target="_blank"
-        rel="noreferrer"
-        className="kofi-button"
+      <button
+        type="button"
+        onClick={onOpenSupport}
+        aria-haspopup="dialog"
+        aria-label={t('footer.kofi.aria')}
+        className="kofi-trigger"
       >
         <KofiCupIcon />
         {t('footer.kofi')}
-      </a>
+      </button>
     </footer>
   );
 }

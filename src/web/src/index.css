@@ -203,37 +203,153 @@ textarea:focus-visible {
   backdrop-filter: blur(16px);
 }
 
-/* Ko-fi Widget_2 badge, local recreation. Official colours/type from their widget CSS;
-   the cup is an inline SVG in Footer.tsx (CSP forbids their CDN image). */
-.kofi-button {
+/*
+ * Ko-fi support control. It used to be a local recreation of Ko-fi's Widget_2 badge —
+ * brand blue #29abe0, 7px radius, hard drop shadow — which read as a foreign object in an
+ * amber-on-#0a0a0a panel whose footer is deliberately quiet. It is now a pill built from
+ * the panel's own tokens, at the same weight as the © line opposite it: mono 11px, cream,
+ * with the brand's warmth showing only in the cup and on hover.
+ */
+.kofi-trigger {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  border-radius: 7px;
-  background: #29abe0;
-  padding: 6px 12px;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 700;
+  gap: 7px;
+  border: 1px solid rgba(244, 239, 230, 0.12);
+  border-radius: 9999px;
+  background: rgba(255, 138, 30, 0.02);
+  padding: 5px 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
   line-height: 1.2;
-  color: #fff;
-  text-decoration: none;
-  text-shadow: 0 1px 1px rgba(34, 34, 34, 0.05);
-  box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.2);
-  transition: opacity 0.2s ease;
+  color: rgba(244, 239, 230, 0.7);
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    border-color 0.2s ease,
+    background-color 0.2s ease;
 }
 
-.kofi-button:visited {
-  color: #fff;
+.kofi-trigger svg {
+  color: var(--color-accent);
 }
 
-.kofi-button:hover {
-  opacity: 0.85;
-  color: #f5f5f5;
+.kofi-trigger:hover,
+.kofi-trigger:focus-visible {
+  border-color: rgba(255, 138, 30, 0.35);
+  background: rgba(255, 138, 30, 0.07);
+  color: var(--color-accent);
 }
 
-.kofi-button:focus-visible {
-  border-radius: 7px;
+/*
+ * The Ko-fi widget itself. Their embed snippet carries these three declarations in a
+ * `style=""` attribute, which cannot survive `style-src 'self'` — a literal style
+ * attribute is blocked in production and silently allowed by `vite dev`, so it would have
+ * broken only after shipping. #f9f9f9 is the widget's own surface, not a panel token.
+ */
+.kofi-frame {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: #f9f9f9;
+}
+
+/*
+ * Dialog entrance/exit. `.fade-in` (opacity only, 0.2s) is what the other two dialogs use,
+ * and it has no exit half — they unmount instantly. These add the leaving direction, with
+ * the component unmounting on `animationend`.
+ *
+ * The exit gets its OWN keyframes rather than replaying the entrance with `reverse`. Same
+ * name means the same animation to the browser: changing only direction and fill on a
+ * declaration whose `animation-name` list has not changed updates the running animation in
+ * place instead of starting a new one — and the entrance had already finished, so the panel
+ * jumped straight to the reversed end state and fired no `animationend` at all. The exit
+ * looked instant and only unmounted when the fallback timer in KofiDialog ran out.
+ *
+ * Deliberately NOT disabled under prefers-reduced-motion: the global rule at the top of
+ * this file collapses the duration to 0.01ms and `animationend` still fires, which is the
+ * whole reason that rule uses 0.01ms rather than 0. Adding `animation: none` here would
+ * strand the dialog open for anyone who asked for less motion.
+ */
+@keyframes dialogBackdropIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dialogBackdropOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes dialogPanelIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes dialogPanelOut {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+}
+
+.dialog-overlay {
+  animation: dialogBackdropIn 0.28s ease-out;
+}
+
+.dialog-overlay[data-closing='true'] {
+  animation: dialogBackdropOut 0.22s ease-in forwards;
+}
+
+.dialog-panel {
+  animation: dialogPanelIn 0.28s ease-out;
+}
+
+.dialog-panel[data-closing='true'] {
+  animation: dialogPanelOut 0.22s ease-in forwards;
+}
+
+/* Below `sm`, the panel is a bottom sheet: it rises from the edge and drops back to it
+   instead of scaling through the middle, which is the gesture the shape is promising. */
+@media (max-width: 639px) {
+  @keyframes dialogPanelIn {
+    from {
+      opacity: 0;
+      transform: translateY(100%);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes dialogPanelOut {
+    from {
+      opacity: 1;
+      transform: none;
+    }
+    to {
+      opacity: 0;
+      transform: translateY(100%);
+    }
+  }
 }
 
 /* Header dropdown menus: same blur + rim as .glass-header, with a denser fill so

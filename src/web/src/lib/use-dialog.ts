@@ -5,9 +5,12 @@ import type {
   RefObject,
 } from 'react';
 
+// `iframe` is in the list because KofiDialog embeds one: without it the Tab trap wrapped
+// straight past the widget and a keyboard user could never reach the donation form. It is
+// inert for the two dialogs that carry no frame.
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), '
-  + 'select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  + 'select:not([disabled]), iframe, [tabindex]:not([tabindex="-1"])';
 
 function listFocusable(container: HTMLElement): HTMLElement[] {
   return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(

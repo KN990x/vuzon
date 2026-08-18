@@ -187,7 +187,16 @@ export const es = {
   'catchAll.confirmDisable':
     'Con el catch-all pausado, el correo enviado a una dirección sin alias se rechazará. ¿Continuar?',
 
-  'footer.kofi': 'Apóyame en Ko-fi',
+  'footer.kofi': 'Invítame a un café',
+  'footer.kofi.aria': 'Invítame a un café en Ko-fi (abre un diálogo)',
+
+  'kofi.title': 'Apoya vuzon',
+  'kofi.subtitle': 'Ko-fi gestiona el pago; este panel no envía nada.',
+  'kofi.frameTitle': 'Panel de apoyo de Ko-fi',
+  'kofi.loading': 'Cargando Ko-fi…',
+  'kofi.blocked': 'El widget no cargó. Un bloqueador de contenido o un equipo sin salida a internet lo provocan.',
+  'kofi.openExternal': 'Abrir en ko-fi.com',
+  'kofi.close': 'Cerrar',
 
   'rule.action.drop': 'Descartar',
   'rule.action.worker': 'Worker: {value}',
