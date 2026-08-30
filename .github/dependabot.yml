@@ -23,6 +23,10 @@ updates:
       day: "monday"
       time: "09:00"
     open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns:
+          - "*"
 
   - package-ecosystem: "docker"
     directory: "/"
@@ -35,3 +39,7 @@ updates:
       # Node major: bump Dockerfile, CI node-version, and engines.node together.
       - dependency-name: "node"
         update-types: ["version-update:semver-major"]
+    groups:
+      docker:
+        patterns:
+          - "*"
