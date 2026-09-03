@@ -37,6 +37,16 @@ test('resolveApiRouteError: Cloudflare 401 → 502 and a generic message', () =>
   assert.equal(code, ERROR_CODES.CLOUDFLARE_GENERIC);
 });
 
+test('resolveApiRouteError: Cloudflare 403 → 502 and a generic message', () => {
+  // 403 is the token-without-scopes case. Passing it through would look to the SPA like
+  // an expired panel session (every 401 is UnauthorizedError). Same mapping as 401.
+  const err = new CloudflareApiError('upstream forbidden', { status: 403, code: 'x' });
+  const { status, message, code } = resolveApiRouteError(err);
+  assert.equal(status, 502);
+  assert.ok(!message.includes('upstream'));
+  assert.equal(code, ERROR_CODES.CLOUDFLARE_GENERIC);
+});
+
 test('resolveApiRouteError: Cloudflare 404 keeps 404 and a generic message', () => {
   const err = new CloudflareApiError('not found', { status: 404, code: 'y' });
   const { status, message, code } = resolveApiRouteError(err);

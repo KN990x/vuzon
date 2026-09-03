@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { apiRequest } from '../lib/api';
 import { buildLoginErrorMessage } from '../lib/login-error';
+import { sessionAfterUnauthorized } from '../lib/session';
 import { useI18n } from '../i18n/context';
 import type { MessageKey } from '../i18n/en';
 import { authFieldClass, formErrorClass, pillButtonClass, VuzonMark } from '../components/primitives';
@@ -9,6 +10,12 @@ import { LanguageMenu } from '../components/LanguageMenu';
 
 interface LoginProps {
   onSuccess: () => void;
+  /**
+   * `POST /api/login` with an empty store answers 409 `auth.setup_required` (not 401).
+   * That is the documented password-reset path after deleting `auth.json`: staying on
+   * this form with a translated message still hid the wizard until a full reload.
+   */
+  onSetupRequired: () => void;
   /**
    * One-shot explanation for why the user is looking at this screen (today: they lost the
    * setup race). Held as a key, not as text, so it follows the language switcher like
@@ -18,7 +25,12 @@ interface LoginProps {
   onNoticeDismiss?: () => void;
 }
 
-export function Login({ onSuccess, notice = null, onNoticeDismiss }: LoginProps) {
+export function Login({
+  onSuccess,
+  onSetupRequired,
+  notice = null,
+  onNoticeDismiss,
+}: LoginProps) {
   const i18n = useI18n();
   const { t } = i18n;
   const [username, setUsername] = useState('');
@@ -43,6 +55,13 @@ export function Login({ onSuccess, notice = null, onNoticeDismiss }: LoginProps)
       await apiRequest('/api/login', 'POST', { username, password });
       onSuccess();
     } catch (err) {
+      const code = err && typeof err === 'object' && 'code' in err && typeof err.code === 'string'
+        ? err.code
+        : undefined;
+      if (sessionAfterUnauthorized(code) === 'setup') {
+        onSetupRequired();
+        return;
+      }
       setError(err);
     } finally {
       setSubmitting(false);

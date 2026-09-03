@@ -127,6 +127,22 @@ test('timeout: AbortError is normalized to 504 upstream_timeout', async () => {
   );
 });
 
+test('GET retries a timeout, then reports 504', async () => {
+  const calls = stubFetch(() => abortError());
+  const client = createCloudflareClient({ env: ENV });
+
+  await assert.rejects(
+    () => client.fetchCloudflare('/zones/z/email/routing/rules'),
+    (err) => {
+      assert.ok(err instanceof CloudflareApiError);
+      assert.equal(err.status, 504);
+      assert.equal(err.code, 'upstream_timeout');
+      return true;
+    },
+  );
+  assert.equal(calls.length, 3);
+});
+
 test('network down: any other transport failure is normalized to 502 upstream_unreachable', async () => {
   stubFetch(() => new TypeError('fetch failed'));
   const client = createCloudflareClient({ env: ENV });
@@ -140,6 +156,22 @@ test('network down: any other transport failure is normalized to 502 upstream_un
       return true;
     },
   );
+});
+
+test('GET retries a transport failure, then reports 502', async () => {
+  const calls = stubFetch(() => new TypeError('fetch failed'));
+  const client = createCloudflareClient({ env: ENV });
+
+  await assert.rejects(
+    () => client.fetchCloudflare('/zones/z/email/routing/rules'),
+    (err) => {
+      assert.ok(err instanceof CloudflareApiError);
+      assert.equal(err.status, 502);
+      assert.equal(err.code, 'upstream_unreachable');
+      return true;
+    },
+  );
+  assert.equal(calls.length, 3);
 });
 
 test('a non-JSON response (e.g. HTML from a proxy) yields invalid_response', async () => {
@@ -319,6 +351,53 @@ test('an empty 200 with no JSON content-type is a success too', async () => {
   const client = createCloudflareClient({ env: ENV });
 
   assert.equal(await client.fetchCloudflare('/zones/z/email/routing/rules/r', 'DELETE'), null);
+});
+
+test('a GET 204 is an invalid response, not an empty listing', async () => {
+  stubFetch([textResponse('', { status: 204, contentType: null })]);
+  const client = createCloudflareClient({ env: ENV });
+
+  await assert.rejects(
+    () => client.fetchAllCloudflare('/zones/z/email/routing/rules'),
+    (err) => err instanceof CloudflareApiError && err.code === 'invalid_response',
+  );
+});
+
+test('an empty GET 200 with no JSON is an invalid response, not an empty listing', async () => {
+  stubFetch([textResponse('', { status: 200, contentType: 'text/plain' })]);
+  const client = createCloudflareClient({ env: ENV });
+
+  await assert.rejects(
+    () => client.fetchAllCloudflare('/zones/z/email/routing/rules'),
+    (err) => err instanceof CloudflareApiError && err.code === 'invalid_response',
+  );
+});
+
+test('fetchAllCloudflare: result null is not an empty listing', async () => {
+  stubFetch([jsonResponse({ success: true, result: null })]);
+  const client = createCloudflareClient({ env: ENV });
+
+  await assert.rejects(
+    () => client.fetchAllCloudflare('/zones/z/email/routing/rules'),
+    (err) => err instanceof CloudflareApiError && err.code === 'invalid_response',
+  );
+});
+
+test('fetchAllCloudflare: a non-array result is not an empty listing', async () => {
+  stubFetch([jsonResponse({ success: true, result: { id: 'not-a-list' } })]);
+  const client = createCloudflareClient({ env: ENV });
+
+  await assert.rejects(
+    () => client.fetchAllCloudflare('/zones/z/email/routing/rules'),
+    (err) => err instanceof CloudflareApiError && err.code === 'invalid_response',
+  );
+});
+
+test('fetchAllCloudflare: an empty array is a legitimate empty listing', async () => {
+  stubFetch([jsonResponse({ success: true, result: [] })]);
+  const client = createCloudflareClient({ env: ENV });
+
+  assert.deepEqual(await client.fetchAllCloudflare('/zones/z/email/routing/rules'), []);
 });
 
 test('a non-empty non-JSON 200 is still an invalid response', async () => {

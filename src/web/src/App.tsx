@@ -106,6 +106,10 @@ export default function App() {
           setLoginNotice(null);
           setSession('authed');
         }}
+        onSetupRequired={() => {
+          setLoginNotice(null);
+          setSession('setup');
+        }}
         notice={loginNotice}
         onNoticeDismiss={() => setLoginNotice(null)}
       />

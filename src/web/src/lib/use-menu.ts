@@ -78,10 +78,12 @@ export function useMenu({ initialFocus }: { initialFocus?: () => number } = {}) 
         return;
       }
 
-      // Tab closes the menu and returns focus to the trigger. `setOpen(false)` alone left
-      // the items in the DOM for one frame, so Tab moved onto the next menuitem, React
-      // then unmounted the menu, and focus dropped to <body>.
+      // Tab closes the menu and parks focus on the trigger. `setOpen(false)` is async, so
+      // without preventDefault the Tab default still runs while the items are mounted:
+      // focus moves trigger → first menuitem, React then unmounts, and focus drops to
+      // <body>. The next Tab (now on the trigger, menu gone) leaves the control as usual.
       if (event.key === 'Tab') {
+        event.preventDefault();
         close();
         return;
       }

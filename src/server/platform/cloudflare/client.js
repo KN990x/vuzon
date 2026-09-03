@@ -209,13 +209,23 @@ export function createCloudflareClient({ env = process.env } = {}) {
         const res = await fetch(url, { ...options, signal: controller.signal });
         const parsed = await parseCloudflareResponse(res);
 
-        // A successful response with no body is still a success. `parseCloudflareResponse`
+        // A successful mutation with no body is still a success. `parseCloudflareResponse`
         // only parses JSON when the content-type announces it, so a 204 (or any empty 2xx)
-        // reached `buildResponseError` and came back as a 502 `invalid_response` — the
-        // panel reporting failure for a DELETE that had already gone through, leaving the
-        // row on screen and the user retrying into a 404. Cloudflare answers 200+JSON on
-        // DELETE today; this keeps a change there from becoming a data-desync bug.
-        if (res.ok && !parsed.isJson && (res.status === 204 || parsed.body === '')) {
+        // on DELETE reached `buildResponseError` and came back as a 502 `invalid_response`
+        // — the panel reporting failure for a DELETE that had already gone through, leaving
+        // the row on screen and the user retrying into a 404. Cloudflare answers 200+JSON
+        // on DELETE today; this keeps a change there from becoming a data-desync bug.
+        //
+        // GET is excluded on purpose. The same empty 2xx on a listing was treated as
+        // `{ result: null }`, which `fetchAllCloudflare` then coerced to `[]` and took as
+        // a complete empty page — dest-in-use and the duplicate-alias pre-check both
+        // fail-open on an empty list, and GET /api/rules paints the panel empty.
+        if (
+          method !== 'GET'
+          && res.ok
+          && !parsed.isJson
+          && (res.status === 204 || parsed.body === '')
+        ) {
           return { success: true, result: null };
         }
 
@@ -315,7 +325,23 @@ export function createCloudflareClient({ env = process.env } = {}) {
         `${requestPath}${separator}page=${page}&per_page=${LIST_PAGE_SIZE}`,
       );
 
-      const pageResult = Array.isArray(data.result) ? data.result : [];
+      // A listing that did not come back as a list is not an empty page. Coercing
+      // `result: null` or an object to `[]` stopped pagination and looked complete —
+      // dest-in-use skipped every alias, and the duplicate-alias pre-check let a twin
+      // through. Fail closed; `result: []` is the legitimate empty listing.
+      if (!Array.isArray(data.result)) {
+        throw new CloudflareApiError(
+          'Cloudflare listing did not return an array',
+          {
+            status: 502,
+            code: 'invalid_response',
+            retryable: false,
+            details: { requestPath, page },
+          },
+        );
+      }
+
+      const pageResult = data.result;
       if (pageResult.length) {
         allResults = allResults.concat(pageResult);
       }
