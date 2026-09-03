@@ -270,7 +270,9 @@ export function registerApiRoutes(app, {
     });
 
     // A list that did not come back as a list means the check could not run at all.
-    if (!Array.isArray(addresses)) {
+    // Same for rules: treating a non-array as [] would skip every alias and look like
+    // the destination was unused — fail closed, like the addresses listing above.
+    if (!Array.isArray(addresses) || !Array.isArray(rules)) {
       throw usageCheckFailed();
     }
 
@@ -294,7 +296,7 @@ export function registerApiRoutes(app, {
       throw usageCheckFailed();
     }
 
-    const allRules = Array.isArray(rules) ? [...rules] : [];
+    const allRules = [...rules];
     if (
       catchAll
       && typeof catchAll === 'object'

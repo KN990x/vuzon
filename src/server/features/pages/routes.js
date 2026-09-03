@@ -3,7 +3,10 @@ import express from 'express';
 import { createPagesRateLimiter } from '../../platform/http/rate-limiters.js';
 
 function sendIndexHtml(publicDir, res, next) {
-  res.sendFile(path.join(publicDir, 'index.html'), (err) => {
+  // The shell names the hashed JS/CSS. Caching it would pin a visitor to a stale bundle
+  // after a release; hashed /assets/ below are the ones that may be immutable.
+  res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(path.join(publicDir, 'index.html'), { cacheControl: false }, (err) => {
     if (!err) {
       return;
     }
@@ -31,7 +34,15 @@ export function registerPageRoutes(app, {
 
   // Rate-limited like the two HTML routes around it. Left unthrottled, the asset directory
   // was the only unauthenticated endpoint with no ceiling at all.
-  app.use(pagesLimiter, express.static(publicDir, { index: false }));
+  app.use(pagesLimiter, express.static(publicDir, {
+    index: false,
+    setHeaders(res, filePath) {
+      const relative = path.relative(publicDir, filePath);
+      if (relative.split(path.sep)[0] === 'assets') {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    },
+  }));
 
   // SPA catch-all: any GET outside /api/* that did not match a static file.
   app.get(/^(?!\/api(?:\/|$)).*/, pagesLimiter, (_req, res, next) => {

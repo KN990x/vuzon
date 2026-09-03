@@ -859,6 +859,57 @@ test('HTTP integration: without src/web/dist the SPA answers 503 with a clear me
   }
 });
 
+test('HTTP integration: hashed assets are immutable; the HTML shell is not', async () => {
+  const publicDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vuzon-public-'));
+  fs.mkdirSync(path.join(publicDir, 'assets'));
+  fs.writeFileSync(path.join(publicDir, 'index.html'), '<div id="root"></div>\n');
+  fs.writeFileSync(path.join(publicDir, 'assets', 'app.js'), 'console.log(1);\n');
+  fs.writeFileSync(path.join(publicDir, 'favicon.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>\n');
+
+  const env = {
+    CF_ZONE_ID: 'zone_test_1',
+    CF_ACCOUNT_ID: 'acct_test_1',
+    DOMAIN: 'example.com',
+    NODE_ENV: 'development',
+  };
+
+  const { app } = createApp({
+    env,
+    cloudflareClient: createMockCloudflareClient(),
+    sessionSecret: 'test-session-secret-32chars!!',
+    credentialStore: createTestCredentialStore(),
+    publicDir,
+  });
+
+  const { server, baseUrl } = await listen(app);
+
+  try {
+    const html = await fetch(`${baseUrl}/`);
+    assert.equal(html.status, 200);
+    assert.equal(html.headers.get('cache-control'), 'no-cache');
+
+    const asset = await fetch(`${baseUrl}/assets/app.js`);
+    assert.equal(asset.status, 200);
+    assert.equal(asset.headers.get('cache-control'), 'public, max-age=31536000, immutable');
+
+    const favicon = await fetch(`${baseUrl}/favicon.svg`);
+    assert.equal(favicon.status, 200);
+    assert.equal(
+      (favicon.headers.get('cache-control') || '').toLowerCase().includes('immutable'),
+      false,
+      'unhashed files at the public root must not inherit the assets policy',
+    );
+
+    const api = await fetch(`${baseUrl}/api/me`);
+    assert.ok((api.headers.get('cache-control') || '').includes('no-store'));
+  } finally {
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+    fs.rmSync(publicDir, { recursive: true, force: true });
+  }
+});
+
 test('HTTP integration: the catch-all cannot be mutated or deleted', async () => {
   const env = {
     CF_ZONE_ID: 'zone_test_1',
@@ -2560,6 +2611,7 @@ test('HTTP integration: DELETE /api/addresses/:id separates "already gone" from 
   const base = createMockCloudflareClient();
   // The address listing is what tells the two cases apart, so it is swapped per request.
   let addressListing = [{ id: 'addr-known', email: 'known@example.com', verified: true }];
+  let rulesListing = [];
   const cloudflareClient = {
     async fetchCloudflare(requestPath, method = 'GET', body = null) {
       if (requestPath.includes('/email/routing/addresses') && method === 'DELETE') {
@@ -2573,7 +2625,7 @@ test('HTTP integration: DELETE /api/addresses/:id separates "already gone" from 
         return addressListing;
       }
       if (requestPath.includes('/email/routing/rules')) {
-        return [];
+        return rulesListing;
       }
       return [];
     },
@@ -2620,6 +2672,20 @@ test('HTTP integration: DELETE /api/addresses/:id separates "already gone" from 
     {
       // A listing that is not a list at all means the check could not run either.
       addressListing = null;
+      const res = await fetch(`${baseUrl}/api/addresses/addr-known`, {
+        method: 'DELETE',
+        headers: { Cookie: sessionCookie },
+      });
+      assert.equal(res.status, 502);
+      assert.equal((await readJson(res)).code, ERROR_CODES.DEST_USAGE_CHECK_FAILED);
+      assert.equal(addressDeleteCalls, 0);
+    }
+
+    {
+      // Same fail-closed for a rules listing that is not a list: treating it as [] would
+      // skip every alias and look like the destination was unused.
+      addressListing = [{ id: 'addr-known', email: 'known@example.com', verified: true }];
+      rulesListing = null;
       const res = await fetch(`${baseUrl}/api/addresses/addr-known`, {
         method: 'DELETE',
         headers: { Cookie: sessionCookie },

@@ -5,11 +5,11 @@ const MAX_LIST_PAGES = 100;
 /**
  * Second, independent ceiling on a listing.
  *
- * Under the client's own `per_page` it is unreachable: 100 pages x 50 items is exactly
- * 5000, so the page cap always trips first. It exists for the case the page cap cannot
- * see — Cloudflare ignoring `per_page` and returning far more per page — which is why it
- * is deliberately NOT derived from `MAX_LIST_PAGES * LIST_PAGE_SIZE`. Comparing with `>=`
- * so a single oversized page that lands exactly on the boundary is caught too.
+ * Under the client's own `per_page`, 100 pages × 50 items is exactly 5000, so a complete
+ * listing of that size must succeed — the page cap is what stops a 101st request.
+ * This ceiling exists for the case the page cap cannot see: Cloudflare ignoring
+ * `per_page` and returning far more per page. Compared with `>` so a listing that lands
+ * exactly on 5000 is accepted, and one item past it is not.
  */
 const MAX_LIST_ITEMS = 5000;
 /** Must match the `per_page` query sent below. */
@@ -320,7 +320,7 @@ export function createCloudflareClient({ env = process.env } = {}) {
         allResults = allResults.concat(pageResult);
       }
 
-      if (allResults.length >= MAX_LIST_ITEMS) {
+      if (allResults.length > MAX_LIST_ITEMS) {
         throw new CloudflareApiError(
           'Item limit exceeded while listing Cloudflare resources.',
           {

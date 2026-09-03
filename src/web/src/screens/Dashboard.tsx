@@ -62,7 +62,7 @@ function asList<T>(value: unknown): T[] {
   return Array.isArray(result) ? (result as T[]) : [];
 }
 
-export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
+export function Dashboard({ onUnauthorized }: { onUnauthorized: (code?: string) => void }) {
   const i18n = useI18n();
   const { t, tn } = i18n;
   const [profile, setProfile] = useState<Profile>({ rootDomain: '', username: '' });
@@ -208,7 +208,7 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
         return await apiRequest<T>(path, method, body);
       } catch (err) {
         if (err instanceof UnauthorizedError) {
-          onUnauthorizedRef.current();
+          onUnauthorizedRef.current(err.code);
         }
         throw err;
       }
@@ -249,9 +249,9 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
           return;
         }
         if (result.status !== 'fulfilled') {
-          if (path === '/api/rules/catch-all') {
-            setCatchAll(null);
-          }
+          // Keep whatever catch-all we already had: rules and addresses do the same,
+          // and the partial-load banner already explains the failed endpoint. Clearing
+          // it here made a blip look like "there is no catch-all".
           failures.push({ labelKey, error: result.reason });
           return;
         }
@@ -704,9 +704,9 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: () => void }) {
           mode={accountMode}
           currentUsername={profile.username}
           onClose={() => setAccountMode(null)}
-          onUnauthorized={() => {
+          onUnauthorized={(code) => {
             setAccountMode(null);
-            onUnauthorized();
+            onUnauthorized(code);
           }}
           onChanged={(kind) => {
             setAccountMode(null);

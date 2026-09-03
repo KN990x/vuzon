@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiRequest, UnauthorizedError } from './lib/api';
+import { sessionAfterUnauthorized } from './lib/session';
 import { useI18n } from './i18n/context';
 import type { MessageKey } from './i18n/en';
 import { pillButtonClass } from './components/primitives';
@@ -43,7 +44,7 @@ export default function App() {
           setSession('error');
           return;
         }
-        setSession(err.code === 'auth.setup_required' ? 'setup' : 'anon');
+        setSession(sessionAfterUnauthorized(err.code));
       });
 
     return () => {
@@ -86,7 +87,10 @@ export default function App() {
   if (session === 'setup') {
     return (
       <Setup
-        onSuccess={() => setSession('authed')}
+        onSuccess={() => {
+          setLoginNotice(null);
+          setSession('authed');
+        }}
         onAlreadyConfigured={() => {
           setLoginNotice('error.setup.already_done');
           setSession('checking');
@@ -98,12 +102,27 @@ export default function App() {
   if (session === 'anon') {
     return (
       <Login
-        onSuccess={() => setSession('authed')}
+        onSuccess={() => {
+          setLoginNotice(null);
+          setSession('authed');
+        }}
         notice={loginNotice}
         onNoticeDismiss={() => setLoginNotice(null)}
       />
     );
   }
 
-  return <Dashboard onUnauthorized={() => setSession('anon')} />;
+  return (
+    <Dashboard
+      onUnauthorized={(code) => {
+        const next = sessionAfterUnauthorized(code);
+        // The setup-race notice is one-shot. Leaving it set meant a later logout
+        // remounted Login still explaining a claim that had already happened.
+        if (next === 'anon') {
+          setLoginNotice(null);
+        }
+        setSession(next);
+      }}
+    />
+  );
 }

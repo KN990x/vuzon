@@ -7,3 +7,8 @@ strictPeerDependencies: true
 pmOnFail: error
 allowBuilds:
   esbuild: true
+# Express 4.22 pins qs to ~6.15.1; express-rate-limit 8.6 resolves ip-address to 10.2.0.
+# Neither parent can move without a major. These floors close the production advisories.
+overrides:
+  qs: '>=6.16.0'
+  ip-address: '>=10.3.1'

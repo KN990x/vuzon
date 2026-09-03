@@ -78,10 +78,11 @@ export function useMenu({ initialFocus }: { initialFocus?: () => number } = {}) 
         return;
       }
 
-      // Tab moves on rather than cycling inside: this is a menu, not a dialog, so it does
-      // not trap focus — it just gets out of the way.
+      // Tab closes the menu and returns focus to the trigger. `setOpen(false)` alone left
+      // the items in the DOM for one frame, so Tab moved onto the next menuitem, React
+      // then unmounted the menu, and focus dropped to <body>.
       if (event.key === 'Tab') {
-        setOpen(false);
+        close();
         return;
       }
 

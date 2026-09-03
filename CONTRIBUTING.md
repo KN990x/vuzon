@@ -229,7 +229,7 @@ Response envelope: reads return `{ result }`, mutations `{ ok: true }` (plus `re
 - `POST /api/rules` — Creates rule `{ localPart, action }` where `action` is `forward` (exactly one verified destination) or `drop`.
 - `PUT  /api/rules/catch-all` — Updates the catch-all (`action` / `enabled`); the only door that mutates it.
 - `PUT  /api/rules/:id` — Patches an existing alias (`action` / `name` / `enabled`). Catch-all and undescribable actions are refused.
-- `DELETE /api/rules/:id` — Deletes rule (catch-all and undescribable actions refused).
+- `DELETE /api/rules/:id` — Deletes rule (catch-all refused). An undescribable action is still deletable: deleting reconstructs nothing.
 - `POST /api/rules/:id/enable` — Enables rule (same editability guard as PUT).
 - `POST /api/rules/:id/disable` — Disables rule (same editability guard as PUT).
 

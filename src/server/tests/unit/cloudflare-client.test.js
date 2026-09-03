@@ -291,6 +291,17 @@ test('fetchAllCloudflare: stops when the item cap is exceeded', async () => {
   );
 });
 
+test('fetchAllCloudflare: a listing of exactly 5000 items is accepted', async () => {
+  // 100 pages × 50 is exactly the item ceiling. Compared with `>` so that complete
+  // listing succeeds; the page cap is what stops a 101st request.
+  const page = Array.from({ length: 5000 }, (_, i) => ({ id: `item-${i}` }));
+  stubFetch(() => jsonResponse({ success: true, result: page, result_info: { total_pages: 1 } }));
+  const client = createCloudflareClient({ env: ENV });
+
+  const all = await client.fetchAllCloudflare('/zones/z/email/routing/rules');
+  assert.equal(all.length, 5000);
+});
+
 test('a 204 No Content on DELETE is a success, not a 502', async () => {
   // parseCloudflareResponse only parses JSON when the content-type announces it, so an
   // empty 2xx used to fall through to buildResponseError and come back as a 502

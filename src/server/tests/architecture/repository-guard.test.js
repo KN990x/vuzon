@@ -61,6 +61,17 @@ test('package: the Node engine constraint does not drift between the three manif
   assert.match(String(root.engines?.node), /^>=\d+$/);
 });
 
+test('package: .nvmrc pins the same Node major as engines.node', () => {
+  const root = readJsonFile(repoRoot, 'package.json');
+  const nvmrc = fs.readFileSync(path.join(repoRoot, '.nvmrc'), 'utf8').trim();
+  const enginesMajor = String(root.engines?.node).match(/^>=(\d+)$/)?.[1];
+  assert.equal(
+    nvmrc,
+    enginesMajor,
+    `.nvmrc (${nvmrc}) must match the major in engines.node (${root.engines?.node})`,
+  );
+});
+
 test('tree: no leftovers from the workspace migration', () => {
   // The HTTP contract lives in tests/integration/server/app.test.js, not in a separate .md.
   assert.equal(fs.existsSync(path.join(repoRoot, 'API_CONTRACT.md')), false);

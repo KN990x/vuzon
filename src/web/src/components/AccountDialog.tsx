@@ -15,7 +15,7 @@ interface AccountDialogProps {
   currentUsername: string;
   onClose: () => void;
   /** Session gone while the dialog was open — same path as any other 401 on the panel. */
-  onUnauthorized: () => void;
+  onUnauthorized: (code?: string) => void;
   /** Reported to the panel so the change lands in the shared status toast. */
   onChanged: (kind: AccountChangeKind) => void;
 }
@@ -81,7 +81,7 @@ export function AccountDialog({
 
   function handleAccountError(err: unknown, setError: (value: unknown) => void) {
     if (err instanceof UnauthorizedError) {
-      onUnauthorizedRef.current();
+      onUnauthorizedRef.current(err.code);
       return;
     }
     setError(err);
