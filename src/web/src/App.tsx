@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiRequest, UnauthorizedError } from './lib/api';
 import { sessionAfterUnauthorized } from './lib/session';
+import type { Profile } from './lib/types';
 import { useI18n } from './i18n/context';
 import type { MessageKey } from './i18n/en';
 import { pillButtonClass } from './components/primitives';
@@ -23,6 +24,9 @@ type Session = 'checking' | 'setup' | 'anon' | 'authed' | 'error';
 export default function App() {
   const { t } = useI18n();
   const [session, setSession] = useState<Session>('checking');
+  // Kept from the session check that authorised the panel, so Dashboard does not flash an
+  // empty domain (and cannot create aliases) while a second GET /api/me is in flight.
+  const [profile, setProfile] = useState<Profile | null>(null);
   // One-shot message handed to the login screen. Losing the setup race used to drop the
   // user straight onto an unexplained login form: the wizard 409s, App re-checks, the
   // re-check answers a plain 401, and the reason they were moved never reached the screen.
@@ -34,12 +38,16 @@ export default function App() {
     }
 
     let cancelled = false;
-    apiRequest('/api/me')
-      .then(() => {
-        if (!cancelled) setSession('authed');
+    apiRequest<Profile>('/api/me')
+      .then((value) => {
+        if (!cancelled) {
+          setProfile(value);
+          setSession('authed');
+        }
       })
       .catch((err: unknown) => {
         if (cancelled) return;
+        setProfile(null);
         if (!(err instanceof UnauthorizedError)) {
           setSession('error');
           return;
@@ -89,7 +97,7 @@ export default function App() {
       <Setup
         onSuccess={() => {
           setLoginNotice(null);
-          setSession('authed');
+          setSession('checking');
         }}
         onAlreadyConfigured={() => {
           setLoginNotice('error.setup.already_done');
@@ -104,7 +112,7 @@ export default function App() {
       <Login
         onSuccess={() => {
           setLoginNotice(null);
-          setSession('authed');
+          setSession('checking');
         }}
         onSetupRequired={() => {
           setLoginNotice(null);
@@ -116,8 +124,20 @@ export default function App() {
     );
   }
 
+  if (!profile) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-ink font-mono text-cream/70">
+        <h1 className="sr-only">{t('app.loading')}</h1>
+        <p role="status" className="m-0 text-[13px] uppercase tracking-[0.22em]">
+          {t('app.loading')}
+        </p>
+      </main>
+    );
+  }
+
   return (
     <Dashboard
+      initialProfile={profile}
       onUnauthorized={(code) => {
         const next = sessionAfterUnauthorized(code);
         // The setup-race notice is one-shot. Leaving it set meant a later logout

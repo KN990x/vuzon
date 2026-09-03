@@ -160,7 +160,7 @@ export const es = {
   'rules.editor.confirmReplace':
     'Esto sustituye la acción actual de la regla, y vuzon no puede recuperarla. ¿Continuar?',
 
-  'dests.title': 'Destinos verificados',
+  'dests.title': 'Destinos',
   'dests.verified': 'Verificado',
   'dests.pending': 'Pendiente',
   'dests.delete': 'Eliminar destino',
@@ -241,7 +241,7 @@ export const es = {
   'error.client.invalid_json': 'Respuesta JSON inválida del servidor (HTTP {status})',
   'error.client.timeout': 'El servidor tardó demasiado en responder. Revisa la conexión e inténtalo de nuevo.',
 
-  'error.field.email': 'Email',
+  'error.field.email': 'Correo',
   'error.field.localPart': 'Alias',
   'error.field.action': 'Acción',
   'error.field.name': 'Nombre',

@@ -51,8 +51,22 @@ for i in $(seq 1 90); do
   sleep 1
 done
 
-# SPA is served; unauthenticated /api/me is 401 JSON (API 404 before SPA catch-all).
-curl -fsS "http://127.0.0.1:${PORT}/" | grep -q '<div id="root">'
+# SPA is served; hashed JS/CSS from the shell must be reachable (a COPY that leaves
+# index.html and drops /assets/* used to pass with only the root div check).
+html="$(curl -fsS "http://127.0.0.1:${PORT}/")"
+printf '%s' "$html" | grep -q '<div id="root">'
+js_assets="$(printf '%s' "$html" | grep -oE '/assets/[^"[:space:]]+\.js' || true)"
+css_assets="$(printf '%s' "$html" | grep -oE '/assets/[^"[:space:]]+\.css' || true)"
+test -n "$js_assets"
+test -n "$css_assets"
+while IFS= read -r asset; do
+  [ -z "$asset" ] && continue
+  test "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PORT}${asset}")" = "200"
+done <<EOF
+${js_assets}
+${css_assets}
+EOF
+
 test "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PORT}/api/me")" = "401"
 curl -sS "http://127.0.0.1:${PORT}/api/me" | grep -q '"code":"auth.setup_required"'
 

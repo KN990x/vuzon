@@ -76,6 +76,28 @@ export function ruleAliasLabel(rule) {
 }
 
 /**
+ * Can this catch-all payload be scanned for destination usage?
+ *
+ * A successful GET that is `null` or `{}` used to be skipped: the usage scan then ran
+ * over aliases alone and DELETE went ahead even when the catch-all still forwarded there.
+ * Fail closed unless we can see `actions` or a matcher of `type: 'all'`.
+ * @param {unknown} catchAll
+ * @returns {boolean}
+ */
+export function isUsableCatchAllForUsageScan(catchAll) {
+  if (!catchAll || typeof catchAll !== 'object' || Array.isArray(catchAll)) {
+    return false;
+  }
+
+  const { actions, matchers } = /** @type {{ actions?: unknown, matchers?: unknown }} */ (catchAll);
+  if (Array.isArray(actions)) {
+    return true;
+  }
+  return Array.isArray(matchers)
+    && matchers.some((matcher) => matcher && typeof matcher === 'object' && matcher.type === 'all');
+}
+
+/**
  * Rules whose forward actions include this destination email.
  * Mirror of `hasRuleForAlias` (rule-diagnostics.js): same trim/lowercase, same
  * scalar-or-array `actions[].value` handling as `describeRuleActions`.

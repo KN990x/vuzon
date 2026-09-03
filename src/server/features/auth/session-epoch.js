@@ -104,12 +104,11 @@ export function configureSessionEpochPersistence({ dataDir }) {
 export function revokeSessionsIssuedUntilNow(now = Date.now()) {
   const next = Math.max(now, revokedBefore + 1);
   // Persist BEFORE moving the in-memory mark. The other order left the two out of sync
-  // whenever the write failed (a full or read-only volume): `POST /api/account/password`
-  // had already saved the new hash, so the caller saw a 500 for a change that succeeded,
-  // their own tab was logged out by the raised in-memory mark, and the next restart
-  // reloaded the OLD on-disk value — reviving every cookie the change meant to kill.
-  // Writing first means a failure leaves both marks at their previous value and the route
-  // reports an error for a revocation that genuinely did not happen.
+  // whenever the write failed (a full or read-only volume): the in-memory mark moved, the
+  // caller was logged out of their own tab for a revocation that never reached disk, and
+  // the next restart reloaded the OLD on-disk value — reviving every cookie the change
+  // meant to kill. Writing first means a failure leaves both marks at their previous
+  // value and the route reports an error for a revocation that genuinely did not happen.
   if (epochFilePath) {
     writeEpochFile(epochFilePath, next);
   }

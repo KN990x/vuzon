@@ -196,6 +196,26 @@ export function createCredentialStore({ dataDir }) {
   // Single user, so the record is cached in memory and refreshed on save().
   let record = readRecord(filePath);
 
+  /**
+   * Serialises writes. `save` / `updatePassword` await scrypt, which yields the event loop,
+   * and the password and username routes have no lock between them: without a queue, one
+   * writer hashed against a username captured before the yield and overwrote the other's
+   * field. Failures must not stall the queue (`then(task, task)`).
+   * @type {Promise<void>}
+   */
+  let writeQueue = Promise.resolve();
+
+  /**
+   * @template T
+   * @param {() => T | Promise<T>} task
+   * @returns {Promise<T>}
+   */
+  function enqueueWrite(task) {
+    const run = writeQueue.then(task, task);
+    writeQueue = run.then(() => undefined, () => undefined);
+    return run;
+  }
+
   return {
     /** @returns {boolean} */
     isConfigured() {
@@ -208,18 +228,43 @@ export function createCredentialStore({ dataDir }) {
     },
 
     /**
-     * Writes (or replaces) the panel credentials.
+     * Writes (or replaces) the panel credentials. Used by the setup wizard, which names
+     * both fields. Password changes go through `updatePassword` so they cannot restore a
+     * username captured before another tab renamed the account.
      * @param {{ username: string, password: string }} credentials
      */
     async save({ username, password }) {
-      const next = {
-        version: RECORD_VERSION,
-        username: username.trim(),
-        password: await hashPassword(password),
-        updatedAt: new Date().toISOString(),
-      };
-      writeRecordAtomically(filePath, next);
-      record = next;
+      return enqueueWrite(async () => {
+        const next = {
+          version: RECORD_VERSION,
+          username: username.trim(),
+          password: await hashPassword(password),
+          updatedAt: new Date().toISOString(),
+        };
+        writeRecordAtomically(filePath, next);
+        record = next;
+      });
+    },
+
+    /**
+     * Re-hashes the password and keeps whatever username is on the record *inside* the
+     * write lock. The password route used to pass `getUsername()` captured before `verify`
+     * (another scrypt yield); a concurrent rename then got overwritten by that stale name.
+     * @param {string} password
+     */
+    async updatePassword(password) {
+      return enqueueWrite(async () => {
+        if (record === null) {
+          throw new Error('Cannot update the password before the panel has credentials');
+        }
+        const next = {
+          ...record,
+          password: await hashPassword(password),
+          updatedAt: new Date().toISOString(),
+        };
+        writeRecordAtomically(filePath, next);
+        record = next;
+      });
     },
 
     /**
@@ -227,17 +272,19 @@ export function createCredentialStore({ dataDir }) {
      * independent of the username; rewriting it would only churn the salt for no gain.
      * @param {string} username
      */
-    updateUsername(username) {
-      if (record === null) {
-        throw new Error('Cannot update the username before the panel has credentials');
-      }
-      const next = {
-        ...record,
-        username: username.trim(),
-        updatedAt: new Date().toISOString(),
-      };
-      writeRecordAtomically(filePath, next);
-      record = next;
+    async updateUsername(username) {
+      return enqueueWrite(() => {
+        if (record === null) {
+          throw new Error('Cannot update the username before the panel has credentials');
+        }
+        const next = {
+          ...record,
+          username: username.trim(),
+          updatedAt: new Date().toISOString(),
+        };
+        writeRecordAtomically(filePath, next);
+        record = next;
+      });
     },
 
     /**

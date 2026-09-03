@@ -52,7 +52,7 @@ Only expose these ports on a trusted network — the Vite dev server has no auth
 
 - **Backend:** routes in `src/server/features/*/routes.js`; integrations in `src/server/platform/`; configuration in `src/server/config/`. Keep `src/server/server.js` as a thin entrypoint.
 - **Frontend:** React app under `src/web/src/` (`screens/`, `components/`, pure helpers in `lib/`, translations in `i18n/`). Keep business logic in `src/web/src/lib/` so it stays unit-testable.
-- **Tests:** backend coverage in `src/server/tests/unit/` and `src/server/tests/integration/`; smoke checks in `src/server/tests/architecture/`; frontend tests in `src/web/src/**/*.test.ts` (Vitest).
+- **Tests:** backend coverage in `src/server/tests/unit/` and `src/server/tests/integration/`; architecture guards in `src/server/tests/architecture/` (invariants no HTTP test can observe — not smoke checks); frontend tests in `src/web/src/**/*.test.ts` (Vitest).
 
 ## Code conventions
 
@@ -226,6 +226,7 @@ Response envelope: reads return `{ result }`, mutations `{ ok: true }` (plus `re
 - `POST /api/addresses` — Creates destination address `{ email }`.
 - `DELETE /api/addresses/:id` — Deletes destination address (refused with `dest.in_use` when still referenced by a rule or catch-all).
 - `GET  /api/rules` — Lists rules/aliases.
+- `GET  /api/rules/catch-all` — Reads the catch-all rule (must stay registered before any `GET /api/rules/:id` if one is ever added: `cloudflareResourceIdSchema` accepts hyphens).
 - `POST /api/rules` — Creates rule `{ localPart, action }` where `action` is `forward` (exactly one verified destination) or `drop`.
 - `PUT  /api/rules/catch-all` — Updates the catch-all (`action` / `enabled`); the only door that mutates it.
 - `PUT  /api/rules/:id` — Patches an existing alias (`action` / `name` / `enabled`). Catch-all and undescribable actions are refused.

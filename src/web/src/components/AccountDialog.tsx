@@ -41,12 +41,16 @@ export function AccountDialog({
   const [newUsername, setNewUsername] = useState(currentUsername);
   const [usernamePassword, setUsernamePassword] = useState('');
   const [usernameError, setUsernameError] = useState<unknown>(null);
+  const [usernameFieldIssue, setUsernameFieldIssue] = useState<
+    'username.required' | 'password.current_required' | null
+  >(null);
   const [usernameSubmitting, setUsernameSubmitting] = useState(false);
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newPasswordConfirm, setNewPasswordConfirm] = useState('');
   const [passwordError, setPasswordError] = useState<unknown>(null);
+  const [passwordFieldIssue, setPasswordFieldIssue] = useState<'password.current_required' | null>(null);
   const [policyIssue, setPolicyIssue] = useState<PasswordIssue | null>(null);
   const [passwordSubmitting, setPasswordSubmitting] = useState(false);
 
@@ -94,6 +98,15 @@ export function AccountDialog({
     }
 
     setUsernameError(null);
+    if (!newUsername.trim()) {
+      setUsernameFieldIssue('username.required');
+      return;
+    }
+    if (!usernamePassword.trim()) {
+      setUsernameFieldIssue('password.current_required');
+      return;
+    }
+    setUsernameFieldIssue(null);
     setUsernameSubmitting(true);
     try {
       await apiRequest('/api/account/username', 'POST', {
@@ -115,6 +128,12 @@ export function AccountDialog({
     }
 
     setPasswordError(null);
+    if (!currentPassword.trim()) {
+      setPolicyIssue(null);
+      setPasswordFieldIssue('password.current_required');
+      return;
+    }
+    setPasswordFieldIssue(null);
     const issue = checkNewPassword(newPassword, newPasswordConfirm);
     setPolicyIssue(issue);
     if (issue) {
@@ -137,12 +156,16 @@ export function AccountDialog({
   }
 
   let usernameErrorMessage = '';
-  if (usernameError !== null) {
+  if (usernameFieldIssue) {
+    usernameErrorMessage = tRaw(`error.issue.${usernameFieldIssue}`) ?? '';
+  } else if (usernameError !== null) {
     usernameErrorMessage = buildAuthErrorMessage(i18n, usernameError, 'account.username.error.generic');
   }
 
   let passwordErrorMessage = '';
-  if (policyIssue) {
+  if (passwordFieldIssue) {
+    passwordErrorMessage = tRaw(`error.issue.${passwordFieldIssue}`) ?? '';
+  } else if (policyIssue) {
     passwordErrorMessage = tRaw(`error.issue.${policyIssue}`) ?? '';
   } else if (passwordError !== null) {
     passwordErrorMessage = buildAuthErrorMessage(i18n, passwordError, 'account.password.error.generic');
@@ -187,7 +210,7 @@ export function AccountDialog({
           </p>
 
           {mode === 'username' ? (
-            <form className="flex flex-col gap-4" onSubmit={handleUsernameSubmit}>
+            <form className="flex flex-col gap-4" noValidate onSubmit={handleUsernameSubmit}>
               <p className="m-0 font-mono text-[11px] text-cream/60">
                 {t('account.username.current', { username: currentUsername })}
               </p>
@@ -201,7 +224,6 @@ export function AccountDialog({
                   value={newUsername}
                   onChange={(e) => setNewUsername(e.target.value)}
                   autoComplete="username"
-                  required
                   className={authFieldClass}
                 />
               </label>
@@ -214,7 +236,6 @@ export function AccountDialog({
                   value={usernamePassword}
                   onChange={(e) => setUsernamePassword(e.target.value)}
                   autoComplete="current-password"
-                  required
                   className={authFieldClass}
                 />
               </label>
@@ -233,7 +254,7 @@ export function AccountDialog({
               </div>
             </form>
           ) : (
-            <form className="flex flex-col gap-4" onSubmit={handlePasswordSubmit}>
+            <form className="flex flex-col gap-4" noValidate onSubmit={handlePasswordSubmit}>
               <label className="flex flex-col gap-1.5">
                 <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-cream/65">
                   {t('account.password.current')}
@@ -244,7 +265,6 @@ export function AccountDialog({
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   autoComplete="current-password"
-                  required
                   className={authFieldClass}
                 />
               </label>
@@ -257,7 +277,6 @@ export function AccountDialog({
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   autoComplete="new-password"
-                  required
                   className={authFieldClass}
                 />
                 <span className="font-mono text-[11px] text-cream/60">{t('setup.passwordHint')}</span>
@@ -271,7 +290,6 @@ export function AccountDialog({
                   value={newPasswordConfirm}
                   onChange={(e) => setNewPasswordConfirm(e.target.value)}
                   autoComplete="new-password"
-                  required
                   className={authFieldClass}
                 />
               </label>

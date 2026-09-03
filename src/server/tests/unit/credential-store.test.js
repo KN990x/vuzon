@@ -131,7 +131,7 @@ test('credential-store: updateUsername() renames without re-hashing the password
   await store.save({ username: 'kn', password: PASSWORD });
 
   const before = JSON.parse(fs.readFileSync(path.join(dataDir, 'auth.json'), 'utf8'));
-  store.updateUsername('  owner  ');
+  await store.updateUsername('  owner  ');
   const after = JSON.parse(fs.readFileSync(path.join(dataDir, 'auth.json'), 'utf8'));
 
   assert.equal(store.getUsername(), 'owner');
@@ -142,9 +142,14 @@ test('credential-store: updateUsername() renames without re-hashing the password
   assert.equal(await store.verify({ username: 'kn', password: PASSWORD }), false);
 });
 
-test('credential-store: updateUsername() on an empty store throws', (t) => {
+test('credential-store: updateUsername() on an empty store throws', async (t) => {
   const store = createCredentialStore({ dataDir: tempDataDir(t) });
-  assert.throws(() => store.updateUsername('owner'), /before the panel has credentials/i);
+  await assert.rejects(() => store.updateUsername('owner'), /before the panel has credentials/i);
+});
+
+test('credential-store: updatePassword() on an empty store throws', async (t) => {
+  const store = createCredentialStore({ dataDir: tempDataDir(t) });
+  await assert.rejects(() => store.updatePassword(PASSWORD), /before the panel has credentials/i);
 });
 
 /**
@@ -165,7 +170,7 @@ test('credential-store: concurrent writes never corrupt auth.json or throw ENOEN
   const writes = [];
   for (let i = 0; i < 12; i += 1) {
     writes.push(store.save({ username: `user${i}`, password: `${PASSWORD}-${i}` }));
-    writes.push(Promise.resolve().then(() => store.updateUsername(`renamed${i}`)));
+    writes.push(store.updateUsername(`renamed${i}`));
   }
   // Any ENOENT from the rename would surface here.
   await Promise.all(writes);
@@ -185,6 +190,28 @@ test('credential-store: concurrent writes never corrupt auth.json or throw ENOEN
   // A fresh store reading from disk agrees with the one in memory.
   const reopened = createCredentialStore({ dataDir });
   assert.equal(reopened.getUsername(), parsed.username);
+});
+
+test('credential-store: overlapping password and username changes both survive', async (t) => {
+  const dataDir = tempDataDir(t);
+  const store = createCredentialStore({ dataDir });
+  await store.save({ username: 'kn', password: PASSWORD });
+
+  // The two account routes have no lock between them. Without a write queue, save() hashed
+  // against a username captured before scrypt yielded, and updateUsername wrote the old
+  // hash — one of the two changes was always lost. Both must be on disk when they finish.
+  await Promise.all([
+    store.updatePassword(`${PASSWORD}-new`),
+    store.updateUsername('owner'),
+  ]);
+
+  const parsed = JSON.parse(fs.readFileSync(path.join(dataDir, 'auth.json'), 'utf8'));
+  assert.equal(parsed.username, 'owner');
+  const reopened = createCredentialStore({ dataDir });
+  assert.equal(reopened.getUsername(), 'owner');
+  assert.equal(await reopened.verify({ username: 'owner', password: `${PASSWORD}-new` }), true);
+  assert.equal(await reopened.verify({ username: 'owner', password: PASSWORD }), false);
+  assert.equal(await reopened.verify({ username: 'kn', password: `${PASSWORD}-new` }), false);
 });
 
 test('credential-store: auth.json is written owner-only (0600)', async (t) => {

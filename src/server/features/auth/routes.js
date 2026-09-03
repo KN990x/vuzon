@@ -56,13 +56,18 @@ export function registerAuthRoutes(app, {
         return sendApiRouteError(res, err);
       }
 
-      await credentialStore.save({ username: body.username, password: body.password });
-
       // Claiming the panel must drop every session issued before it. `session-secret` and
       // `session-epoch` survive the `auth.json` deletion that credential-store.js documents
       // as the password-reset path, so without this a cookie captured before the reset
       // stayed valid for its full 7-day maxAge against the brand-new credentials.
+      //
+      // Revoke BEFORE writing credentials. The other order left a window where `auth.json`
+      // already held the new hash but a failed epoch write (full volume) answered 500
+      // without moving the mark — stolen cookies kept working against the new password.
+      // If the save fails after this, the caller re-enters with the previous credentials
+      // (or the wizard, on first setup); that is recoverable. The reverse is not.
       revokeSessionsIssuedUntilNow();
+      await credentialStore.save({ username: body.username, password: body.password });
 
       // Signing in right away: asking the user to retype what they just chose adds nothing.
       req.session = {
@@ -132,13 +137,14 @@ export function registerAuthRoutes(app, {
       });
     }
 
-    await credentialStore.save({ username, password: body.newPassword });
-
     // A password change must drop every other session, including a cookie copied earlier:
-    // that is the whole point of changing it. The caller's own session is re-stamped so the
-    // user is not logged out of the tab they are looking at (`nextIssuedAt` guarantees a
-    // mark strictly above the one just set).
+    // that is the whole point of changing it. Revoke first (see the setup route), then
+    // persist the new hash. `updatePassword` reads the live username inside the store lock
+    // so a concurrent rename is not overwritten by the name captured above, before verify.
+    // The caller's own session is re-stamped so they are not logged out of this tab
+    // (`nextIssuedAt` guarantees a mark strictly above the one just set).
     revokeSessionsIssuedUntilNow();
+    await credentialStore.updatePassword(body.newPassword);
     req.session = {
       authenticated: true,
       issuedAt: nextIssuedAt(),
@@ -178,9 +184,9 @@ export function registerAuthRoutes(app, {
       return res.json({ success: true });
     }
 
-    credentialStore.updateUsername(body.newUsername);
-
+    // Revoke first (same reason as the password route), then persist the new name.
     revokeSessionsIssuedUntilNow();
+    await credentialStore.updateUsername(body.newUsername);
     req.session = {
       authenticated: true,
       issuedAt: nextIssuedAt(),

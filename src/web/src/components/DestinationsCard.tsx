@@ -18,6 +18,8 @@ interface DestinationsCardProps {
   dests: Destination[];
   /** False until the first refresh comes back, so the empty state does not flash first. */
   loaded: boolean;
+  /** True when `/api/addresses` failed: do not claim the list is empty. */
+  loadFailed: boolean;
   newDestInput: string;
   onInputChange: (value: string) => void;
   onAdd: () => void;
@@ -28,7 +30,7 @@ interface DestinationsCardProps {
 }
 
 export function DestinationsCard({
-  dests, loaded, newDestInput, onInputChange, onAdd, onDelete, loading, isDestPending, error,
+  dests, loaded, loadFailed, newDestInput, onInputChange, onAdd, onDelete, loading, isDestPending, error,
 }: DestinationsCardProps) {
   const { t } = useI18n();
   const titleId = useId();
@@ -80,7 +82,7 @@ export function DestinationsCard({
         })}
       </ul>
 
-      {dests.length === 0 && (
+      {dests.length === 0 && !loadFailed && (
         <div className={`${rowPaddingClass} font-mono text-xs text-cream/60 ${rowDividerClass}`}>
           {loaded ? t('dests.empty') : t('dests.loading')}
         </div>

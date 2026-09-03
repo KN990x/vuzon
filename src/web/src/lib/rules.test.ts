@@ -318,7 +318,7 @@ test('interpretAddDestError: another status is translated by code under the Erro
     params: { issues: [{ field: 'email', code: 'email.invalid' }] },
   });
   expect(interpretAddDestError(en, err)).toBe('Error: Email: invalid email format');
-  expect(interpretAddDestError(es, err)).toBe('Error: Email: formato de correo inválido');
+  expect(interpretAddDestError(es, err)).toBe('Error: Correo: formato de correo inválido');
 });
 
 test('interpretAddDestError: an error with no code falls back to its own message', () => {

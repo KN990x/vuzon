@@ -29,7 +29,8 @@ import { DestinationsCard } from '../components/DestinationsCard';
 import { pillButtonClass } from '../components/primitives';
 
 // /api/me is not listed here: rootDomain comes from the server environment and does
-// not change during the session, so it is fetched once on mount.
+// not change during the session. App.tsx already fetched it to decide to show the panel,
+// and that payload is passed in as `initialProfile`.
 const REFRESH_ENDPOINTS = [
   { path: '/api/rules', labelKey: 'dashboard.resource.rules' },
   { path: '/api/addresses', labelKey: 'dashboard.resource.addresses' },
@@ -62,10 +63,21 @@ function asList<T>(value: unknown): T[] {
   return Array.isArray(result) ? (result as T[]) : [];
 }
 
-export function Dashboard({ onUnauthorized }: { onUnauthorized: (code?: string) => void }) {
+interface RefreshOutcome {
+  applied: boolean;
+  failures: LoadFailure[];
+}
+
+export function Dashboard({
+  initialProfile,
+  onUnauthorized,
+}: {
+  initialProfile: Profile;
+  onUnauthorized: (code?: string) => void;
+}) {
   const i18n = useI18n();
   const { t, tn } = i18n;
-  const [profile, setProfile] = useState<Profile>({ rootDomain: '', username: '' });
+  const [profile, setProfile] = useState<Profile>(initialProfile);
   const [rules, setRules] = useState<Rule[]>([]);
   const [dests, setDests] = useState<Destination[]>([]);
   const [catchAll, setCatchAll] = useState<Rule | null>(null);
@@ -216,7 +228,7 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: (code?: string) 
     [],
   );
 
-  const refreshAll = useCallback(async () => {
+  const refreshAll = useCallback(async (): Promise<RefreshOutcome> => {
     // `refreshAll` is called nested from the mutations; the counter keeps the inner
     // refresh from switching the indicator off while the outer one is still running.
     // On a clean load it also clears `status` — mutation success toasts must be set
@@ -234,7 +246,7 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: (code?: string) 
       // A newer refresh started (or the screen went away) while these were in flight: its
       // data is the current truth, so writing ours on top would resurrect stale state.
       if (!mountedRef.current || generation !== refreshGenerationRef.current) {
-        return;
+        return { applied: false, failures: [] };
       }
 
       const failures: LoadFailure[] = [];
@@ -285,6 +297,7 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: (code?: string) 
       if (statusMsgRef.current !== '') {
         setStatus('');
       }
+      return { applied: true, failures };
     } finally {
       refreshDepthRef.current = Math.max(0, refreshDepthRef.current - 1);
       if (refreshDepthRef.current === 0) {
@@ -297,27 +310,6 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: (code?: string) 
     void refreshAll();
   }, [refreshAll]);
 
-  // Profile: once on mount (see the comment on REFRESH_ENDPOINTS).
-  useEffect(() => {
-    let cancelled = false;
-
-    api<Profile>('/api/me')
-      .then((value) => {
-        if (!cancelled) setProfile(value || { rootDomain: '', username: '' });
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setStatus(i18nRef.current.t('dashboard.status.profileError', {
-            message: translateApiError(i18nRef.current, err),
-          }));
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [api, setStatus]);
-
   // Derived values (same criteria as the documented Alpine client).
   const verifiedDests = dests.filter((dest) => isVerifiedStatus(dest.verified));
 
@@ -325,11 +317,17 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: (code?: string) 
   const filteredRules = filterAliasRules(rules, catchAll, search);
 
   let aliasListEmptyMessage = '';
+  const rulesFailed = loadFailures.some((failure) => failure.labelKey === 'dashboard.resource.rules');
+  const addressesFailed = loadFailures.some((failure) => failure.labelKey === 'dashboard.resource.addresses');
   if (filteredRules.length === 0) {
     if (!loaded) {
       // Before the first refresh lands there is nothing to be empty about; announcing
       // "No aliases created yet" and then replacing it with a list reads as a glitch.
       aliasListEmptyMessage = t('aliases.empty.loading');
+    } else if (rulesFailed) {
+      // The partial-load banner already names the failed endpoint. Saying "no aliases"
+      // next to it would claim Cloudflare is empty when we simply could not list them.
+      aliasListEmptyMessage = '';
     } else if (search) {
       aliasListEmptyMessage = t('aliases.empty.noResults');
     } else if (catchAll) {
@@ -364,6 +362,21 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: (code?: string) 
   /** Shorthand for the many `setStatus('Error: …')` call sites. */
   function setErrorStatus(err: unknown) {
     setStatus(t('dashboard.status.error', { message: translateApiError(i18n, err) }));
+  }
+
+  /** Toast a mutation only when this refresh wrote state and that resource actually landed. */
+  function toastWhenResourceFresh(
+    outcome: RefreshOutcome,
+    labelKey: LoadFailure['labelKey'],
+    message: string,
+  ) {
+    if (!outcome.applied) {
+      return;
+    }
+    if (outcome.failures.some((failure) => failure.labelKey === labelKey)) {
+      return;
+    }
+    setStatus(message);
   }
 
   async function logout() {
@@ -421,8 +434,11 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: (code?: string) 
       try {
         await api('/api/rules', 'POST', { localPart, action });
         setNewAlias((prev) => ({ ...prev, local: '' }));
-        await refreshAll();
-        setStatus(t('dashboard.status.aliasCreated'));
+        toastWhenResourceFresh(
+          await refreshAll(),
+          'dashboard.resource.rules',
+          t('dashboard.status.aliasCreated'),
+        );
       } catch (err) {
         setErrors((prev) => ({ ...prev, alias: err }));
       }
@@ -439,8 +455,11 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: (code?: string) 
       try {
         await api('/api/addresses', 'POST', { email: newDestInput });
         setNewDestInput('');
-        await refreshAll();
-        setStatus(t('dashboard.status.destAdded'));
+        toastWhenResourceFresh(
+          await refreshAll(),
+          'dashboard.resource.addresses',
+          t('dashboard.status.destAdded'),
+        );
       } catch (err) {
         setErrors((prev) => ({ ...prev, dest: err }));
       }
@@ -452,8 +471,11 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: (code?: string) 
       try {
         const action = rule.enabled ? 'disable' : 'enable';
         await api(`/api/rules/${rule.id}/${action}`, 'POST');
-        await refreshAll();
-        setStatus(t('dashboard.status.aliasUpdated'));
+        toastWhenResourceFresh(
+          await refreshAll(),
+          'dashboard.resource.rules',
+          t('dashboard.status.aliasUpdated'),
+        );
       } catch (err) {
         setErrorStatus(err);
       }
@@ -504,8 +526,11 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: (code?: string) 
     await runExclusive(`rule:${rule.id}`, async () => {
       try {
         await api(`/api/rules/${rule.id}`, 'PUT', patch);
-        await refreshAll();
-        setStatus(t(patch.action ? 'dashboard.status.destUpdated' : 'dashboard.status.aliasUpdated'));
+        toastWhenResourceFresh(
+          await refreshAll(),
+          'dashboard.resource.rules',
+          t(patch.action ? 'dashboard.status.destUpdated' : 'dashboard.status.aliasUpdated'),
+        );
         ok = true;
       } catch (err) {
         setErrorStatus(err);
@@ -549,8 +574,11 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: (code?: string) 
     await runExclusive('catch-all', async () => {
       try {
         await api('/api/rules/catch-all', 'PUT', patch);
-        await refreshAll();
-        setStatus(t('dashboard.status.catchAllUpdated'));
+        toastWhenResourceFresh(
+          await refreshAll(),
+          'dashboard.resource.catchAll',
+          t('dashboard.status.catchAllUpdated'),
+        );
         ok = true;
       } catch (err) {
         setErrorStatus(err);
@@ -587,8 +615,11 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: (code?: string) 
         // rule that is already gone while refreshAll runs. Not optimistic — nothing to roll
         // back, because this only runs after the server said yes.
         setRules((prev) => prev.filter((rule) => rule.id !== id));
-        await refreshAll();
-        setStatus(t('dashboard.status.aliasDeleted'));
+        toastWhenResourceFresh(
+          await refreshAll(),
+          'dashboard.resource.rules',
+          t('dashboard.status.aliasDeleted'),
+        );
       } catch (err) {
         await refreshAll();
         setErrorStatus(err);
@@ -631,8 +662,11 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: (code?: string) 
     await runExclusive(`dest:${id}`, async () => {
       try {
         await api(`/api/addresses/${id}`, 'DELETE');
-        await refreshAll();
-        setStatus(t('dashboard.status.destDeleted'));
+        toastWhenResourceFresh(
+          await refreshAll(),
+          'dashboard.resource.addresses',
+          t('dashboard.status.destDeleted'),
+        );
       } catch (err) {
         setErrorStatus(err);
       }
@@ -835,6 +869,7 @@ export function Dashboard({ onUnauthorized }: { onUnauthorized: (code?: string) 
             <DestinationsCard
               dests={dests}
               loaded={loaded}
+              loadFailed={addressesFailed}
               newDestInput={newDestInput}
               onInputChange={(value) => {
                 setNewDestInput(value);

@@ -35,6 +35,7 @@ export function Setup({ onSuccess, onAlreadyConfigured }: SetupProps) {
   // follows the language switcher instead of freezing in the locale that was active.
   const [error, setError] = useState<unknown>(null);
   const [policyIssue, setPolicyIssue] = useState<PasswordIssue | null>(null);
+  const [usernameMissing, setUsernameMissing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -44,6 +45,13 @@ export function Setup({ onSuccess, onAlreadyConfigured }: SetupProps) {
     }
 
     setError(null);
+
+    if (!username.trim()) {
+      setPolicyIssue(null);
+      setUsernameMissing(true);
+      return;
+    }
+    setUsernameMissing(false);
 
     // Answered locally: the server validates the same rules, but its KDF makes the round
     // trip slow enough to be worth skipping for a typo in the confirmation.
@@ -69,7 +77,9 @@ export function Setup({ onSuccess, onAlreadyConfigured }: SetupProps) {
   }
 
   let errorMessage = '';
-  if (policyIssue) {
+  if (usernameMissing) {
+    errorMessage = tRaw('error.issue.username.required') ?? '';
+  } else if (policyIssue) {
     errorMessage = tRaw(`error.issue.${policyIssue}`) ?? '';
   } else if (error !== null) {
     errorMessage = buildAuthErrorMessage(i18n, error, 'setup.error.generic');
@@ -97,7 +107,7 @@ export function Setup({ onSuccess, onAlreadyConfigured }: SetupProps) {
           {t('setup.intro')}
         </p>
 
-        <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+        <form className="flex flex-col gap-4" noValidate onSubmit={handleSubmit}>
           <label className="flex flex-col gap-1.5">
             <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-cream/65">
               {t('setup.username')}
@@ -107,7 +117,6 @@ export function Setup({ onSuccess, onAlreadyConfigured }: SetupProps) {
               onChange={(e) => setUsername(e.target.value)}
               autoComplete="username"
               autoFocus
-              required
               className={authFieldClass}
             />
           </label>
@@ -120,7 +129,6 @@ export function Setup({ onSuccess, onAlreadyConfigured }: SetupProps) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="new-password"
-              required
               className={authFieldClass}
             />
             <span className="font-mono text-[11px] text-cream/60">{t('setup.passwordHint')}</span>
@@ -134,7 +142,6 @@ export function Setup({ onSuccess, onAlreadyConfigured }: SetupProps) {
               value={passwordConfirm}
               onChange={(e) => setPasswordConfirm(e.target.value)}
               autoComplete="new-password"
-              required
               className={authFieldClass}
             />
           </label>

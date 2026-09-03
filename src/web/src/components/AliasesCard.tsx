@@ -272,7 +272,7 @@ export function AliasesCard(props: AliasesCardProps) {
         })}
       </ul>
 
-      {rules.length === 0 && (
+      {rules.length === 0 && emptyMessage !== '' && (
         <div className={`${rowPaddingClass} font-mono text-xs text-cream/60 ${rowDividerClass}`}>
           {emptyMessage}
         </div>

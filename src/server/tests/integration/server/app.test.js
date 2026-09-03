@@ -145,7 +145,13 @@ function createTestCredentialStore({ username = 'testuser', password = 'test-sec
     async save({ username: nextUser, password: nextPassword }) {
       record = { username: nextUser.trim(), password: nextPassword };
     },
-    updateUsername(nextUser) {
+    async updatePassword(nextPassword) {
+      if (record === null) {
+        throw new Error('Cannot update the password before the panel has credentials');
+      }
+      record = { ...record, password: nextPassword };
+    },
+    async updateUsername(nextUser) {
       if (record === null) {
         throw new Error('Cannot update the username before the panel has credentials');
       }
@@ -159,7 +165,41 @@ function createTestCredentialStore({ username = 'testuser', password = 'test-sec
   };
 }
 
-test('HTTP integration: healthz, auth, API with a simulated Cloudflare', async () => {
+/**
+ * Disposable data directory. `createApp` always binds the session epoch to `dataDir`
+ * (default `<repo>/data`), and `resetSessionEpochForTests()` deletes that file. A test
+ * that omits `dataDir` would wipe the local panel's revocation mark.
+ */
+function tempDataDir(t) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vuzon-app-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  return dir;
+}
+
+/**
+ * `createApp` for HTTP tests: always an isolated data dir so the suite cannot touch
+ * the repository's `data/session-epoch`.
+ */
+function createTestApp(t, opts = {}) {
+  return createApp({
+    ...opts,
+    dataDir: opts.dataDir ?? tempDataDir(t),
+  });
+}
+
+const SETUP_PASSWORD = 'a-long-enough-password';
+
+test('HTTP integration: tests bind the session epoch to a temp dir, not the repo', () => {
+  const src = fs.readFileSync(new URL(import.meta.url), 'utf8');
+  const direct = [...src.matchAll(/^\s*(?:const \{ app[^;\n]*\} = createApp\()/gm)];
+  assert.deepEqual(
+    direct.map((match) => match[0]),
+    [],
+    'createApp() in a test case binds the epoch to <repo>/data; go through createTestApp(t, …)',
+  );
+});
+
+test('HTTP integration: healthz, auth, API with a simulated Cloudflare', async (t) => {
   const env = {
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
@@ -168,7 +208,7 @@ test('HTTP integration: healthz, auth, API with a simulated Cloudflare', async (
   };
 
   const cloudflareClient = createMockCloudflareClient();
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env,
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
@@ -312,7 +352,7 @@ test('HTTP integration: healthz, auth, API with a simulated Cloudflare', async (
   }
 });
 
-test('HTTP integration: login trims the submitted credentials', async () => {
+test('HTTP integration: login trims the submitted credentials', async (t) => {
   const env = {
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
@@ -320,7 +360,7 @@ test('HTTP integration: login trims the submitted credentials', async () => {
     NODE_ENV: 'development',
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env,
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
@@ -356,7 +396,7 @@ test('HTTP integration: login trims the submitted credentials', async () => {
   }
 });
 
-test('HTTP integration: before the setup, /api/me and /api/login say so', async () => {
+test('HTTP integration: before the setup, /api/me and /api/login say so', async (t) => {
   const env = {
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
@@ -364,7 +404,7 @@ test('HTTP integration: before the setup, /api/me and /api/login say so', async 
     NODE_ENV: 'development',
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env,
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
@@ -400,7 +440,7 @@ test('HTTP integration: before the setup, /api/me and /api/login say so', async 
   }
 });
 
-test('HTTP integration: security headers on /healthz', async () => {
+test('HTTP integration: security headers on /healthz', async (t) => {
   const env = {
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
@@ -408,7 +448,7 @@ test('HTTP integration: security headers on /healthz', async () => {
     NODE_ENV: 'development',
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env,
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
@@ -437,6 +477,8 @@ test('HTTP integration: security headers on /healthz', async () => {
     assert.ok(csp.includes('frame-src https://ko-fi.com'));
     assert.ok(csp.includes("script-src 'self'"));
     assert.ok(csp.includes("connect-src 'self'"));
+    assert.ok(csp.includes("style-src 'self'"));
+    assert.equal(csp.includes("'unsafe-inline'"), false);
     assert.equal(csp.replaceAll('frame-src https://ko-fi.com', '').includes('ko-fi.com'), false);
     assert.ok((res.headers.get('permissions-policy') || '').includes('camera=()'));
     // Express advertises itself by default; nothing useful comes from telling the world.
@@ -448,7 +490,7 @@ test('HTTP integration: security headers on /healthz', async () => {
   }
 });
 
-test('HTTP integration: logout invalidates a copy of the session cookie', async () => {
+test('HTTP integration: logout invalidates a copy of the session cookie', async (t) => {
   const env = {
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
@@ -456,7 +498,7 @@ test('HTTP integration: logout invalidates a copy of the session cookie', async 
     NODE_ENV: 'development',
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env,
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
@@ -498,7 +540,7 @@ test('HTTP integration: logout invalidates a copy of the session cookie', async 
   }
 });
 
-test('HTTP integration: anonymous logout does not revoke other sessions', async () => {
+test('HTTP integration: anonymous logout does not revoke other sessions', async (t) => {
   const env = {
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
@@ -506,7 +548,7 @@ test('HTTP integration: anonymous logout does not revoke other sessions', async 
     NODE_ENV: 'development',
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env,
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
@@ -539,7 +581,7 @@ test('HTTP integration: anonymous logout does not revoke other sessions', async 
   }
 });
 
-test('HTTP integration: anonymous logout is idempotent (200)', async () => {
+test('HTTP integration: anonymous logout is idempotent (200)', async (t) => {
   const env = {
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
@@ -547,7 +589,7 @@ test('HTTP integration: anonymous logout is idempotent (200)', async () => {
     NODE_ENV: 'development',
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env,
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
@@ -571,7 +613,7 @@ test('HTTP integration: anonymous logout is idempotent (200)', async () => {
   }
 });
 
-test('HTTP integration: /api responses are not cached', async () => {
+test('HTTP integration: /api responses are not cached', async (t) => {
   const env = {
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
@@ -579,7 +621,7 @@ test('HTTP integration: /api responses are not cached', async () => {
     NODE_ENV: 'development',
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env,
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
@@ -614,7 +656,7 @@ test('HTTP integration: /api responses are not cached', async () => {
   }
 });
 
-test('HTTP integration: login rate limit answers 429', async () => {
+test('HTTP integration: login rate limit answers 429', async (t) => {
   const env = {
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
@@ -622,7 +664,7 @@ test('HTTP integration: login rate limit answers 429', async () => {
     NODE_ENV: 'development',
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env,
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
@@ -658,7 +700,7 @@ test('HTTP integration: login rate limit answers 429', async () => {
   }
 });
 
-test('HTTP integration: an invalid login body answers 400', async () => {
+test('HTTP integration: an invalid login body answers 400', async (t) => {
   const env = {
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
@@ -666,7 +708,7 @@ test('HTTP integration: an invalid login body answers 400', async () => {
     NODE_ENV: 'development',
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env,
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
@@ -691,7 +733,7 @@ test('HTTP integration: an invalid login body answers 400', async () => {
   }
 });
 
-test('HTTP integration: authenticated API rate limit answers 429', async () => {
+test('HTTP integration: authenticated API rate limit answers 429', async (t) => {
   const env = {
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
@@ -699,7 +741,7 @@ test('HTTP integration: authenticated API rate limit answers 429', async () => {
     NODE_ENV: 'development',
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env,
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
@@ -739,7 +781,7 @@ test('HTTP integration: authenticated API rate limit answers 429', async () => {
   }
 });
 
-test('HTTP integration: sessionless requests do not consume the API rate-limit quota', async () => {
+test('HTTP integration: sessionless requests do not consume the API rate-limit quota', async (t) => {
   const env = {
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
@@ -747,7 +789,7 @@ test('HTTP integration: sessionless requests do not consume the API rate-limit q
     NODE_ENV: 'development',
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env,
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
@@ -791,7 +833,7 @@ test('HTTP integration: sessionless requests do not consume the API rate-limit q
   }
 });
 
-test('HTTP integration: HSTS is only sent with COOKIE_SECURE on', async () => {
+test('HTTP integration: HSTS is only sent with COOKIE_SECURE on', async (t) => {
   const baseEnv = {
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
@@ -808,7 +850,7 @@ test('HTTP integration: HSTS is only sent with COOKIE_SECURE on', async () => {
       env.COOKIE_SECURE = cookieSecure;
     }
 
-    const { app } = createApp({
+    const { app } = createTestApp(t, {
       env,
       cloudflareClient: createMockCloudflareClient(),
       sessionSecret: 'test-session-secret-32chars!!',
@@ -829,7 +871,7 @@ test('HTTP integration: HSTS is only sent with COOKIE_SECURE on', async () => {
   }
 });
 
-test('HTTP integration: without src/web/dist the SPA answers 503 with a clear message', async () => {
+test('HTTP integration: without src/web/dist the SPA answers 503 with a clear message', async (t) => {
   const env = {
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
@@ -837,7 +879,7 @@ test('HTTP integration: without src/web/dist the SPA answers 503 with a clear me
     NODE_ENV: 'development',
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env,
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
@@ -859,7 +901,7 @@ test('HTTP integration: without src/web/dist the SPA answers 503 with a clear me
   }
 });
 
-test('HTTP integration: hashed assets are immutable; the HTML shell is not', async () => {
+test('HTTP integration: hashed assets are immutable; the HTML shell is not', async (t) => {
   const publicDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vuzon-public-'));
   fs.mkdirSync(path.join(publicDir, 'assets'));
   fs.writeFileSync(path.join(publicDir, 'index.html'), '<div id="root"></div>\n');
@@ -873,7 +915,7 @@ test('HTTP integration: hashed assets are immutable; the HTML shell is not', asy
     NODE_ENV: 'development',
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env,
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
@@ -910,7 +952,7 @@ test('HTTP integration: hashed assets are immutable; the HTML shell is not', asy
   }
 });
 
-test('HTTP integration: the catch-all cannot be mutated or deleted', async () => {
+test('HTTP integration: the catch-all cannot be mutated or deleted', async (t) => {
   const env = {
     CF_ZONE_ID: 'zone_test_1',
     CF_ACCOUNT_ID: 'acct_test_1',
@@ -918,7 +960,7 @@ test('HTTP integration: the catch-all cannot be mutated or deleted', async () =>
     NODE_ENV: 'development',
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env,
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
@@ -978,7 +1020,7 @@ const DIAGNOSTICS_ENV = {
   NODE_ENV: 'development',
 };
 
-test('HTTP integration: POST/PUT /api/rules write the canonical destination email', async () => {
+test('HTTP integration: POST/PUT /api/rules write the canonical destination email', async (t) => {
   const posts = [];
   const puts = [];
   const base = createMockCloudflareClient();
@@ -995,7 +1037,7 @@ test('HTTP integration: POST/PUT /api/rules write the canonical destination emai
     },
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
@@ -1033,7 +1075,7 @@ test('HTTP integration: POST/PUT /api/rules write the canonical destination emai
   }
 });
 
-test('HTTP integration: creating an alias with an unverified destination gives an actionable message', async () => {
+test('HTTP integration: creating an alias with an unverified destination gives an actionable message', async (t) => {
   const base = createMockCloudflareClient();
   const cloudflareClient = {
     ...base,
@@ -1045,7 +1087,7 @@ test('HTTP integration: creating an alias with an unverified destination gives a
     },
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
@@ -1078,8 +1120,8 @@ test('HTTP integration: creating an alias with an unverified destination gives a
   }
 });
 
-test('HTTP integration: creating an alias with an unknown destination says so explicitly', async () => {
-  const { app } = createApp({
+test('HTTP integration: creating an alias with an unknown destination says so explicitly', async (t) => {
+  const { app } = createTestApp(t, {
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
@@ -1109,7 +1151,7 @@ test('HTTP integration: creating an alias with an unknown destination says so ex
   }
 });
 
-test('HTTP integration: a duplicate alias is rejected even when Cloudflare would accept it', async () => {
+test('HTTP integration: a duplicate alias is rejected even when Cloudflare would accept it', async (t) => {
   // The dangerous case: Cloudflare accepts a duplicate matcher and answers 200, but only
   // the first rule processes the mail. Diagnosing on the error branch never sees it, so
   // the check has to happen before the POST — and the POST must never be issued.
@@ -1136,7 +1178,7 @@ test('HTTP integration: a duplicate alias is rejected even when Cloudflare would
     },
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
@@ -1167,7 +1209,7 @@ test('HTTP integration: a duplicate alias is rejected even when Cloudflare would
   }
 });
 
-test('HTTP integration: concurrent alias creates for the same localPart yield one success', async () => {
+test('HTTP integration: concurrent alias creates for the same localPart yield one success', async (t) => {
   // In-process lock + pre-check: the second create must see the first rule and stop
   // before another POST. Without the lock both would race past an empty list.
   const stored = [];
@@ -1198,7 +1240,7 @@ test('HTTP integration: concurrent alias creates for the same localPart yield on
     },
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
@@ -1234,7 +1276,7 @@ test('HTTP integration: concurrent alias creates for the same localPart yield on
   }
 });
 
-test('HTTP integration: post-create recount rolls back a duplicate that slipped past pre-check', async () => {
+test('HTTP integration: post-create recount rolls back a duplicate that slipped past pre-check', async (t) => {
   // Simulates a twin that appears only after our POST (another process, or a rule
   // Cloudflare already held outside the pre-flight snapshot): we must DELETE ours and
   // answer rules.duplicate_alias instead of leaving a silent blackhole.
@@ -1278,7 +1320,7 @@ test('HTTP integration: post-create recount rolls back a duplicate that slipped 
     },
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
@@ -1307,7 +1349,7 @@ test('HTTP integration: post-create recount rolls back a duplicate that slipped 
   }
 });
 
-test('HTTP integration: a duplicate alias is diagnosed after the Cloudflare failure', async () => {
+test('HTTP integration: a duplicate alias is diagnosed after the Cloudflare failure', async (t) => {
   const base = createMockCloudflareClient();
   const cloudflareClient = {
     ...base,
@@ -1330,7 +1372,7 @@ test('HTTP integration: a duplicate alias is diagnosed after the Cloudflare fail
     },
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
@@ -1362,7 +1404,7 @@ test('HTTP integration: a duplicate alias is diagnosed after the Cloudflare fail
   }
 });
 
-test('HTTP integration: an upstream 429 on create is NOT diagnosed (no extra Cloudflare calls)', async () => {
+test('HTTP integration: an upstream 429 on create is NOT diagnosed (no extra Cloudflare calls)', async (t) => {
   // 429 and 408 say nothing about the payload, so there is nothing to diagnose. Running
   // the diagnostics anyway fired two more GETs, each of which the client retries twice on
   // 429 — up to six extra requests and roughly a second of backoff spent while already
@@ -1389,7 +1431,7 @@ test('HTTP integration: an upstream 429 on create is NOT diagnosed (no extra Clo
     },
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
@@ -1424,7 +1466,7 @@ test('HTTP integration: an upstream 429 on create is NOT diagnosed (no extra Clo
   }
 });
 
-test('HTTP integration: a Cloudflare failure with no identifiable cause stays generic', async () => {
+test('HTTP integration: a Cloudflare failure with no identifiable cause stays generic', async (t) => {
   const base = createMockCloudflareClient();
   const cloudflareClient = {
     ...base,
@@ -1436,7 +1478,7 @@ test('HTTP integration: a Cloudflare failure with no identifiable cause stays ge
     },
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
@@ -1466,7 +1508,7 @@ test('HTTP integration: a Cloudflare failure with no identifiable cause stays ge
   }
 });
 
-test('HTTP integration: PUT /api/rules/:id changes the destination and respects the catch-all', async () => {
+test('HTTP integration: PUT /api/rules/:id changes the destination and respects the catch-all', async (t) => {
   const puts = [];
   const base = createMockCloudflareClient();
   const cloudflareClient = {
@@ -1479,7 +1521,7 @@ test('HTTP integration: PUT /api/rules/:id changes the destination and respects 
     },
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
@@ -1592,9 +1634,9 @@ function createSpecialRulesClient(puts) {
   };
 }
 
-test('HTTP integration: a rule with an unknown action type cannot be edited, but can be deleted', async () => {
+test('HTTP integration: a rule with an unknown action type cannot be edited, but can be deleted', async (t) => {
   const puts = [];
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient: createSpecialRulesClient(puts),
     sessionSecret: 'test-session-secret-32chars!!',
@@ -1660,9 +1702,9 @@ test('HTTP integration: a rule with an unknown action type cannot be edited, but
   }
 });
 
-test('HTTP integration: renaming a Worker rule preserves its action untouched', async () => {
+test('HTTP integration: renaming a Worker rule preserves its action untouched', async (t) => {
   const puts = [];
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient: createSpecialRulesClient(puts),
     sessionSecret: 'test-session-secret-32chars!!',
@@ -1718,7 +1760,7 @@ test('HTTP integration: renaming a Worker rule preserves its action untouched', 
   }
 });
 
-test('HTTP integration: POST /api/rules can create a rule that drops the mail', async () => {
+test('HTTP integration: POST /api/rules can create a rule that drops the mail', async (t) => {
   const posts = [];
   const listed = [];
   const base = createMockCloudflareClient();
@@ -1736,7 +1778,7 @@ test('HTTP integration: POST /api/rules can create a rule that drops the mail', 
     },
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
@@ -1772,7 +1814,7 @@ test('HTTP integration: POST /api/rules can create a rule that drops the mail', 
   }
 });
 
-test('HTTP integration: enable/disable actually flip the rule state', async () => {
+test('HTTP integration: enable/disable actually flip the rule state', async (t) => {
   const puts = [];
   const base = createMockCloudflareClient();
   const cloudflareClient = {
@@ -1785,7 +1827,7 @@ test('HTTP integration: enable/disable actually flip the rule state', async () =
     },
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
@@ -1818,7 +1860,7 @@ test('HTTP integration: enable/disable actually flip the rule state', async () =
   }
 });
 
-test('HTTP integration: PUT /api/rules/catch-all edits the fallback rule safely', async () => {
+test('HTTP integration: PUT /api/rules/catch-all edits the fallback rule safely', async (t) => {
   const puts = [];
   const base = createMockCloudflareClient();
   const cloudflareClient = {
@@ -1831,7 +1873,7 @@ test('HTTP integration: PUT /api/rules/catch-all edits the fallback rule safely'
     },
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
@@ -1919,8 +1961,8 @@ test('HTTP integration: PUT /api/rules/catch-all edits the fallback rule safely'
   }
 });
 
-test('HTTP integration: a malformed or oversized JSON body answers 4xx, not 500', async () => {
-  const { app } = createApp({
+test('HTTP integration: a malformed or oversized JSON body answers 4xx, not 500', async (t) => {
+  const { app } = createTestApp(t, {
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
@@ -1959,7 +2001,7 @@ test('HTTP integration: a malformed or oversized JSON body answers 4xx, not 500'
   }
 });
 
-test('HTTP integration: an async rejection without try/catch reaches the API error handler', async () => {
+test('HTTP integration: an async rejection without try/catch reaches the API error handler', async (t) => {
   const base = createMockCloudflareClient();
   const cloudflareClient = {
     ...base,
@@ -1978,7 +2020,7 @@ test('HTTP integration: an async rejection without try/catch reaches the API err
     NODE_ENV: 'development',
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env,
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
@@ -2010,7 +2052,7 @@ test('HTTP integration: an async rejection without try/catch reaches the API err
   }
 });
 
-test('HTTP integration: a CloudflareApiError 401 is not exposed as 401 to the client', async () => {
+test('HTTP integration: a CloudflareApiError 401 is not exposed as 401 to the client', async (t) => {
   const base = createMockCloudflareClient();
   const cloudflareClient = {
     ...base,
@@ -2029,7 +2071,7 @@ test('HTTP integration: a CloudflareApiError 401 is not exposed as 401 to the cl
     NODE_ENV: 'development',
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env,
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
@@ -2061,7 +2103,7 @@ test('HTTP integration: a CloudflareApiError 401 is not exposed as 401 to the cl
   }
 });
 
-test('HTTP integration: an uppercase /API path does not bypass the /api middlewares', async () => {
+test('HTTP integration: an uppercase /API path does not bypass the /api middlewares', async (t) => {
   // Express matches routes case-insensitively by default, but the Cache-Control middleware,
   // the same-origin guard and the API error handler all test `req.path` against a lowercase
   // '/api/' prefix. Before `case sensitive routing`, GET /API/rules reached the handler with
@@ -2085,7 +2127,7 @@ test('HTTP integration: an uppercase /API path does not bypass the /api middlewa
     NODE_ENV: 'development',
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env,
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
@@ -2147,7 +2189,7 @@ test('HTTP integration: an uppercase /API path does not bypass the /api middlewa
   }
 });
 
-test('HTTP integration: POST /api/addresses names a duplicate instead of the generic error', async () => {
+test('HTTP integration: POST /api/addresses names a duplicate instead of the generic error', async (t) => {
   // Cloudflare rejects an address it already holds with a plain 4xx, which reached the user
   // as `cloudflare.generic` ("Could not complete the operation…") — true and useless, when
   // the actual answer is "it is already in your list". Diagnosed on the error branch only.
@@ -2172,7 +2214,7 @@ test('HTTP integration: POST /api/addresses names a duplicate instead of the gen
     },
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
@@ -2205,7 +2247,7 @@ test('HTTP integration: POST /api/addresses names a duplicate instead of the gen
   }
 });
 
-test('HTTP integration: POST /api/addresses stays generic when the address is genuinely new', async () => {
+test('HTTP integration: POST /api/addresses stays generic when the address is genuinely new', async (t) => {
   // Same failure, but the address is NOT in the list, so there is no cause to name and the
   // original Cloudflare error must survive untouched rather than being mislabelled.
   const base = createMockCloudflareClient();
@@ -2225,7 +2267,7 @@ test('HTTP integration: POST /api/addresses stays generic when the address is ge
     },
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
@@ -2255,7 +2297,7 @@ test('HTTP integration: POST /api/addresses stays generic when the address is ge
   }
 });
 
-test('HTTP integration: POST /api/addresses rejects a malformed email before calling Cloudflare', async () => {
+test('HTTP integration: POST /api/addresses rejects a malformed email before calling Cloudflare', async (t) => {
   const base = createMockCloudflareClient();
   let posts = 0;
   const cloudflareClient = {
@@ -2268,7 +2310,7 @@ test('HTTP integration: POST /api/addresses rejects a malformed email before cal
     },
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
@@ -2303,7 +2345,7 @@ test('HTTP integration: POST /api/addresses rejects a malformed email before cal
   }
 });
 
-test('HTTP integration: DELETE /api/addresses/:id refuses a destination still used by a rule', async () => {
+test('HTTP integration: DELETE /api/addresses/:id refuses a destination still used by a rule', async (t) => {
   let addressDeleteCalls = 0;
   const base = createMockCloudflareClient();
   const cloudflareClient = {
@@ -2346,7 +2388,7 @@ test('HTTP integration: DELETE /api/addresses/:id refuses a destination still us
     NODE_ENV: 'development',
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env,
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
@@ -2383,7 +2425,7 @@ test('HTTP integration: DELETE /api/addresses/:id refuses a destination still us
   }
 });
 
-test('HTTP integration: DELETE /api/addresses/:id fails explicitly when catch-all cannot be checked', async () => {
+test('HTTP integration: DELETE /api/addresses/:id fails explicitly when catch-all cannot be checked', async (t) => {
   let addressDeleteCalls = 0;
   const base = createMockCloudflareClient();
   const cloudflareClient = {
@@ -2408,7 +2450,7 @@ test('HTTP integration: DELETE /api/addresses/:id fails explicitly when catch-al
     },
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
@@ -2436,8 +2478,63 @@ test('HTTP integration: DELETE /api/addresses/:id fails explicitly when catch-al
   }
 });
 
-test('HTTP integration: same-origin guard blocks a mismatched Origin on mutations', async () => {
-  const { app } = createApp({
+test('HTTP integration: DELETE /api/addresses/:id fails closed on a malformed catch-all', async (t) => {
+  for (const catchAllBody of [null, {}]) {
+    let addressDeleteCalls = 0;
+    const base = createMockCloudflareClient();
+    const cloudflareClient = {
+      async fetchCloudflare(requestPath, method = 'GET', body = null) {
+        if (requestPath.includes('/email/routing/addresses') && method === 'DELETE') {
+          addressDeleteCalls += 1;
+          return { id: 'deleted' };
+        }
+        if (requestPath.endsWith('/email/routing/rules/catch_all') && method === 'GET') {
+          return catchAllBody;
+        }
+        return base.fetchCloudflare(requestPath, method, body);
+      },
+      async fetchAllCloudflare(requestPath) {
+        if (requestPath.includes('/email/routing/addresses')) {
+          return [{ id: 'addr-free', email: 'free@example.com', verified: true }];
+        }
+        if (requestPath.includes('/email/routing/rules')) {
+          return [];
+        }
+        return [];
+      },
+    };
+
+    const { app } = createTestApp(t, {
+      env: { ...DIAGNOSTICS_ENV },
+      cloudflareClient,
+      sessionSecret: 'test-session-secret-32chars!!',
+      credentialStore: createTestCredentialStore(),
+    });
+    const { server, baseUrl } = await listen(app);
+
+    try {
+      resetSessionEpochForTests();
+      const sessionCookie = await loginAndGetCookie(baseUrl);
+
+      const res = await fetch(`${baseUrl}/api/addresses/addr-free`, {
+        method: 'DELETE',
+        headers: { Cookie: sessionCookie },
+      });
+      assert.equal(res.status, 502, `catch-all ${JSON.stringify(catchAllBody)} must fail closed`);
+      const data = await readJson(res);
+      assert.equal(data.code, ERROR_CODES.DEST_USAGE_CHECK_FAILED);
+      assert.equal(addressDeleteCalls, 0, 'must not DELETE when catch-all is not scannable');
+    } finally {
+      resetSessionEpochForTests();
+      await new Promise((resolve) => {
+        server.close(resolve);
+      });
+    }
+  }
+});
+
+test('HTTP integration: same-origin guard blocks a mismatched Origin on mutations', async (t) => {
+  const { app } = createTestApp(t, {
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
@@ -2480,8 +2577,8 @@ test('HTTP integration: same-origin guard blocks a mismatched Origin on mutation
   }
 });
 
-test('HTTP integration: same-origin guard covers /api/login and /api/logout', async () => {
-  const { app } = createApp({
+test('HTTP integration: same-origin guard covers /api/login and /api/logout', async (t) => {
+  const { app } = createTestApp(t, {
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
@@ -2526,8 +2623,8 @@ test('HTTP integration: same-origin guard covers /api/login and /api/logout', as
   }
 });
 
-test('HTTP integration: same-origin guard blocks same-site Sec-Fetch-Site with a mismatched Origin', async () => {
-  const { app } = createApp({
+test('HTTP integration: same-origin guard blocks same-site Sec-Fetch-Site with a mismatched Origin', async (t) => {
+  const { app } = createTestApp(t, {
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
@@ -2606,7 +2703,7 @@ test('HTTP integration: same-origin guard blocks same-site Sec-Fetch-Site with a
   }
 });
 
-test('HTTP integration: DELETE /api/addresses/:id separates "already gone" from "cannot verify"', async () => {
+test('HTTP integration: DELETE /api/addresses/:id separates "already gone" from "cannot verify"', async (t) => {
   let addressDeleteCalls = 0;
   const base = createMockCloudflareClient();
   // The address listing is what tells the two cases apart, so it is swapped per request.
@@ -2631,7 +2728,7 @@ test('HTTP integration: DELETE /api/addresses/:id separates "already gone" from 
     },
   };
 
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient,
     sessionSecret: 'test-session-secret-32chars!!',
@@ -2706,17 +2803,10 @@ test('HTTP integration: DELETE /api/addresses/:id separates "already gone" from 
  * Setup wizard and password change, end to end and against the REAL credential store:
  * this is the one place where the on-disk record and scrypt are exercised through HTTP.
  */
-function tempDataDir(t) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vuzon-app-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  return dir;
-}
-
-const SETUP_PASSWORD = 'a-long-enough-password';
 
 test('HTTP integration: the setup wizard claims the panel exactly once', async (t) => {
   const dataDir = tempDataDir(t);
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
@@ -2832,7 +2922,7 @@ test('HTTP integration: the setup wizard claims the panel exactly once', async (
 
 test('HTTP integration: concurrent setup claims yield exactly one 200', async (t) => {
   const dataDir = tempDataDir(t);
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
@@ -2925,7 +3015,7 @@ test('HTTP integration: re-running the setup after an auth.json reset revokes ol
 
   let stolenCookie = '';
   {
-    const { app } = createApp({
+    const { app } = createTestApp(t, {
       env: { ...DIAGNOSTICS_ENV },
       cloudflareClient: createMockCloudflareClient(),
       dataDir,
@@ -2961,7 +3051,7 @@ test('HTTP integration: re-running the setup after an auth.json reset revokes ol
 
   {
     // Same data directory, so the signing key and the revocation mark are the real ones.
-    const { app } = createApp({
+    const { app } = createTestApp(t, {
       env: { ...DIAGNOSTICS_ENV },
       cloudflareClient: createMockCloudflareClient(),
       dataDir,
@@ -2997,7 +3087,7 @@ test('HTTP integration: re-running the setup after an auth.json reset revokes ol
 
 test('HTTP integration: changing the password revokes every other session', async (t) => {
   const dataDir = tempDataDir(t);
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
@@ -3102,6 +3192,76 @@ test('HTTP integration: changing the password revokes every other session', asyn
   }
 });
 
+test('HTTP integration: a failed epoch write does not persist the new password', async (t) => {
+  // Revoke-then-save: if writing session-epoch fails (full or read-only volume), auth.json
+  // must still hold the old hash. The previous order saved first, so a 500 left stolen
+  // cookies valid against the NEW password.
+  const dataDir = tempDataDir(t);
+  const { app } = createTestApp(t, {
+    env: { ...DIAGNOSTICS_ENV },
+    cloudflareClient: createMockCloudflareClient(),
+    sessionSecret: 'test-session-secret-32chars!!',
+    dataDir,
+  });
+  const { server, baseUrl } = await listen(app);
+
+  try {
+    resetSessionEpochForTests();
+
+    const setupRes = await fetch(`${baseUrl}/api/setup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: 'kn',
+        password: SETUP_PASSWORD,
+        passwordConfirm: SETUP_PASSWORD,
+      }),
+    });
+    assert.equal(setupRes.status, 200);
+    const cookie = sessionCookieHeaderFromResponse(setupRes);
+    const hashBefore = JSON.parse(
+      fs.readFileSync(path.join(dataDir, 'auth.json'), 'utf8'),
+    ).password.hash;
+
+    fs.chmodSync(dataDir, 0o555);
+    try {
+      const res = await fetch(`${baseUrl}/api/account/password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Cookie: cookie },
+        body: JSON.stringify({
+          currentPassword: SETUP_PASSWORD,
+          newPassword: 'another-long-password',
+          newPasswordConfirm: 'another-long-password',
+        }),
+      });
+      assert.equal(res.status, 500);
+      const hashAfter = JSON.parse(
+        fs.readFileSync(path.join(dataDir, 'auth.json'), 'utf8'),
+      ).password.hash;
+      assert.equal(hashAfter, hashBefore, 'the password must not change if revocation did not persist');
+    } finally {
+      fs.chmodSync(dataDir, 0o700);
+    }
+
+    const login = await fetch(`${baseUrl}/api/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'kn', password: SETUP_PASSWORD }),
+    });
+    assert.equal(login.status, 200, 'the previous password must still work');
+  } finally {
+    try {
+      fs.chmodSync(dataDir, 0o700);
+    } catch {
+      // already restored
+    }
+    resetSessionEpochForTests();
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+  }
+});
+
 test('HTTP integration: password-change revocation survives a process restart', async (t) => {
   // The epoch mark used to live only in memory: a restart set it back to 0 and every
   // cookie issued before the change became valid again. It is now under the data dir.
@@ -3113,7 +3273,7 @@ test('HTTP integration: password-change revocation survives a process restart', 
     dataDir,
   };
 
-  const { app: app1 } = createApp(shared);
+  const { app: app1 } = createTestApp(t, shared);
   const { server: server1, baseUrl: base1 } = await listen(app1);
 
   let stolenCookie = '';
@@ -3149,7 +3309,7 @@ test('HTTP integration: password-change revocation survives a process restart', 
     });
   }
 
-  const { app: app2 } = createApp(shared);
+  const { app: app2 } = createTestApp(t, shared);
   const { server: server2, baseUrl: base2 } = await listen(app2);
   try {
     const res = await fetch(`${base2}/api/me`, { headers: { Cookie: stolenCookie } });
@@ -3164,7 +3324,7 @@ test('HTTP integration: password-change revocation survives a process restart', 
 
 test('HTTP integration: changing the username revokes every other session', async (t) => {
   const dataDir = tempDataDir(t);
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',
@@ -3308,7 +3468,7 @@ test('HTTP integration: changing the username revokes every other session', asyn
 
 test('HTTP integration: the setup and account routes are covered by the same-origin guard', async (t) => {
   const dataDir = tempDataDir(t);
-  const { app } = createApp({
+  const { app } = createTestApp(t, {
     env: { ...DIAGNOSTICS_ENV },
     cloudflareClient: createMockCloudflareClient(),
     sessionSecret: 'test-session-secret-32chars!!',

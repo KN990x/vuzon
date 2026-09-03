@@ -32,13 +32,14 @@ export function Login({
   onNoticeDismiss,
 }: LoginProps) {
   const i18n = useI18n();
-  const { t } = i18n;
+  const { t, tRaw } = i18n;
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   // The raw error is kept, not its text: translating at render time means the message
   // follows the language switcher instead of freezing in whatever locale was active
   // when it failed.
   const [error, setError] = useState<unknown>(null);
+  const [fieldIssue, setFieldIssue] = useState<'username.required' | 'password.required' | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -48,6 +49,15 @@ export function Login({
     }
 
     setError(null);
+    if (!username.trim()) {
+      setFieldIssue('username.required');
+      return;
+    }
+    if (!password.trim()) {
+      setFieldIssue('password.required');
+      return;
+    }
+    setFieldIssue(null);
     setSubmitting(true);
     try {
       // 400 (Zod), 401 (credentials) and 429 (rate limit) arrive carrying the server's
@@ -68,7 +78,9 @@ export function Login({
     }
   }
 
-  const errorMessage = error === null ? '' : buildLoginErrorMessage(i18n, error);
+  const errorMessage = fieldIssue !== null
+    ? (tRaw(`error.issue.${fieldIssue}`) ?? '')
+    : error === null ? '' : buildLoginErrorMessage(i18n, error);
 
   return (
     <main className="fade-in flex min-h-screen items-center justify-center bg-ink px-6 font-sans text-cream">
@@ -104,6 +116,7 @@ export function Login({
         <form
           className="flex flex-col gap-4"
           onSubmit={handleSubmit}
+          noValidate
           // The notice explains a past event; once the user starts typing it is no longer
           // what they are doing, and it must not outlive this visit to the screen.
           onInput={onNoticeDismiss}
@@ -117,7 +130,6 @@ export function Login({
               onChange={(e) => setUsername(e.target.value)}
               autoComplete="username"
               autoFocus
-              required
               className={authFieldClass}
             />
           </label>
@@ -130,7 +142,6 @@ export function Login({
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
-              required
               className={authFieldClass}
             />
           </label>

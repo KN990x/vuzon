@@ -145,3 +145,46 @@ test('frontend: no framer-motion (the Toast animates with CSS)', () => {
   const declared = { ...web.dependencies, ...web.devDependencies };
   assert.equal(Object.hasOwn(declared, 'framer-motion'), false);
 });
+
+test('frontend: no window.confirm / alert / prompt', () => {
+  // The panel uses ConfirmDialog so buttons follow the catalogue, not the browser language.
+  // Comments documenting that choice mention the names; strip them before grepping calls.
+  const webSrc = path.join(repoRoot, 'src', 'web', 'src');
+  const files = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+      } else if (/\.(ts|tsx)$/.test(entry.name)) {
+        files.push(full);
+      }
+    }
+  };
+  walk(webSrc);
+
+  for (const file of files) {
+    const code = fs.readFileSync(file, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/.*$/gm, '');
+    const rel = path.relative(repoRoot, file);
+    assert.equal(
+      /window\.confirm\s*\(/.test(code),
+      false,
+      `${rel} calls window.confirm; use ConfirmDialog`,
+    );
+    assert.equal(/\balert\s*\(/.test(code), false, `${rel} calls alert()`);
+    assert.equal(/\bprompt\s*\(/.test(code), false, `${rel} calls prompt()`);
+  }
+});
+
+test('package: Dockerfile corepack pnpm matches packageManager', () => {
+  const pkg = readJsonFile(repoRoot, 'package.json');
+  const dockerfile = fs.readFileSync(path.join(repoRoot, 'Dockerfile'), 'utf8');
+  const pin = pkg.packageManager;
+  assert.match(String(pin), /^pnpm@/);
+  assert.ok(
+    dockerfile.includes(`corepack prepare ${pin} --activate`),
+    `Dockerfile must corepack prepare ${pin} (got a different pin, or none)`,
+  );
+});

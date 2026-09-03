@@ -168,7 +168,7 @@ export const en = {
   'rules.editor.confirmReplace':
     'This replaces the rule\'s current action, which vuzon cannot restore. Continue?',
 
-  'dests.title': 'Verified destinations',
+  'dests.title': 'Destinations',
   'dests.verified': 'Verified',
   'dests.pending': 'Pending',
   'dests.delete': 'Delete destination',

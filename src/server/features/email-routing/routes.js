@@ -19,6 +19,7 @@ import { cloudflareRuleSchema } from '../../shared/cloudflare-schemas.js';
 import {
   destinationInUseError,
   findRulesUsingDestination,
+  isUsableCatchAllForUsageScan,
   ruleAliasLabel,
 } from './destination-usage.js';
 import {
@@ -297,11 +298,10 @@ export function registerApiRoutes(app, {
     }
 
     const allRules = [...rules];
-    if (
-      catchAll
-      && typeof catchAll === 'object'
-      && !allRules.some((rule) => rule && typeof rule === 'object' && rule.id === catchAll.id)
-    ) {
+    if (!isUsableCatchAllForUsageScan(catchAll)) {
+      throw usageCheckFailed();
+    }
+    if (!allRules.some((rule) => rule && typeof rule === 'object' && rule.id === catchAll.id)) {
       allRules.push(catchAll);
     }
     const using = findRulesUsingDestination(allRules, address.email);

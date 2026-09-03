@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   destinationInUseError,
   findRulesUsingDestination,
+  isUsableCatchAllForUsageScan,
   ruleAliasLabel,
 } from '../../features/email-routing/destination-usage.js';
 import { ERROR_CODES } from '../../platform/http/error-codes.js';
@@ -74,6 +75,22 @@ test('ruleAliasLabel: prefers literal to, then name, then id', () => {
   );
   assert.equal(ruleAliasLabel({ id: 'r', name: 'My rule', matchers: [] }), 'My rule');
   assert.equal(ruleAliasLabel({ id: 'rule-42' }), 'rule-42');
+});
+
+test('isUsableCatchAllForUsageScan: null, arrays and empty objects fail closed', () => {
+  assert.equal(isUsableCatchAllForUsageScan(null), false);
+  assert.equal(isUsableCatchAllForUsageScan(undefined), false);
+  assert.equal(isUsableCatchAllForUsageScan({}), false);
+  assert.equal(isUsableCatchAllForUsageScan([]), false);
+  assert.equal(isUsableCatchAllForUsageScan({ id: 'catch_all_rule' }), false);
+  assert.equal(
+    isUsableCatchAllForUsageScan({ matchers: [{ type: 'all' }] }),
+    true,
+  );
+  assert.equal(
+    isUsableCatchAllForUsageScan({ actions: [{ type: 'drop' }] }),
+    true,
+  );
 });
 
 test('destinationInUseError: joins aliases into a string param', () => {
