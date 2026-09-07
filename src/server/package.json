@@ -24,7 +24,7 @@
     "cookie-session": "^2.1.1",
     "dotenv": "^16.6.1",
     "express": "^4.22.2",
-    "express-rate-limit": "^8.6.0",
+    "express-rate-limit": "^8.7.0",
     "zod": "^3.25.76"
   }
 }
