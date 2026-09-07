@@ -82,10 +82,10 @@ jobs:
       # QEMU and Buildx come BEFORE the smoke test now, because the smoke test needs them:
       # the arm64 image used to be pushed to GHCR without ever having been executed.
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
+        uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4
 
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
 
       # Build → test → push. Each architecture is loaded into the local daemon and booted
       # before anything is published; the multi-arch push below then reuses the same GHA
