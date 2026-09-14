@@ -63,7 +63,7 @@ jobs:
           echo "Version ${manifest} matches the release tag."
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         # version from package.json#packageManager
 
       - name: Set up Node.js
@@ -82,10 +82,10 @@ jobs:
       # QEMU and Buildx come BEFORE the smoke test now, because the smoke test needs them:
       # the arm64 image used to be pushed to GHCR without ever having been executed.
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
+        uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4
 
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
 
       # Build → test → push. Each architecture is loaded into the local daemon and booted
       # before anything is published; the multi-arch push below then reuses the same GHA
