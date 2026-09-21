@@ -63,7 +63,7 @@ jobs:
           echo "Version ${manifest} matches the release tag."
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         # version from package.json#packageManager
 
       - name: Set up Node.js
@@ -82,17 +82,17 @@ jobs:
       # QEMU and Buildx come BEFORE the smoke test now, because the smoke test needs them:
       # the arm64 image used to be pushed to GHCR without ever having been executed.
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4
 
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
       # Build → test → push. Each architecture is loaded into the local daemon and booted
       # before anything is published; the multi-arch push below then reuses the same GHA
       # cache, so the bytes that reach GHCR are the ones that passed.
       # `load: true` takes a single platform at a time, hence two build steps.
       - name: Build amd64 image for testing
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
           file: ./Dockerfile
@@ -106,7 +106,7 @@ jobs:
         run: .github/scripts/smoke-test.sh vuzon-release-smoke:amd64 vuzon-smoke-amd64 linux/amd64
 
       - name: Build arm64 image for testing
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
           file: ./Dockerfile
@@ -142,7 +142,7 @@ jobs:
 
       # Layers already cached from the two test builds above.
       - name: Build & push
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
           file: ./Dockerfile
