@@ -48,8 +48,3 @@ Thumbs.db
 *.local
 .idea
 .vscode
-
-# Agent tooling: local guides, kept out of the public repository
-.claude/
-AGENTS.md
-CLAUDE.md
