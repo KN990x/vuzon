@@ -1,45 +1,91 @@
+# Few PRs, none of them surprising:
+#   - Version updates run monthly, one grouped PR per ecosystem, minor and patch only.
+#   - Security updates open as soon as an advisory lands, but grouped into one PR per
+#     ecosystem: `open-pull-requests-limit` does not apply to them, and without a group
+#     each advisory opens its own.
+#   - Majors never arrive as a routine PR. The monthly `Security audit` workflow keeps
+#     them listed in the "Pending major updates" issue, to be planned as migrations.
 version: 2
 updates:
   # ecosystem "npm" also covers pnpm-lock.yaml (no separate "pnpm" ecosystem)
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-    open-pull-requests-limit: 10
+      interval: "monthly"
+      time: "06:00"
+      timezone: "Europe/Madrid"
+    open-pull-requests-limit: 5
+    # `^` ranges: only touch a package.json when its range no longer admits the version.
+    versioning-strategy: increase-if-necessary
+    # A version published hours ago is exactly the one a malicious publish is caught in.
+    # Not applied to security updates.
+    cooldown:
+      default-days: 7
+    # Majors apply to version updates only: a security major still opens a PR.
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      # vitest and @vitest/coverage-v8 pin each other exactly, and `strictPeerDependencies`
+      # rejects the lockfile Dependabot builds after moving only one of them — so every
+      # run failed on them. They move together, by hand:
+      #   pnpm --filter @vuzon/web up vitest @vitest/coverage-v8
+      # The "Pending major updates" issue lists them whenever they fall behind.
+      - dependency-name: "vitest"
+      - dependency-name: "@vitest/*"
     groups:
-      dependencies:
+      security:
+        applies-to: security-updates
         patterns:
           - "*"
+      dependencies:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
+  # Actions are pinned by SHA; Dependabot moves the SHA and its version comment together.
+  # Majors stay in the group: CI exercises the actions it uses, and actionlint checks the
+  # inputs of the release-only ones (QEMU, login, metadata).
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
+      interval: "monthly"
+      time: "06:00"
+      timezone: "Europe/Madrid"
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
     groups:
+      actions-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
       actions:
+        applies-to: version-updates
         patterns:
           - "*"
 
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
+      interval: "monthly"
+      time: "06:00"
+      timezone: "Europe/Madrid"
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
     ignore:
       # Node major: bump Dockerfile, CI node-version, and engines.node together.
-      - dependency-name: "node"
+      - dependency-name: "*"
         update-types: ["version-update:semver-major"]
     groups:
+      docker-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
       docker:
+        applies-to: version-updates
         patterns:
           - "*"
