@@ -1,7 +1,11 @@
 # Multi-stage build over a single pnpm workspace (see https://pnpm.io/docker).
 # Runtime image: Node + backend prod deps + built SPA (no pnpm/corepack).
 
-FROM node:24-slim AS base
+# Base images are pinned by digest as well as tag. The tag says which line (Node 24,
+# Python 3.11); the digest says which build of it, so one commit always builds from the
+# same bytes, and base-image patches arrive as the monthly Dependabot `docker` PR
+# instead of silently on the next build.
+FROM node:24-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS base
 
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME/bin:$PATH"
@@ -34,7 +38,7 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm --filter @vuzon/server deploy --prod --legacy /prod
 
 # ---- runtime ----
-FROM node:24-slim AS runtime
+FROM node:24-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS runtime
 
 WORKDIR /app
 

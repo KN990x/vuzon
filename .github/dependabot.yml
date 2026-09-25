@@ -76,6 +76,7 @@ updates:
     open-pull-requests-limit: 5
     cooldown:
       default-days: 7
+    # The Dockerfile pins tag + digest: patches to node:24-slim arrive here as a new digest.
     ignore:
       # Node major: bump the Dockerfile, .nvmrc (CI reads it) and engines.node together.
       - dependency-name: "*"
