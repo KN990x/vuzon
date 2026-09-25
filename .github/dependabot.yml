@@ -33,11 +33,11 @@ updates:
       - dependency-name: "vitest"
       - dependency-name: "@vitest/*"
     groups:
-      security:
+      npm-security:
         applies-to: security-updates
         patterns:
           - "*"
-      dependencies:
+      npm:
         applies-to: version-updates
         patterns:
           - "*"
@@ -77,7 +77,7 @@ updates:
     cooldown:
       default-days: 7
     ignore:
-      # Node major: bump Dockerfile, CI node-version, and engines.node together.
+      # Node major: bump the Dockerfile, .nvmrc (CI reads it) and engines.node together.
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
     groups:
