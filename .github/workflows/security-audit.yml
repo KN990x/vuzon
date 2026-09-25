@@ -1,0 +1,88 @@
+# Dependency auditing. An alarm, not a merge gate — that is ci.yml. Deliberately not on
+# push or pull_request: a vulnerability published today is not a reason to block a commit
+# that has nothing to do with it, and every Dependabot PR would be born with a cross
+# nobody could clear.
+#
+# Monthly: Dependabot alerts already arrive the day an advisory is published, from the
+# same database. This is the backstop, not the first warning.
+name: Security audit
+
+on:
+  schedule:
+    # The 1st of each month, 03:30 UTC: before Dependabot's monthly run (06:00 Madrid).
+    - cron: "30 3 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: pnpm audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        # version from package.json#packageManager
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Blocking: what ends up in the image (`@vuzon/server` runtime deps and the SPA bundle).
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level high
+
+      # Informational: build and test tooling never reaches the image.
+      - name: Audit the full tree (informational)
+        continue-on-error: true
+        run: pnpm audit --audit-level moderate
+
+  # Dependabot ignores majors on purpose; this keeps them visible in one issue that is
+  # edited in place (no notification) instead of a PR per breaking release.
+  majors:
+    name: Pending majors
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        # version from package.json#packageManager
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      # Nothing is executed here, so no install scripts either.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Rewrite the "Pending major updates" issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Held back entirely in dependabot.yml; listed whenever they fall behind.
+          HELD: "vitest @vitest/*"
+        run: bash .github/scripts/majors-report.sh
