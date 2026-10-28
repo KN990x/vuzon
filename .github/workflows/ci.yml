@@ -32,14 +32,14 @@ jobs:
       # Dependabot entirely, with no error anywhere. The check is shared by every KN990x
       # repository (KN990x/.github), pinned like any other action.
       - name: Validate workflows and Dependabot config
-        uses: KN990x/.github/actions/validate-config@c859a5362f488cdc045747c8f44a03ad91aa6bd9 # v1.2.2
+        uses: KN990x/.github/actions/validate-config@b68c77e9ce54507686108a96dccbad8c80210ec6 # v1.2.3
 
       - name: Set up pnpm
         uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         # version from package.json#packageManager
 
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: ".nvmrc"
           cache: pnpm
