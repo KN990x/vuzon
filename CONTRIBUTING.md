@@ -14,8 +14,8 @@ You can open issues for bugs or ideas, and pull requests for fixes or features.
 
 ## Development environment
 
-- **Node.js 24** (LTS) or newer, matching the `Dockerfile` base image and CI (`setup-node`); see `engines` in `package.json`.
-- **pnpm 11+** only (do not use npm or Yarn). Enable Corepack so the version in `package.json` → `packageManager` is used: `corepack enable`. Project settings live in [`pnpm-workspace.yaml`](pnpm-workspace.yaml) (pnpm 11 no longer reads non-auth settings from `.npmrc`).
+- **Node.js 26** (LTS) or newer, matching the `Dockerfile` base image and CI (`setup-node`); see `engines` in `package.json`.
+- **pnpm 11+** only (do not use npm or Yarn). Enable Corepack so the version in `package.json` → `packageManager` is used: `corepack enable` (Node 25+ no longer ships Corepack, so `npm install -g corepack` first). Project settings live in [`pnpm-workspace.yaml`](pnpm-workspace.yaml) (pnpm 11 no longer reads non-auth settings from `.npmrc`).
 - Create a `.env` in the project root with the same fields end users set: `CF_API_TOKEN` and `DOMAIN`. Panel credentials are **not** among them — they are chosen in the browser on first visit (see *Deployment notes*). [`.env.example`](.env.example) is a minimal template; the full list of optional environment variables is in [README.md](README.md).
 
 ```bash

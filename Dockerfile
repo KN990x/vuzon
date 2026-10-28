@@ -1,17 +1,18 @@
 # Multi-stage build over a single pnpm workspace (see https://pnpm.io/docker).
 # Runtime image: Node + backend prod deps + built SPA (no pnpm/corepack).
 
-# Base images are pinned by digest as well as tag. The tag says which line (Node 24,
+# Base images are pinned by digest as well as tag. The tag says which line (Node 26,
 # Python 3.11); the digest says which build of it, so one commit always builds from the
 # same bytes, and base-image patches arrive as the monthly Dependabot `docker` PR
 # instead of silently on the next build.
-FROM node:24-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS base
+FROM node:26-slim@sha256:94816674c62774da0d099a947bf4613b9e1972a2733abd0d0cd80e795f8411d0 AS base
 
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME/bin:$PATH"
 ENV CI=true
 
-RUN corepack enable && corepack prepare pnpm@11.14.0 --activate
+# Node 25+ images no longer ship corepack: install it (pinned) before enabling it.
+RUN npm install -g corepack@0.36.0 && corepack enable && corepack prepare pnpm@11.14.0 --activate
 
 # ---- build ----
 # Native builder: SPA + JS are arch-independent; only the runtime stage needs $TARGETPLATFORM.
@@ -38,7 +39,7 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm --filter @vuzon/server deploy --prod --legacy /prod
 
 # ---- runtime ----
-FROM node:24-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS runtime
+FROM node:26-slim@sha256:94816674c62774da0d099a947bf4613b9e1972a2733abd0d0cd80e795f8411d0 AS runtime
 
 WORKDIR /app
 
@@ -63,7 +64,7 @@ ENV VUZON_DATA_DIR=/app/data
 VOLUME ["/app/data"]
 EXPOSE 8001
 
-# node:24-slim ships no curl/wget; probe /healthz with fetch.
+# node:26-slim ships no curl/wget; probe /healthz with fetch.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||8001)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
