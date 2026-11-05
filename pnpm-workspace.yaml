@@ -7,10 +7,6 @@ strictPeerDependencies: true
 pmOnFail: error
 allowBuilds:
   esbuild: true
-# express-rate-limit 8.6 resolves ip-address to 10.2.0 and cannot move without a major.
-# This floor closes the production advisory.
-overrides:
-  ip-address: '>=10.3.1'
 # GHSA-mrhx-c7xc-m3w5 targets zod 4's core ($ZodArray). @vuzon/server is on zod 3, whose
 # classic ZodArray is a separate implementation; the Dependabot alert was dismissed as
 # inaccurate for that reason. Exposure is bounded anyway: the only array schemas sit behind
