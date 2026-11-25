@@ -15,6 +15,7 @@
     "dev": "pnpm --parallel --filter @vuzon/server --filter @vuzon/web run dev",
     "lint": "eslint . && pnpm --filter @vuzon/web run lint",
     "release:prep": "node scripts/release-prep.mjs",
+    "setup": "node scripts/setup.mjs",
     "start": "pnpm run build && pnpm --filter @vuzon/server run start",
     "test": "pnpm --filter @vuzon/server run test"
   },
