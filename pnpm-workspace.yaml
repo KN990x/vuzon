@@ -10,8 +10,8 @@ allowBuilds:
 # GHSA-mrhx-c7xc-m3w5 targets zod 4's core ($ZodArray). @vuzon/server is on zod 3, whose
 # classic ZodArray is a separate implementation; the Dependabot alert was dismissed as
 # inaccurate for that reason. Exposure is bounded anyway: the only array schemas sit behind
-# requireAuth, and express.json caps the body at 256 kB. Without this entry the monthly
-# `Security audit` stays red on a known, reviewed finding and stops being an alarm.
+# requireAuth, and express.json caps the body at 256 kB. Without this entry `pnpm audit`
+# stays red on a known, reviewed finding and stops being an alarm.
 # Remove it with the move to zod 4 (>= 4.6.6 is patched).
 auditConfig:
   ignoreGhsas:

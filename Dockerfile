@@ -3,7 +3,7 @@
 
 # Base images are pinned by digest as well as tag. The tag says which line (Node 26,
 # Python 3.11); the digest says which build of it, so one commit always builds from the
-# same bytes, and base-image patches arrive as the monthly Dependabot `docker` PR
+# same bytes, and base-image patches arrive as a deliberate digest bump in a commit
 # instead of silently on the next build.
 FROM node:26-slim@sha256:94816674c62774da0d099a947bf4613b9e1972a2733abd0d0cd80e795f8411d0 AS base
 
