@@ -251,17 +251,6 @@ Found a security issue? **Do not open a public issue.** Report it privately via 
 
 Clone the repo, run tests, and build without Docker: **[CONTRIBUTING.md](CONTRIBUTING.md)**.
 
-### Set up the project on another machine
-
-```bash
-git clone https://github.com/KN990x/vuzon.git && cd vuzon
-mise install        # Node from .nvmrc (any version manager that reads .nvmrc works too)
-corepack enable     # pnpm at the version in package.json → packageManager
-pnpm run setup      # checks Node and pnpm, installs dependencies, creates .env from .env.example
-```
-
-`pnpm run setup` is safe to run again: it never overwrites an existing `.env` and never prints a value, only the **names** of the keys still empty (`DOMAIN` and `CF_API_TOKEN`). Fill them in `.env` by hand, then start with `pnpm dev`. Node 25+ no longer ships Corepack: install it first with `npm install -g corepack@latest`.
-
 ---
 
 <a id="spanish"></a>
@@ -454,14 +443,3 @@ vuzon solo escribe acciones que entiende del todo: reenviar a una dirección ver
 ## Desarrollo
 
 Clona el repositorio, ejecuta tests y haz build sin Docker: **[CONTRIBUTING.md](CONTRIBUTING.md)**.
-
-### Montar el proyecto en otra máquina
-
-```bash
-git clone https://github.com/KN990x/vuzon.git && cd vuzon
-mise install        # Node de .nvmrc (sirve cualquier gestor de versiones que lea .nvmrc)
-corepack enable     # pnpm con la versión de package.json → packageManager
-pnpm run setup      # comprueba Node y pnpm, instala las dependencias y crea .env desde .env.example
-```
-
-`pnpm run setup` se puede repetir sin riesgo: nunca pisa un `.env` que ya exista ni imprime un valor, solo los **nombres** de las claves que siguen vacías (`DOMAIN` y `CF_API_TOKEN`). Rellénalas a mano en `.env` y arranca con `pnpm dev`. Desde Node 25, Node ya no trae Corepack: instálalo antes con `npm install -g corepack@latest`.

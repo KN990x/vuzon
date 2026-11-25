@@ -20,10 +20,8 @@ You can open issues for bugs or ideas, and pull requests for fixes or features.
 
 ```bash
 corepack enable
-pnpm run setup    # checks Node and pnpm, pnpm install --frozen-lockfile, .env from .env.example if missing
+pnpm install
 ```
-
-`pnpm run setup` is idempotent and never prints a value: it only names the `.env` keys that are still empty. Plain `pnpm install` is enough once `.env` exists.
 
 This is a single **pnpm workspace** with two packages: the backend `@vuzon/server` in `src/server/` and the React + Vite SPA `@vuzon/web` in `src/web/`. There is **one root `pnpm-lock.yaml`**; `pnpm install` at the root installs both.
 
